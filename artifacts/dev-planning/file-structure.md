@@ -1,136 +1,89 @@
-# File Structure: SH-11 Gradebook, Grading Scales & Report Cards
+# File Structure: SH-12 (PRD-12 Announcements & News)
 
-Generated 2026-11-09T12:14:35Z. `+` = CREATE, `~` = MODIFY. Owning task in brackets. No deletions.
+Brownfield. `+` marks a new file (CREATE) and `~` marks an existing file that is changed (MODIFY). Nothing is deleted. No new dependencies are added (ADR-1).
 
 ```
-./
-  ~ package.json  [TASK-9]
 prisma/
-  ~ schema.prisma  [TASK-1]
-  ~ seed.ts  [TASK-32]
-prisma/migrations/20261111000000_add_gradebook/
-  + migration.sql  [TASK-1]
-scripts/
-  + gradebook-backfill.ts  [TASK-9]
-src/app/(app)/admin/grading-scales/
-  + GradingScalesClient.tsx  [TASK-22]
-  + ScaleEditorDialog.tsx  [TASK-22]
-  + page.tsx  [TASK-22]
-src/app/(app)/admin/report-cards/
-  + ReportCardsAdminClient.tsx  [TASK-29]
-  + page.tsx  [TASK-29]
-src/app/(app)/courses/[courseId]/assignments/
-  ~ AssignmentForm.tsx  [TASK-24]
-src/app/(app)/courses/[courseId]/gradebook/
-  + page.tsx  [TASK-26]
-src/app/(app)/courses/[courseId]/gradebook/settings/
-  + GradebookSettingsClient.tsx  [TASK-23]
-  + page.tsx  [TASK-23]
-src/app/(app)/courses/[courseId]/grades/
-  + page.tsx  [TASK-27]
-src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/
-  ~ QuizSettingsPanel.tsx  [TASK-24]
-src/app/(app)/grades/
-  + GradesClient.tsx  [TASK-27]
-  + page.tsx  [TASK-27]
-src/app/(app)/report-cards/
-  + page.tsx  [TASK-30]
-src/app/(app)/report-cards/[id]/
-  + ReportCardReviewClient.tsx  [TASK-30]
-  + page.tsx  [TASK-30]
-src/app/(app)/report-cards/[id]/print/
-  + page.tsx  [TASK-28]
-src/app/(app)/report-cards/print/
-  + page.tsx  [TASK-28]
-src/app/(app)/students/[id]/grades/
-  + page.tsx  [TASK-27]
-src/app/(app)/students/[id]/report-cards/
-  + page.tsx  [TASK-31]
-src/app/api/courses/[id]/grade-categories/
-  + route.ts  [TASK-13]
-src/app/api/courses/[id]/grade-items/
-  + route.ts  [TASK-15]
-src/app/api/courses/[id]/gradebook/
-  + route.ts  [TASK-15]
-src/app/api/courses/[id]/term-overrides/[studentId]/
-  + route.ts  [TASK-15]
-src/app/api/grade-items/[id]/
-  + route.ts  [TASK-15]
-src/app/api/grade-items/[id]/grades/[studentId]/
-  + route.ts  [TASK-15]
-src/app/api/grade-items/[id]/mark-missing/
-  + route.ts  [TASK-15]
-src/app/api/grading-scales/
-  + route.ts  [TASK-12]
-src/app/api/grading-scales/[id]/
-  + route.ts  [TASK-12]
-src/app/api/report-cards/
-  + route.ts  [TASK-19]
-src/app/api/report-cards/[id]/
-  + route.ts  [TASK-19]
-src/app/api/report-cards/generate/
-  + route.ts  [TASK-19]
-src/app/api/report-cards/publish/
-  + route.ts  [TASK-19]
-src/app/api/report-cards/unpublish/
-  + route.ts  [TASK-19]
-src/app/api/students/[id]/grades/
-  + route.ts  [TASK-16]
-src/components/gradebook/
-  + AddManualItemDialog.tsx  [TASK-25]
-  + GradebookGrid.tsx  [TASK-26]
-  + ItemStatsDialog.tsx  [TASK-25]
-  + StudentGradesView.tsx  [TASK-27]
-  + TermOverrideDialog.tsx  [TASK-25]
-src/components/report-cards/
-  + PrintButton.tsx  [TASK-28]
-  + ReportCardDocument.tsx  [TASK-28]
-src/config/
-  ~ course-tabs.ts  [TASK-21]
-  ~ navigation.ts  [TASK-21]
-  ~ student-tabs.ts  [TASK-21]
-src/lib/validators/
-  ~ assignments.ts  [TASK-6]
-  + gradebook.ts  [TASK-2]
-  ~ quiz.ts  [TASK-7]
-src/server/assignments/
-  ~ assignments-service.ts  [TASK-6]
-src/server/gradebook/
-  + backfill.ts  [TASK-9]
-  + categories-service.ts  [TASK-13]
-  + grade-calc.ts  [TASK-3]
-  + gradebook-service.ts  [TASK-14]
-  + gradebook-sync.ts  [TASK-5]
-  + load.ts  [TASK-10]
-  + scales-service.ts  [TASK-12]
-  + student-grades-service.ts  [TASK-16]
-  + term-placement.ts  [TASK-4]
-src/server/notifications/
-  ~ types.ts  [TASK-11]
-src/server/quiz/
-  ~ attempt-service.ts  [TASK-7]
-  ~ maintenance.ts  [TASK-7]
-  ~ quiz-service.ts  [TASK-7]
-src/server/report-cards/
-  + access.ts  [TASK-17]
-  + report-card-service.ts  [TASK-18]
-  + snapshot.ts  [TASK-17]
-tests/e2e/
-  + gradebook.spec.ts  [TASK-33]
-  + report-cards.spec.ts  [TASK-33]
-tests/integration/gradebook/
-  + backfill.test.ts  [TASK-9]
-  + gradebook-sync.test.ts  [TASK-8]
-tests/integration/report-cards/
-  + report-cards.test.ts  [TASK-20]
-tests/unit/gradebook/
-  + grade-calc.test.ts  [TASK-3]
-  + term-placement.test.ts  [TASK-4]
+├── ~ schema.prisma                                   TASK-1  (enums, 4 models, lastRemindedAt, indexes, back-relations)
+├── migrations/
+│   └── 20261112000000_add_announcements/
+│       └── + migration.sql                           TASK-1
+└── ~ seed.ts                                         TASK-19 (6 announcements, skip-if-missing)
+
+src/
+├── lib/validators/
+│   └── + announcements.ts                            TASK-2
+├── config/
+│   ├── ~ navigation.ts                               TASK-13 (NavItem.badgeEndpoint, Announcements entry)
+│   ├── ~ course-tabs.ts                              TASK-18
+│   └── ~ public-routes.ts                            TASK-12 ('/api/public/news')
+├── server/
+│   ├── announcements/
+│   │   ├── + excerpt.ts                              TASK-3  toPlainText
+│   │   ├── + audience.ts                             TASK-4  generic audience service
+│   │   ├── + announcements-service.ts                TASK-6 (write side), TASK-7 (read side)
+│   │   ├── + maintenance.ts                          TASK-8  publishDueAnnouncements
+│   │   └── + files.ts                                TASK-9  announcementFileResolver
+│   ├── notifications/
+│   │   ├── ~ types.ts                                TASK-5
+│   │   └── ~ notify.ts                               TASK-5  (mandatoryInApp override)
+│   └── files/
+│       └── ~ contexts.ts                             TASK-9
+└── app/
+    ├── (app)/
+    │   ├── ~ shell.tsx                               TASK-13 (Badge + 30 s poll)
+    │   ├── announcements/
+    │   │   ├── + page.tsx                            TASK-14 feed
+    │   │   ├── + AnnouncementFeed.tsx                TASK-14 (also used by the course tab)
+    │   │   ├── + AnnouncementCard.tsx                TASK-14
+    │   │   ├── + AnnouncementComposer.tsx            TASK-16
+    │   │   ├── + AudienceBuilder.tsx                 TASK-16
+    │   │   ├── new/
+    │   │   │   └── + page.tsx                        TASK-16
+    │   │   ├── manage/
+    │   │   │   ├── + page.tsx                        TASK-17
+    │   │   │   └── + ManageTable.tsx                 TASK-17
+    │   │   └── [id]/
+    │   │       ├── + page.tsx                        TASK-15 detail
+    │   │       ├── + AnnouncementDetailView.tsx      TASK-15
+    │   │       ├── edit/
+    │   │       │   └── + page.tsx                    TASK-16
+    │   │       └── stats/
+    │   │           ├── + page.tsx                    TASK-17
+    │   │           └── + StatsView.tsx               TASK-17
+    │   └── courses/[courseId]/announcements/
+    │       └── + page.tsx                            TASK-18
+    └── api/
+        ├── announcements/
+        │   ├── + route.ts                            TASK-10 GET feed, POST create
+        │   ├── unread-count/+ route.ts               TASK-10
+        │   ├── preview-audience/+ route.ts           TASK-10
+        │   ├── manage/+ route.ts                     TASK-10
+        │   └── [id]/
+        │       ├── + route.ts                        TASK-11 GET, PATCH
+        │       ├── archive/+ route.ts                TASK-11
+        │       ├── ack/+ route.ts                    TASK-11
+        │       ├── stats/+ route.ts                  TASK-11 (?format=csv)
+        │       └── remind/+ route.ts                 TASK-11
+        ├── public/news/+ route.ts                    TASK-12
+        └── internal/email/dispatch/~ route.ts        TASK-8
+
+tests/
+├── unit/
+│   ├── validators/+ announcements.test.ts            TASK-2
+│   └── announcements/
+│       ├── + excerpt.test.ts                         TASK-3
+│       ├── + audience-match.test.ts                  TASK-4
+│       └── + permissions.test.ts                     TASK-6
+├── integration/announcements/
+│   ├── + audience-agreement.test.ts                  TASK-20
+│   ├── + publish.test.ts                             TASK-20
+│   └── + api.test.ts                                 TASK-20 (fixture creates Pat's 6A child)
+└── e2e/
+    └── + announcements.spec.ts                       TASK-21
 ```
 
 Notes:
-- Base API path is `/api` (existing convention). Route handlers stay thin (withHandler -> Zod -> service -> ok()).
-- `getStudentQuizScore` already exists in `src/server/quiz/attempt-service.ts`; reuse it (system-design A2 supersedes ADR-6).
-- Sync module is `gradebook-sync.ts` (system-design) not `sync.ts` (ADR-5); backfill lives in `src/server/gradebook/backfill.ts` with a thin CLI in `scripts/`.
-- Optional perf test (system-design §6, CI-skippable) intentionally not planned; add if NFR-2/NFR-3 need proof beyond QA.
-- Migration dir timestamp `20261111000000` sorts after the latest existing migration (`20261110000000_add_quizzes`).
+- The course route segment in this repo is `[courseId]`, not `[id]` as system-design §2.7 writes it. The plan uses the real path, `src/app/(app)/courses/[courseId]/announcements/page.tsx`.
+- The sidebar lives in `src/app/(app)/shell.tsx`, which renders `navigationForRole()`. The badge goes there. There is no separate sidebar component.
+- `announcements-service.ts` is split across two tasks (TASK-6 CREATE, TASK-7 MODIFY) so the dev continuation loop can track partial progress on the largest file.

@@ -1,11 +1,12 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T17:45:00Z",
+  "ticketId": "SH-12",
+  "timestamp": "2026-11-09T19:35:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "status": "complete",
-  "endpointCount": 20,
+  "endpointCount": 12,
+  "blockers": [],
   "artifacts": [
     "artifacts/architect/tech-stack-decisions.md",
     "artifacts/architect/requirements-analysis-notes.md",
@@ -13,18 +14,13 @@
     "artifacts/architect/api-contracts.json"
   ],
   "notes": [
-    "20 endpoint entries across 15 route files, matching system-design §2.3 and the PRD API table. POST /api/grade-items/:id/mark-missing is the only route not in the PRD (FR-24 bulk action).",
-    "Base path is /api (existing convention), not /api/v1. Envelopes and error codes come from src/server/http.ts. No endpoint is paginated.",
-    "Decimals: input number|string ≤ 2 dp (validators/assignments.ts `decimal` pattern). Output: points and weights are fixed2 strings; computed percents are 1 dp strings or null.",
-    "Shared shapes live in api-contracts.json `components` (StudentTermResult, ReportCardSnapshotV1, Bands, …). validators/gradebook.ts and snapshot.ts should mirror them.",
-    "Contract decisions beyond system-design: PUT grade and PUT term-override return the recomputed StudentTermResult. PATCH scale isDefault:false on the current default is a VALIDATION_ERROR. The first scale created always becomes the default. mark-missing works on any source but only touches score-null rows. Report-card comments are max 1,000 chars. Unpublish reason is 1–500 chars. GET /api/report-cards mode A includes NOT_GENERATED rows.",
-    "No HTTP surface (by design) for FR-1, FR-3–FR-7, FR-41 (migration, sync hooks, seed), NFR-7/NFR-9/NFR-12 (UI, reuse and test rules). These are covered in system-design §2.1, §2.2, §2.5 and §6. Print pages call services directly (nonHttpContracts).",
-    "Stale leftovers from SH-10: artifacts/architect/threat-model-notes.json, artifacts/dev-planning/*, artifacts/dev/*, artifacts/qa/* and artifacts/ui-verification/* must be regenerated for SH-11, not reused."
-  ],
-  "blockers": [],
-  "devGates": [
-    "NFR-7: dev must reach mui-mcp (useMuiDocs → fetchDocs) before writing any UI component, especially the DataGrid keyboard editing for FR-20. If it's unreachable, stop and report. This does not block dev-planning.",
-    "FR-1/ADR-3: the partial unique index grading_scale_one_default is raw SQL in the migration. Use prisma migrate, never db push."
+    "12 endpoints across 10 route files (matching system-design §2.6 and the PRD API table, FR-34), plus 2 existing endpoints extended without contract change: /api/internal/email/dispatch (publishDueAnnouncements, FR-27) and /api/files/:id (the 'announcement' context, FR-30).",
+    "Base path is /api, not /api/v1. Envelopes, pagination (default 20, max 100; manage max 50) and error codes come from src/server/http.ts. RATE_LIMITED 429 already exists in ApiErrorCode.",
+    "Error policy: targeting violations → 403 (AC-3). Non-member, not-visible or non-owner access to a specific announcement → 404. State conflicts (author editing ARCHIVED, ack without requiresAck, remind when !requiresAck) → 409. Second reminder within 24h → 429 with details.retryAfter (FR-25, ADR-4).",
+    "Contract decisions beyond system-design: zero-recipient publish returns VALIDATION_ERROR with details.reason='NO_RECIPIENTS'. PATCH mode=draft on a PUBLISHED row is 409 (archive instead). Archive is idempotent. Ack also sets readAt if it was empty. Remind with nobody left still claims the throttle and returns notified: 0. On feed page 1, pinned items are lifted to the top and meta.total excludes them. Manage accepts an optional ?status filter on displayStatus. Percentages are integers rounded half-up, or null when the denominator is 0.",
+    "Schema addition: Announcement.lastRemindedAt DateTime? (FR-25), already listed in system-design §1.",
+    "NotifyInput gains an optional mandatoryInApp override (system-design A9) so announcement.published stays a single type key (FR-26).",
+    "Shared DTOs (AudienceRow, AnnouncementInput, FeedItem, AnnouncementDetail, AudienceCounts) are in api-contracts.json `components`. src/lib/validators/announcements.ts should mirror them."
   ],
   "nextPhase": "dev-planning"
 }

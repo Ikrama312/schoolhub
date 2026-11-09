@@ -1,63 +1,60 @@
-# SH-11 — User Stories (PRD-11: Gradebook, Grading Scales & Report Cards)
+# SH-12 — User Stories (PRD-12: Announcements & News)
 
 Run mode: `--brownfield --tech-stack react`. Each story cites its requirement id(s) in `requirements.json`.
 
-## Data & Sync
+## Data & Audience
 
-- **US-1 (FR-1, FR-2)** — As a developer, I want the gradebook models, a Course grading scale, and a category on assignments and quizzes, so that every grade has a stored home.
-- **US-2 (FR-3, FR-4)** — As a teacher, I want published assignments and graded (non-practice) quizzes to appear in the gradebook automatically, so that I never enter them twice.
-- **US-3 (FR-5, FR-6)** — As a teacher, I want a returned submission's final score (or its exemption) to sync to the gradebook, so that the gradebook stays current. Unreturned scores stay hidden from students.
-- **US-4 (FR-7)** — As a teacher, I want a quiz score to sync once the attempt is graded and its results are visible, so that quiz results count without manual entry.
-- **US-5 (FR-8)** — As an admin, I want an idempotent `npm run gradebook:backfill`, so that data created before this PRD appears in the gradebook.
-- **US-6 (FR-9)** — As a teacher, I want synced grades to be read-only except for the comment, so that the source page remains the single place to edit them.
+- **US-1 (FR-1, FR-2, FR-36)**: As a developer, I want the announcement models, enums and validators, so that announcements, audiences, attachments and read receipts are stored consistently.
+- **US-2 (FR-3 – FR-8)**: As an author, I want audiences (school, staff, role, grade level, section, course, each with student/parent/teacher flags) resolved to exactly the right active users, so that my announcement reaches the intended people and nobody else.
 
-## Calculation
+## Permissions
 
-- **US-7 (FR-10 – FR-15)** — As a teacher, I want term grades calculated the same way across the school (excused and missing items, drop lowest, weight re-normalisation, half-up rounding, then band lookup, then overrides), so that grades are consistent and correct. For example, Homework 40% (18/20, 9/10) and Exams 60% (70/100) give 78.0% C+.
+- **US-3 (FR-9, FR-11)**: As an admin, I want to target any audience and mark announcements public, so that I can reach anyone, including website visitors. Students and parents cannot post.
+- **US-4 (FR-10)**: As a teacher, I want to post to my courses and my homeroom section, so that my students and their parents hear class news. The server rejects any other audience with 403.
+- **US-5 (FR-12)**: As an author, I want to edit my own announcements, and as an admin I want to edit or archive any, so that mistakes can be corrected. Edits by admins are audited.
 
-## Setup
+## Composing
 
-- **US-8 (FR-16)** — As an admin, I want to define grading scales with validated bands and exactly one default, so that letter grades are consistent.
-- **US-9 (FR-17, FR-40)** — As a teacher, I want to set weighted categories that must total 100, with a live sum indicator, and choose a grading scale per course, so that grades reflect my syllabus.
+- **US-6 (FR-13)**: As an admin or teacher, I want a composer with a Markdown body, a cover image, attachments, an audience builder, pin/ack/public options and publish now / schedule / draft with an expiry, so that I can write a complete notice in one place.
+- **US-7 (FR-14, FR-15)**: As an author, I want a live "Will reach N people" count by role, and I want publishing to zero recipients refused, so that I know who I'm reaching before I send.
+- **US-8 (FR-16)**: As an admin, I want to schedule an announcement and set an expiry, so that it appears and disappears at the right time.
 
-## Gradebook Grid
+## Reading
 
-- **US-10 (FR-18, FR-19)** — As a teacher, I want a spreadsheet-like grid of students × items, grouped by category, with averages and the term grade, so that I can see my whole class at a glance.
-- **US-11 (FR-20)** — As a teacher, I want to edit manual-item grades with the keyboard (numbers, Enter or arrows, E, M, Delete), with optimistic saves, so that I can enter grades quickly.
-- **US-12 (FR-21)** — As a teacher, I want clicking a synced cell to open its submission or quiz attempt, so that I edit the grade at its source.
-- **US-13 (FR-22)** — As a teacher, I want to add manual grade items for offline work, so that all assessment is in one place.
-- **US-14 (FR-23)** — As a teacher, I want to override a student's term grade or letter and add a comment, so that I can apply professional judgement on the report card.
-- **US-15 (FR-24)** — As a teacher, I want column actions (hide/show, mark ungraded as missing, statistics), so that I can manage items in bulk.
-- **US-16 (FR-25)** — As a teacher, I want to export the grid as CSV, so that I can share or archive it.
+- **US-9 (FR-17, FR-18)**: As any user, I want one feed of announcements meant for me, with pinned items first, unread dots and All / Unread / Requires-ack tabs, so that I don't miss anything.
+- **US-10 (FR-19, FR-20)**: As a recipient, I want to open an announcement (which marks it read) and acknowledge it when required, so that the office knows I've seen it.
+- **US-11 (FR-21)**: As a course member, I want an Announcements tab on the course, so that I can see class news in context.
+- **US-12 (FR-22)**: As a parent, I want each grade, section or course item labelled with the child it relates to ("For Sam"), so that I know which child it's about.
 
-## Student & Parent Views
+## Author Tools
 
-- **US-17 (FR-26, FR-27, FR-28, FR-42)** — As a student or parent, I want to see current course grades and individual visible scores (on the student tab, on `/grades` and on the course Grades tab), so that we know where the student stands.
+- **US-13 (FR-23)**: As an author, I want a manage view with status, reach, read % and acknowledged %, including expired and archived items, so that I can track my announcements.
+- **US-14 (FR-24, FR-25)**: As an admin, I want per-announcement stats with a recipient table, filters and CSV export, and a "Send reminder" button for those who haven't acknowledged (at most once per 24h), so that I can follow up.
 
-## Report Cards
+## Notifications
 
-- **US-18 (FR-29)** — As an admin, I want a term-filtered list of students with report card status and missing-data warnings, so that I can fix gaps before generating.
-- **US-19 (FR-30, FR-31)** — As an admin, I want to generate draft report cards as frozen snapshots, so that published results never change afterwards.
-- **US-20 (FR-32, FR-33)** — As a homeroom teacher or admin, I want to review a card and write homeroom and principal comments, so that families get personal feedback.
-- **US-21 (FR-34, FR-37)** — As an admin, I want to publish cards (individually or in bulk) and unpublish with an audited reason, so that families receive official results securely.
-- **US-22 (FR-35, FR-36)** — As an admin, student or parent, I want an A4 print view and a 'Report cards' student tab, so that cards can be printed or saved as PDF.
+- **US-15 (FR-26 – FR-29)**: As a recipient, I want one notification (in-app plus email) when an announcement first becomes visible to me, so that I hear about it promptly. Later audience edits don't re-notify.
 
-## Notifications & Seed
+## Files, Public News & Navigation
 
-- **US-23 (FR-38)** — As a student or parent, I want a `grade.posted` notification for manual grades and a `report_card.published` notification, so that I'm informed promptly.
-- **US-24 (FR-41)** — As a developer or QA, I want seed data (the Standard A–F scale, 7A categories, the Oral presentation item, 7A draft cards), so that the features can be demoed and tested.
+- **US-16 (FR-30)**: As a recipient, I want to download the attachments and cover image, so that I get the full notice. Anonymous visitors can download them only for public, published announcements.
+- **US-17 (FR-31)**: As the public website (PRD-18), I want `GET /api/public/news`, so that public announcements appear as school news without a login.
+- **US-18 (FR-32, FR-33)**: As any user, I want an "Announcements" sidebar link with an unread badge, and as a teacher or admin I want a "New announcement" button, so that the feature is easy to reach.
+
+## Seed
+
+- **US-19 (FR-35)**: As a developer or tester, I want the 6 demo announcements seeded, so that every feed state (pinned, ack, course, staff, scheduled, expired) can be seen.
 
 ## Non-Functional Requirements
 
-- **NFR-1** — Pure, Decimal-based calculation with an exhaustive unit test matrix.
-- **NFR-2 / NFR-3** — Gradebook for 35 × 80 loads in < 800 ms; report card generation for 600 × 8 finishes in < 30 s.
-- **NFR-4** — Every manual grade change, override and unpublish is audited with old and new values.
-- **NFR-5** — Hidden items, unreturned scores and unpublished cards never reach students or parents.
-- **NFR-6** — Server-side role and entity access checks on every handler and page.
-- **NFR-7** — MUI-only UI, with every component looked up via mui-mcp. No banned libraries; QA checks.
-- **NFR-8** — DataGrid uses MIT-tier features only (no pinned columns).
-- **NFR-9** — Brownfield reuse of existing helpers; no re-scaffolding or renames; no console.log.
-- **NFR-10** — Date rules use the school timezone; storage is UTC.
-- **NFR-11** — Printed cards fit A4 portrait without the sidebar.
-- **NFR-12** — lint, typecheck and test pass, plus the new unit, integration and Playwright tests.
-- **NFR-13** — Out of scope: standards-based grading, GPA/class rank, multi-year transcripts.
+- **NFR-1**: Material UI only, with every component looked up via mui-mcp first. No banned libraries. QA checks the imports.
+- **NFR-2**: The feed for a parent with 3 children returns in under 200 ms with 2,000 announcements, using SQL joins on audience rows.
+- **NFR-3**: Server-side access checks everywhere. A teacher targeting SCHOOL gets 403.
+- **NFR-4**: Markdown is sanitised as in PRD-08 (body, excerpt, email text).
+- **NFR-5**: Unread dots have screen-reader text "Unread".
+- **NFR-6**: No visibility outside the audience. Scheduled and expired items are hidden from feeds.
+- **NFR-7**: Timestamps are stored in UTC and displayed in the school timezone.
+- **NFR-8**: Brownfield reuse, no re-scaffolding. Lint, typecheck and tests stay green.
+- **NFR-9**: Out of scope: comments, reactions, translation, SMS, and the PRD-18 pages themselves.
+- **NFR-10**: Unit, integration (property-style audience parity, notification idempotency) and Playwright tests as listed.
+- **NFR-11**: Use `logger`, never `console.log`.

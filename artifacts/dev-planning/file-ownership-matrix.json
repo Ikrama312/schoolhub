@@ -1,6 +1,6 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T12:14:35Z",
+  "ticketId": "SH-12",
+  "timestamp": "2026-11-09T16:38:39Z",
   "phase": "dev-planning",
   "version": "1.0",
   "entries": [
@@ -10,383 +10,248 @@
       "operation": "MODIFY"
     },
     {
-      "path": "prisma/migrations/20261111000000_add_gradebook/migration.sql",
+      "path": "prisma/migrations/20261112000000_add_announcements/migration.sql",
       "taskId": "TASK-1",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/gradebook.ts",
+      "path": "src/lib/validators/announcements.ts",
       "taskId": "TASK-2",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/gradebook/grade-calc.ts",
+      "path": "tests/unit/validators/announcements.test.ts",
+      "taskId": "TASK-2",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/announcements/excerpt.ts",
       "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/gradebook/grade-calc.test.ts",
+      "path": "tests/unit/announcements/excerpt.test.ts",
       "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/gradebook/term-placement.ts",
+      "path": "src/server/announcements/audience.ts",
       "taskId": "TASK-4",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/gradebook/term-placement.test.ts",
+      "path": "tests/unit/announcements/audience-match.test.ts",
       "taskId": "TASK-4",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/gradebook/gradebook-sync.ts",
-      "taskId": "TASK-5",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/assignments/assignments-service.ts",
-      "taskId": "TASK-6",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/lib/validators/assignments.ts",
-      "taskId": "TASK-6",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/quiz/quiz-service.ts",
-      "taskId": "TASK-7",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/quiz/attempt-service.ts",
-      "taskId": "TASK-7",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/quiz/maintenance.ts",
-      "taskId": "TASK-7",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/lib/validators/quiz.ts",
-      "taskId": "TASK-7",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "tests/integration/gradebook/gradebook-sync.test.ts",
-      "taskId": "TASK-8",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/gradebook/backfill.ts",
-      "taskId": "TASK-9",
-      "operation": "CREATE"
-    },
-    {
-      "path": "scripts/gradebook-backfill.ts",
-      "taskId": "TASK-9",
-      "operation": "CREATE"
-    },
-    {
-      "path": "package.json",
-      "taskId": "TASK-9",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "tests/integration/gradebook/backfill.test.ts",
-      "taskId": "TASK-9",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/gradebook/load.ts",
-      "taskId": "TASK-10",
       "operation": "CREATE"
     },
     {
       "path": "src/server/notifications/types.ts",
+      "taskId": "TASK-5",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/notifications/notify.ts",
+      "taskId": "TASK-5",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/announcements/announcements-service.ts",
+      "taskId": "TASK-6",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/unit/announcements/permissions.test.ts",
+      "taskId": "TASK-6",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/announcements/announcements-service.ts",
+      "taskId": "TASK-7",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/announcements/maintenance.ts",
+      "taskId": "TASK-8",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/internal/email/dispatch/route.ts",
+      "taskId": "TASK-8",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/announcements/files.ts",
+      "taskId": "TASK-9",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/files/contexts.ts",
+      "taskId": "TASK-9",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/api/announcements/route.ts",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/announcements/unread-count/route.ts",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/announcements/preview-audience/route.ts",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/announcements/manage/route.ts",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/announcements/[id]/route.ts",
       "taskId": "TASK-11",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "src/server/gradebook/scales-service.ts",
+      "path": "src/app/api/announcements/[id]/archive/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/announcements/[id]/ack/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/announcements/[id]/stats/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/announcements/[id]/remind/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/public/news/route.ts",
       "taskId": "TASK-12",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/grading-scales/route.ts",
+      "path": "src/config/public-routes.ts",
       "taskId": "TASK-12",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/grading-scales/[id]/route.ts",
-      "taskId": "TASK-12",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/gradebook/categories-service.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/courses/[id]/grade-categories/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/gradebook/gradebook-service.ts",
-      "taskId": "TASK-14",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/courses/[id]/gradebook/route.ts",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/courses/[id]/grade-items/route.ts",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/grade-items/[id]/route.ts",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/grade-items/[id]/mark-missing/route.ts",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/grade-items/[id]/grades/[studentId]/route.ts",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/courses/[id]/term-overrides/[studentId]/route.ts",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/gradebook/student-grades-service.ts",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/students/[id]/grades/route.ts",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/report-cards/snapshot.ts",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/report-cards/access.ts",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/report-cards/report-card-service.ts",
-      "taskId": "TASK-18",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/report-cards/route.ts",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/report-cards/generate/route.ts",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/report-cards/[id]/route.ts",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/report-cards/publish/route.ts",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/report-cards/unpublish/route.ts",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/integration/report-cards/report-cards.test.ts",
-      "taskId": "TASK-20",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/config/course-tabs.ts",
-      "taskId": "TASK-21",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/config/student-tabs.ts",
-      "taskId": "TASK-21",
       "operation": "MODIFY"
     },
     {
       "path": "src/config/navigation.ts",
-      "taskId": "TASK-21",
+      "taskId": "TASK-13",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/(app)/admin/grading-scales/page.tsx",
-      "taskId": "TASK-22",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/grading-scales/GradingScalesClient.tsx",
-      "taskId": "TASK-22",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/grading-scales/ScaleEditorDialog.tsx",
-      "taskId": "TASK-22",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/courses/[courseId]/gradebook/settings/page.tsx",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/courses/[courseId]/gradebook/settings/GradebookSettingsClient.tsx",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/courses/[courseId]/assignments/AssignmentForm.tsx",
-      "taskId": "TASK-24",
+      "path": "src/app/(app)/shell.tsx",
+      "taskId": "TASK-13",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizSettingsPanel.tsx",
-      "taskId": "TASK-24",
+      "path": "src/app/(app)/announcements/page.tsx",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/AnnouncementFeed.tsx",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/AnnouncementCard.tsx",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/[id]/page.tsx",
+      "taskId": "TASK-15",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/[id]/AnnouncementDetailView.tsx",
+      "taskId": "TASK-15",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/AnnouncementComposer.tsx",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/AudienceBuilder.tsx",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/new/page.tsx",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/[id]/edit/page.tsx",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/manage/page.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/manage/ManageTable.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/[id]/stats/page.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/announcements/[id]/stats/StatsView.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/config/course-tabs.ts",
+      "taskId": "TASK-18",
       "operation": "MODIFY"
     },
     {
-      "path": "src/components/gradebook/AddManualItemDialog.tsx",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/gradebook/TermOverrideDialog.tsx",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/gradebook/ItemStatsDialog.tsx",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/gradebook/GradebookGrid.tsx",
-      "taskId": "TASK-26",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/courses/[courseId]/gradebook/page.tsx",
-      "taskId": "TASK-26",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/gradebook/StudentGradesView.tsx",
-      "taskId": "TASK-27",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/students/[id]/grades/page.tsx",
-      "taskId": "TASK-27",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/grades/page.tsx",
-      "taskId": "TASK-27",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/grades/GradesClient.tsx",
-      "taskId": "TASK-27",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/courses/[courseId]/grades/page.tsx",
-      "taskId": "TASK-27",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/report-cards/ReportCardDocument.tsx",
-      "taskId": "TASK-28",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/report-cards/PrintButton.tsx",
-      "taskId": "TASK-28",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/report-cards/[id]/print/page.tsx",
-      "taskId": "TASK-28",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/report-cards/print/page.tsx",
-      "taskId": "TASK-28",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/report-cards/page.tsx",
-      "taskId": "TASK-29",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/report-cards/ReportCardsAdminClient.tsx",
-      "taskId": "TASK-29",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/report-cards/page.tsx",
-      "taskId": "TASK-30",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/report-cards/[id]/page.tsx",
-      "taskId": "TASK-30",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/report-cards/[id]/ReportCardReviewClient.tsx",
-      "taskId": "TASK-30",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/students/[id]/report-cards/page.tsx",
-      "taskId": "TASK-31",
+      "path": "src/app/(app)/courses/[courseId]/announcements/page.tsx",
+      "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
       "path": "prisma/seed.ts",
-      "taskId": "TASK-32",
+      "taskId": "TASK-19",
       "operation": "MODIFY"
     },
     {
-      "path": "tests/e2e/gradebook.spec.ts",
-      "taskId": "TASK-33",
+      "path": "tests/integration/announcements/audience-agreement.test.ts",
+      "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "tests/e2e/report-cards.spec.ts",
-      "taskId": "TASK-33",
+      "path": "tests/integration/announcements/publish.test.ts",
+      "taskId": "TASK-20",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/integration/announcements/api.test.ts",
+      "taskId": "TASK-20",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/e2e/announcements.spec.ts",
+      "taskId": "TASK-21",
       "operation": "CREATE"
     }
   ]

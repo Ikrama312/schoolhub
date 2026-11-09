@@ -1,10 +1,10 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T12:00:00Z",
+  "ticketId": "SH-12",
+  "timestamp": "2026-11-09T18:00:00Z",
   "phase": "intake",
   "version": "1.0",
   "techStack": "react",
   "confidencePct": 100,
-  "detectionNotes": "The PRD declares '--brownfield --tech-stack react', and package.json confirms it: Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict, Prisma 5.20.0 on PostgreSQL 16, Auth.js v5, Vitest 2.1.1 and Playwright. The MUI packages are pinned at 9.5.0 (material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts), with @mui/x-internals overridden to 9.1.0. PRD-11 needs no new dependencies. The MIT x-data-grid covers the gradebook grid (columnGroupingModel, processRowUpdate, virtualisation); papaparse and src/server/csv.ts cover CSV export; Prisma.Decimal and src/server/assignments/grading-math.ts cover the arithmetic; and src/server/quiz/grading.ts (applyScoringPolicy, resultsVisible, percentOf) covers quiz scores. Printing uses @media print and window.print(), so no PDF library is needed. The mui-mcp server is available for component lookup. Styling goes only through the MUI theme, sx and styled().",
+  "detectionNotes": "The PRD declares '--brownfield --tech-stack react', and package.json confirms it: Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict, Prisma 5.20.0 on PostgreSQL 16, and MUI 9.5.0 (material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts). react-markdown 10.1.0 and papaparse are installed. PRD-12 needs no new dependencies. The existing MarkdownEditor/MarkdownView, FileUpload/FileList, DataTable, UserPicker, NotificationBell (badge-and-poll pattern), src/server/csv.ts, notify(), audit() and registerFileAccess cover the feature. The mui-mcp server is available for component lookup. Styling goes only through the MUI theme, sx and styled().",
   "cssPreprocessor": "css"
 }

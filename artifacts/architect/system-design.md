@@ -1,362 +1,374 @@
-# System Design: PRD-11 Gradebook, Grading Scales & Report Cards
+# System Design: PRD-12 Announcements & News
 
-Ticket: **SH-11** · Phase: architect (`arch-design-system`) · Timestamp: 2026-11-09T17:30:00Z · Status: **complete**
+Ticket: **SH-12** · Phase: architect (`arch-design-system`) · Timestamp: 2026-11-09T19:00:00Z · Status: **complete**
 
-Inputs: `artifacts/intake/requirements.json` (42 FR + 13 NFR), `artifacts/intake/handoff-to-architect.json`, `artifacts/architect/tech-stack-decisions.md` (ADR-1 to ADR-10), `artifacts/architect/requirements-analysis-notes.md` (B1–B19, R1–R7), and the source PRD `11-gradebook.md`.
+Inputs: `artifacts/intake/requirements.json` (36 FR, 11 NFR, 94% confidence), `artifacts/intake/handoff-to-architect.json`, `artifacts/architect/tech-stack-decisions.md` (ADR-1..7), `artifacts/architect/requirements-analysis-notes.md` (B1–B22, R1–R11, A1–A8), and the FR-1 Prisma block in `12-announcements.md`.
+
+> This file replaces the SH-11 version that was here before.
 
 ---
 
 ## 1. Overview
 
-PRD-11 adds a gradebook to SchoolHub, a brownfield Next.js 14 App Router + Prisma/PostgreSQL + MUI 9.5.0 app. It has four parts:
+Announcements is a brownfield feature inside the existing Next.js 14 App Router + Prisma/PostgreSQL + MUI 9 app. **No new dependencies** (ADR-1). The work is:
 
-1. **Sync.** Published assignments and quizzes become `GradeItem`s. Returned submissions and released quiz results become `Grade`s.
-2. **Calculation.** A pure Decimal function turns items, grades, categories, a scale and an override into a term percent and letter.
-3. **Views.** A teacher grid (MIT DataGrid), student/parent grade views, and admin pages for scales and categories.
-4. **Report cards.** Frozen JSON snapshots per student and term, with a draft → published workflow, notifications and an A4 print view.
+- one Prisma migration (FR-1)
+- a generic **audience service** (FR-3..FR-8)
+- an **announcements service** with permissions, visibility, publishing, stats and reminders (FR-9..FR-31)
+- 12 thin route handlers (FR-34)
+- 6 pages plus a course tab, a nav badge and seed data (FR-13..FR-35)
 
-The design adds **no dependencies** (ADR-1). New server code lives only in `src/server/gradebook/` and `src/server/report-cards/` (NFR-9). Existing services gain one-line calls into the sync module.
+The two design centres are:
 
-### 1.1 Intake blockers
+1. **One set of audience rules, three consumers.** A per-user `AudienceKeys` set drives a pure matcher (`isUserInAudience`), a Prisma `where` fragment (feed, unread-count), and the inverse `resolveAudienceUserIds` expansion (preview, stats, notify). The read path never expands recipients (NFR-2).
+2. **Visibility is decided at read time.** One `visibleWhere(now)` predicate is used everywhere. The cron only sends the one notification, claiming `notifiedAt` atomically (FR-16, FR-27).
 
-`handoff-to-architect.json` reports **`blockers: []`** at 95% confidence. There is nothing to escalate. The flagged assumptions are resolved in §1.2.
+### Blockers from intake
 
-### 1.2 Assumptions and design decisions (need product sign-off, none block dev)
+`handoff-to-architect.json` reports **`blockers: []`**. There are no blockers to surface.
 
-| # | Topic | Decision | Req |
+### Assumptions and decisions carried into the design
+
+| # | Item | Decision | Req |
 |---|---|---|---|
-| A1 | Exemption removal | Unexempt sets `excused = false` and re-derives `score` from the source: `finalScore` if the submission is RETURNED, otherwise `null`. | FR-6 |
-| A2 | Quiz score source | **Intake's correction:** `getStudentQuizScore(quizId, studentId)` **already exists** in `src/server/quiz/attempt-service.ts` (L359, labelled "PRD-11 export"). Call it as is. It does **not** check visibility, so the sync gates on `resultsVisible()` first. This replaces ADR-6's "add a helper to grading.ts". Don't create a second one. | FR-7, NFR-9 |
-| A3 | 89.95 rounding | 89.95 → 90.0 → **A−** under the seed scale (A is 93). The unit test asserts 90.0 and the 90-band letter. | FR-13 |
-| A4 | Nav entries | Add `/grades` (STUDENT, PARENT), `/report-cards` (TEACHER), and `/admin/grading-scales` and `/admin/report-cards` (ADMIN, group `Administration`). | FR-16, FR-27, FR-29, FR-33 |
-| A5 | Past due | `now > dueAt` as a UTC instant. Term containment compares school-local dates (`SchoolSettings.timezone`). | NFR-10 |
-| A6 | No term | If no term of the course's academic year contains the date and no term contains today, skip the item and `logger.warn`. | FR-3 |
-| A7 | Teacher hide vs source visibility (R2) | **No extra column** (FR-1 says "exactly as specified"). Source sync writes `isVisible` only on source visibility **transitions**: publish / publishOnce → `true`, archive → `false`. Plain edits to an already-published source never touch `isVisible`, so a teacher's hide survives re-saves. | FR-4, FR-24 |
-| A8 | Uncategorised weight (R3) | If the course has categories, the implicit "Uncategorised" bucket is **shown with its subtotal but has weight 0**, so it's excluded from the weighted mean. If no category has a counted item, fall back to the points total over **all** counted items. If the course has no categories, use the points total. | FR-12 |
-| A9 | `grade.posted` dedupe (R4) | No marker column. Notify only when a MANUAL grade's `score` goes from `null` to a value. That gives one notification per student per item. Later edits are audited but not notified. | FR-38 |
-| A10 | Term drift (R5) | Re-derive `GradeItem.termId` only when `dueAt`/`availableUntil` changes. | FR-3 |
-| A11 | Scale delete (R6) | Return `CONFLICT` if the scale is the default or any `Course.gradingScaleId` references it. Published snapshots embed their own legend, so they're unaffected. | FR-16 |
-| A12 | Percent-only override | Re-derive the letter from the effective scale using the override percent. | FR-14 |
-| A13 | Report card edits | Comments are editable only while `DRAFT`. Unpublish returns the card to `DRAFT` and clears `publishedAt`/`publishedById`. | FR-32, FR-34 |
-| A14 | `Grade.updatedById` on system writes | Sync uses the acting user (grader/teacher) when there is one. Otherwise (auto-graded quiz, maintenance release, backfill) it uses `quiz.createdById`, `assignment.createdById` or, for backfill, `course.teacherId`. The column has no FK, as specified. | FR-1, FR-5, FR-7, FR-8 |
-| A15 | Quiz CLOSED | A CLOSED quiz is **not** unpublished. Its item stays visible. Quizzes have no archive. `deleteQuiz` deletes the item. A practice toggle after publish deletes the item. | FR-3, FR-4 |
+| A1 | Section membership scope | `SectionMember` rows of the targeted section. A section belongs to one academic year, so this is the current-year membership whenever the section is current. Composer pickers offer only current-year sections. | FR-5 |
+| A2 | Zero-recipient drafts | Allowed. The zero-recipient refusal (`VALIDATION_ERROR`) runs only on the transition to PUBLISHED or SCHEDULED. | FR-15 |
+| A3 | Parent expansion | Parents are reached only through ACTIVE, non-archived students. The ACTIVE/non-archived filter is applied to every final user. The matcher follows the same rule. | FR-3..FR-6 |
+| A4 | Pins beyond 3 | The 3 newest pinned items go on top of page 1. Any further pinned items fall into newest-first order. | FR-17 |
+| A5 | AC-8 fixture | The seed stays skip-if-missing. The integration/e2e fixture creates Pat's 6A child and the `ParentStudentLink`. | FR-22, FR-35, NFR-10 |
+| A6 | Archived courses | Courses with `archivedAt != null` are excluded from every teacher branch and from the COURSE student branch. Not stated in the PRD, so flagged here. | FR-4..FR-6 |
+| A7 | Archive is terminal | Archive is terminal for authors: PATCH on an ARCHIVED row by a non-admin returns 409 CONFLICT. Admins may still edit. | FR-12 |
+| A8 | Reminder throttle | Nullable `Announcement.lastRemindedAt` column. A refused reminder returns **429 RATE_LIMITED** with `details.retryAfter` (ADR-4). | FR-25 |
+| A9 | `mandatoryInApp` per instance | `NOTIFICATION_TYPES` is static (B9). Keep the **single type key `announcement.published`** with `mandatoryInApp: false`, and add an optional `mandatoryInApp?: boolean` override to `NotifyInput`. `notify()` passes `{ ...def, mandatoryInApp: input.mandatoryInApp ?? def.mandatoryInApp }` to `resolvePrefs`. Announcements set it to `requiresAck`. This is a one-line change to a shared function, and it keeps the type name exactly as FR-26 states. The rejected alternative was a second `announcement.published_ack` type. | FR-26 |
+| A10 | Non-member responses | Detail, ack, stats and remind return **404 NOT_FOUND** to callers who are not allowed to see the announcement, so its existence is not leaked. Targeting violations on create/update/preview return **403 FORBIDDEN** (AC-3). | NFR-3, NFR-6, FR-10 |
+| A11 | Publish timestamp | Publish-now sets `publishAt = now`, so one column orders the feed and drives visibility (R4). | FR-16, FR-17 |
+
+### Deliberate additions to the FR-1 schema
+
+FR-1 says "exactly as specified". These additions are the minimum the other requirements force, and each is listed with its reason:
+
+- `Announcement.lastRemindedAt DateTime?`: needed by FR-25 (A8). Intake pre-approved it.
+- Indexes: `AnnouncementAudience @@index([announcementId])` and `@@index([type, refId])`, `Announcement @@index([status, publishAt])`, `@@index([authorId])`, `@@index([isPublic, status])`, and `AnnouncementRead @@index([userId])`. These serve NFR-2.
+- Back-relations needed for Prisma to compile: `User.announcements Announcement[]`, `FileObject.announcementAttachments AnnouncementAttachment[]`. `AnnouncementRead.user` is a relation to `User` (`User.announcementReads`, cascade on user delete is not used; users are archived, not deleted) so the stats table can join names.
+
+Everything else matches the PRD block field for field. That includes `coverFileId` as a plain scalar with no FK relation, and `AnnouncementAudience` having no timestamps.
 
 ---
 
 ## 2. Component Breakdown
 
-### 2.1 Data model (one migration: `prisma/migrations/<ts>_gradebook/`)
+### 2.1 Data layer: `prisma/schema.prisma` + `prisma/migrations/20261112000000_add_announcements/` (FR-1)
 
-The models and enums are **exactly the PRD FR-1 block** (FR-1). On top of that:
+```prisma
+enum AnnouncementStatus { DRAFT SCHEDULED PUBLISHED ARCHIVED }
+enum AudienceType { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }
 
-- **Additive columns (FR-2):** `Course.gradingScaleId String?` → `GradingScale` (`onDelete: SetNull`). `Assignment.categoryId String?` and `Quiz.categoryId String?` → `GradeCategory` (`onDelete: SetNull`), so deleting a category never deletes sources.
-- **Relation fields:** add only the back-relations Prisma requires (`Course.gradeItems`, `Course.gradeCategories`, `Term.gradeItems`, `GradeCategory.items/assignments/quizzes`). There are no new scalar columns beyond the spec.
-- **Keys already in the spec make sync race-safe (B19):** `GradeItem.sourceId @unique`, `Grade @@id([gradeItemId, studentId])`, `TermGradeOverride @@id([courseId, termId, studentId])`, `ReportCard @@unique([studentId, termId])`.
-- **Indexes added:**
-  - `GradeItem @@index([courseId, termId])` (NFR-2, NFR-3)
-  - `TermGradeOverride @@index([termId])` (NFR-3)
-  - `ReportCard @@index([termId, status])` (FR-29)
-- **Raw SQL in the migration:** a partial unique index `CREATE UNIQUE INDEX grading_scale_one_default ON "GradingScale" ("isDefault") WHERE "isDefault";` as the backstop for "exactly one default" (FR-16, ADR-3).
-- **Types:** `bands Json` holds `{ letter, minPercent, gpa?, descriptor? }[]`, sorted descending and validated by Zod (`bandsSchema`). `gpa` is stored and never computed (NFR-13).
+model Announcement {
+  // ...PRD fields verbatim...
+  lastRemindedAt DateTime?                       // FR-25 addition
+  @@index([status, publishAt])
+  @@index([authorId])
+  @@index([isPublic, status])
+}
+model AnnouncementAudience { /* PRD verbatim */ @@index([announcementId]) @@index([type, refId]) }
+model AnnouncementAttachment { /* PRD verbatim */ @@index([announcementId]) }
+model AnnouncementRead {
+  /* PRD verbatim */
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId])
+}
+```
 
-### 2.2 Server modules
+### 2.2 Validation: `src/lib/validators/announcements.ts` (FR-2, FR-34)
 
-| Module | Responsibility | Reuses | Req |
-|---|---|---|---|
-| `src/server/gradebook/grade-calc.ts` | **Pure** functions with no Prisma client import (types only): `computeStudentTerm(input)`, `categoryPercent`, `applyDropLowest`, `roundHalfUp1`, `letterFor(percent, bands)`, `applyOverride`, `effectiveScale(course, default)`, `gradeColour(percent)`. Everything is `Decimal`, and rounding happens once at the end. | `Decimal`, `dec`, `fixed2` from `assignments/grading-math.ts` | FR-10–FR-15, FR-26, NFR-1 |
-| `src/server/gradebook/term-placement.ts` | Pure `termFor(date, terms, tz, now)`: picks the containing term in school-local dates, falls back to the term containing today, else returns `null`. | `schoolToday` (attendance-rules), `getSchoolTimezone` | FR-3, NFR-10, A6 |
-| `src/server/gradebook/gradebook-sync.ts` (file name from the PRD) | Idempotent upserts. `upsertItemFromAssignment(tx, id)`, `upsertItemFromQuiz(tx, id)`, `hideItemForSource(tx, sourceId)`, `deleteItemForSource(tx, sourceId)`, `syncSubmissionGrade(tx, assignmentId, studentId, actorId?)`, `syncQuizGrade(quizId, studentId)`, `syncQuizGrades(quizId)`. It also exports **pure row builders** (`itemFromAssignment`, `gradeFromSubmission`, `gradeFromQuizScore`) that the backfill shares. | `isAssignmentVisible`, `getStudentQuizScore`, `resultsVisible`, `applyScoringPolicy`, `logger` | FR-3–FR-7, NFR-5 |
-| `src/server/gradebook/backfill.ts` | `backfillGradebook()`. Batch-loads per course and runs the same row builders with `upsert`. Idempotent through the unique keys. | `applyScoringPolicy` in memory (no per-student `getStudentQuizScore`) | FR-8, NFR-3 |
-| `src/server/gradebook/gradebook-service.ts` | `getGradebook(user, courseId, termId)`, `createManualItem`, `updateItem`, `deleteItem`, `putGrade`, `markAllMissing`, `putTermOverride`, `exportGradebookCsv`. Loads the data, calls grade-calc, enforces FR-9 and writes audit entries. | `assertCanManageCourse`, `audit`, `notifyStudentAndParents`, `toCsv` | FR-9, FR-18–FR-25, FR-38, NFR-2, NFR-4 |
-| `src/server/gradebook/categories-service.ts` | `getCategories`, `replaceCategories` (in a transaction: delete removed ids, upsert the rest, `dec(sum).eq(100)`), and `setCourseScale`. | `assertCanViewCourse`/`assertCanManageCourse` | FR-17, FR-40 |
-| `src/server/gradebook/scales-service.ts` | CRUD. `setDefault` runs in a transaction that clears the other defaults. Delete is guarded (A11). | `requireRole('ADMIN')`, `audit` | FR-16 |
-| `src/server/gradebook/student-grades-service.ts` | `getStudentGrades(user, studentId, termId, courseId?)`. Uses the visible-only serializer. Reuses grade-calc and passes **visible items only** into it, so the computed totals match what the student sees. | `assertCanViewStudent`, `getAccessibleStudentIds` | FR-26–FR-28, FR-42, NFR-5 |
-| `src/server/gradebook/load.ts` | Shared batched loader: `loadCourseTermData(courseIds[], termId, studentIds?)` returns `{items, grades, categories, overrides, scales}` in 5 `findMany` calls with `in` filters, grouped in memory. Used by the gradebook, student grades and report-card generation. | Prisma | NFR-2, NFR-3 |
-| `src/server/report-cards/snapshot.ts` | Zod `snapshotSchema` (`v: 1`) and the pure `buildSnapshot(student, courses, computed, attendance, school, scale)`. | grade-calc | FR-30 |
-| `src/server/report-cards/report-card-service.ts` | `listReportCards` (with warnings), `generateDrafts`, `getReportCard`, `patchComments`, `publish`, `unpublish`, `listForStudent`. | `load.ts`, attendance `getReport`, `notifyStudentAndParents`, `audit` | FR-29–FR-34, FR-36, NFR-3, NFR-4 |
-| `src/server/report-cards/access.ts` | `assertCanViewReportCard(user, card)`, `canEditHomeroomComment`. | `student-access`, `Section.homeroomTeacherId`, `Enrollment` | FR-32, FR-37, NFR-5, NFR-6 |
-| `src/lib/validators/gradebook.ts` | Zod: `bandsSchema`, `scaleSchema`, `categoriesPutSchema`, `manualItemSchema`, `itemPatchSchema`, `gradePutSchema`, `termOverrideSchema` (comment ≤ 1000), `reportCardPatchSchema`, `generateSchema`, `publishSchema`, `unpublishSchema` (reason required). These are shared by client forms and handlers. | Zod | FR-16, FR-17, FR-22, FR-23, FR-39, FR-40 |
-| `src/server/notifications/types.ts` (edit) | Register `grade.posted` (STUDENT+PARENT, `defaultEmail: false`) and `report_card.published` (STUDENT+PARENT, `defaultEmail: true`). | existing registry | FR-38 |
+This module is isomorphic: it is used by both the composer form (react-hook-form + zodResolver) and the handlers.
 
-**Hook edits to existing services** (each is one call; behaviour is otherwise unchanged, per NFR-9):
+- `audienceRowSchema`: `{ type, refId?, includeStudents, includeParents, includeTeachers }`, with these refinements:
+  - `refId` is required unless the type is SCHOOL or STAFF.
+  - For ROLE, `refId` must be a `Role` value.
+  - For GRADE_LEVEL, SECTION and COURSE, at least one include flag must be true.
+- `announcementInputSchema`, with these fields:
+  - `title`: trimmed, 1..150 characters
+  - `body`: 1..20,000 characters
+  - `audiences`: 0..20 rows of `audienceRowSchema`
+  - `pinned`, `requiresAck`, `isPublic`
+  - `coverFileId?`, `attachmentFileIds` (0..10)
+  - `mode`: `'draft' | 'publish' | 'schedule'`
+  - `publishAt?` (ISO), `expiresAt?` (ISO)
 
-| Existing site | Added call | Req |
+  Refinements on `announcementInputSchema`:
+  - `mode === 'schedule'` requires `publishAt > now`.
+  - `expiresAt` must be later than `publishAt ?? now`.
+- `announcementPatchSchema`: `announcementInputSchema.partial()`.
+- `feedQuerySchema`: `{ tab: 'all' | 'unread' | 'ack', courseId?, page, pageSize }`.
+- `statsQuerySchema`: `{ filter?: 'unread' | 'unacked', format?: 'csv' }`.
+- `previewAudienceSchema`: `{ audiences }`.
+
+### 2.3 Audience service: `src/server/announcements/audience.ts` (FR-3..FR-8, NFR-2)
+
+This module is generic. It never imports Announcement models (FR-8), and its input type is `AudienceRow = { type: AudienceType; refId: string | null; includeStudents: boolean; includeParents: boolean; includeTeachers: boolean }`. PRD-14 imports it unchanged.
+
+**`getAudienceKeys(userId) → AudienceKeys`** loads one user's keys with at most about 4 indexed queries. The keys are:
+
+```ts
+type AudienceKeys = {
+  userId: string;
+  role: Role;
+  active: boolean;
+  // As a STUDENT (own) or PARENT (per linked ACTIVE child)
+  gradeLevelIds: Set<string>;
+  sectionIds: Set<string>;   // SectionMember rows
+  courseIds: Set<string>;    // ACTIVE enrollment, non-archived course
+  // As a TEACHER
+  teachCourseIds: Set<string>;   // teacherId or coTeacherIds has, non-archived
+  teachSectionIds: Set<string>;  // homeroom ∪ Course.sectionId of taught courses
+  teachGradeLevelIds: Set<string>; // Section.gradeLevelId of taught current-year courses
+  // Parent only: which child produced each key (FR-22)
+  childByKey: Map<string, { id: string; firstName: string }[]>; // key = `${type}:${refId}`
+};
+```
+
+All the functions below use these keys.
+
+- **`matchesAudience(row, keys) → boolean`** is a pure function and the single source of the rules (R1). For an inactive user it returns false. Otherwise it matches by type:
+
+  | Type | Matches when |
+  |---|---|
+  | SCHOOL | always |
+  | STAFF | role is ADMIN or TEACHER |
+  | ROLE | role equals `refId` |
+  | GRADE_LEVEL | (`includeStudents` and the user is a STUDENT and `gradeLevelIds` has `refId`) or (`includeParents` and the user is a PARENT and `gradeLevelIds` has `refId`) or (`includeTeachers` and `teachGradeLevelIds` has `refId`) |
+  | SECTION | the same pattern with `sectionIds` and `teachSectionIds` |
+  | COURSE | the same pattern with `courseIds` and `teachCourseIds` |
+
+- **`isUserInAudience(user, rows)`** returns `rows.some(r => matchesAudience(r, keys))`. Keys are passed in when the caller already has them (FR-7).
+- **`audienceWhere(keys) → Prisma.AnnouncementAudienceWhereInput`** builds the SQL form of the same table: an `OR` of `{ type, refId: { in: [...] }, include<Flag>: true }` branches, built only for the non-empty key sets. The feed uses it as `audiences: { some: audienceWhere(keys) }`, which compiles to `EXISTS` (ADR-2).
+- **`resolveAudienceUserIds(rows) → string[]`** expands recipients. It runs one `user.findMany({ select: { id } })` per row/flag branch, takes the union in a `Set`, and then applies one final `status: ACTIVE, archivedAt: null` filter. Students that feed the parent branches are filtered to ACTIVE first (A3).
+- **`countAudienceByRole(rows)`** runs `resolveAudienceUserIds` and then `user.groupBy(role)`. It serves the preview and reach figures.
+- **`audienceLabels(rows) → string[]`** batch-loads GradeLevel, Section and Course names and produces chips such as "Grade 7 · Parents" or "MATH-7A · Students, Parents" (FR-18).
+
+Agreement between the matcher and `resolveAudienceUserIds` is not assumed. NFR-10's property test checks `isUserInAudience(u, rows) === resolveAudienceUserIds(rows).includes(u.id)` for every seed user and every seed row.
+
+### 2.4 Announcements service: `src/server/announcements/announcements-service.ts` (FR-9..FR-31, FR-36)
+
+| Function | Responsibility | Req |
 |---|---|---|
-| `assignments-service` `createAssignment` / `updateAssignment` / `publishOnce` | `upsertItemFromAssignment(tx, id)`. This sets `isVisible` only on a visibility transition (A7). It re-places the term only if `dueAt` changed (A10). | FR-3, FR-4 |
-| `deleteOrArchiveAssignment` | archive → `hideItemForSource`; hard delete → `deleteItemForSource` in the same transaction (B9) | FR-4 |
-| `gradeSubmission`, `bulkReturn`, `gradeOffline` | `syncSubmissionGrade` when the submission **is** RETURNED after the write. This covers re-grades of returned work. Nothing happens otherwise (AC-3). | FR-5, NFR-5 |
-| `setExemption` (both branches) | `syncSubmissionGrade` (A1) | FR-6 |
-| `quiz-service` `updateQuiz` (→PUBLISHED, or edits to a published quiz) / `deleteQuiz` | `upsertItemFromQuiz` / `deleteItemForSource`. Practice quizzes are skipped; turning practice on deletes the item. Wrap `deleteQuiz` in a transaction. | FR-3, FR-4 |
-| After callers of `recomputeAttempt` commit (`submitAttempt`, `gradeAnswerManually`, `regradeQuiz`) | `syncQuizGrade(quizId, studentId)`: no-op unless GRADED, `resultsVisible` and not practice | FR-7 |
-| `releaseResults` (MANUAL) and `quiz/maintenance.ts` AFTER_CLOSE claim (`count === 1`) | `syncQuizGrades(quizId)` (bulk). Without this, delayed-visibility quizzes never sync (R1). | FR-7, NFR-5 |
-| Assignment and quiz Zod validators and editors | Optional nullable `categoryId` plus one MUI `Select` of the course's categories | FR-2 |
+| `visibleWhere(now)` | `status IN (SCHEDULED, PUBLISHED) AND publishAt <= now AND (expiresAt IS NULL OR expiresAt > now)`. Used by the feed, detail, ack, unread-count, files and public news. | FR-16, FR-17, NFR-6 |
+| `isVisible(a, now)` | The same predicate in JS, for single rows. | FR-16 |
+| `displayStatus(a, now)` | Derives SCHEDULED, PUBLISHED, EXPIRED, ARCHIVED or DRAFT for the manage view, so the status is correct between cron ticks (R5). | FR-23 |
+| `assertCanTarget(user, rows, isPublic)` | ADMIN may target anything. TEACHER may target only COURSE rows for courses where they are `teacherId` or in `coTeacherIds` (the same test as `course-access.ts`), and SECTION rows where `homeroomTeacherId = user.id`. Every other case, including `isPublic`, throws 403 FORBIDDEN. | FR-9, FR-10, NFR-3 |
+| `createAnnouncement(user, input)` | `requireRole(ADMIN, TEACHER)` at the route, then `assertCanTarget`, then the zero-recipient check if the mode is not draft (FR-15). A transaction creates the announcement, audience rows and attachment rows and calls `attachFiles(tx, 'announcement', id, [cover, ...attachments])`. Files are attached even for drafts (R9, B7). After commit, `mode = publish` calls `claimAndNotify(id, now)`. | FR-11, FR-13, FR-15, FR-16, FR-27 |
+| `updateAnnouncement(user, id, patch)` | Allowed for the author or ADMIN, otherwise 404. ARCHIVED rows edited by a non-admin return 409 (A7). If `audiences` or `isPublic` is in the patch, it re-runs `assertCanTarget` on the **resulting** values (R8). The audience is replaced wholesale inside the transaction, and attachments are re-synced (attach new, detach removed). A transition to publish or schedule re-checks for zero recipients. It never clears `notifiedAt` (FR-29). An admin editing someone else's row triggers `audit('announcement.update')`. | FR-12, FR-29 |
+| `archiveAnnouncement(user, id)` | Allowed for the author or ADMIN. Sets `status = ARCHIVED`. An admin archiving someone else's row triggers `audit('announcement.archive')`. | FR-12 |
+| `listFeed(user, { tab, courseId, page })` | Loads the keys, then queries `visibleWhere ∧ audiences.some(audienceWhere(keys))`, adding the `courseId` filter when present (`audiences.some{type: COURSE, refId}` after `assertCanViewCourse`). The `tab` filter: `unread` → `reads.none{userId}`; `ack` → `requiresAck ∧ reads.none{userId, acknowledgedAt not null}`. Page 1 prepends up to 3 pinned items (`take 3`, ordered by `publishAt desc`) and excludes them from the main list (A4). The main list is ordered by `publishAt desc, id desc`. Each row includes `reads where userId`, `_count.attachments` and the author name and role. DTOs add `excerpt`, `labels` and, for parents, `forChildren`. | FR-17, FR-18, FR-21, FR-22, NFR-2 |
+| `unreadCount(user)` | `count` over the same `where` as the feed plus `reads.none{userId}`. | FR-32 |
+| `getForViewer(user, id)` | Visible to ADMIN, the author, or a user for whom `isVisible ∧ isUserInAudience` holds. Everyone else gets 404. For audience members only, it upserts `AnnouncementRead { readAt }` and keeps the existing `readAt`. Returns the body (rendered client-side with `MarkdownView`), attachments, the viewer's read row and `canEdit`. | FR-19, NFR-6 |
+| `acknowledge(user, id)` | Requires `isVisible ∧ isUserInAudience`, otherwise 404. A row with `!requiresAck` returns 409 CONFLICT. Upserts with `acknowledgedAt` set once; repeat calls are idempotent and return the original time. | FR-20 |
+| `previewAudience(user, rows)` | `assertCanTarget(user, rows, false)` first, so teachers cannot probe the sizes of other audiences. Then `countAudienceByRole`. Returns `{ total, byRole }`. | FR-14 |
+| `listManage(user, page)` | No visibility filter. TEACHER sees `authorId = me`; ADMIN sees everything. For each row on the page it computes `reach = resolveAudienceUserIds(rows).length`, `read% = reads(readAt) ∩ recipients / reach`, and `ack%` when `requiresAck`. `ponytail:` live reach is computed per page row (pageSize ≤ 50). Snapshot a `recipientCount` if this gets slow. | FR-23 |
+| `getStats(user, id, filter)` | Allowed for the author or ADMIN, otherwise 404. Recipients come from the live `resolveAudienceUserIds`, left-joined to reads. Returns the counts `{ recipients, read, acknowledged, readPct, ackPct }` and the rows `{ name, role, readAt, acknowledgedAt }`, filtered by unread or unacked. Reads from users who have left the audience are excluded (R11). | FR-24 |
+| `statsCsv(rows)` | `toCsv` from `src/server/csv.ts` with the columns Name, Role, Read at and Acknowledged at, formatted in the school timezone. | FR-24, NFR-7 |
+| `sendReminder(user, id, now)` | Allowed for the author or ADMIN, otherwise 404. Requires `requiresAck ∧ isVisible`, otherwise 409. Claims atomically with `updateMany({ where: { id, OR: [{ lastRemindedAt: null }, { lastRemindedAt: { lte: now − 24h } }] }, data: { lastRemindedAt: now } })`. A count of 0 throws 429 RATE_LIMITED with `{ retryAfter }`. Otherwise it notifies `recipients − acknowledged` with `announcement.reminder` and returns `{ notified }`. | FR-25, AC-5 |
+| `claimAndNotify(id, now)` | `updateMany({ where: { id, notifiedAt: null, ...visibleWhere(now) }, data: { notifiedAt: now, status: PUBLISHED } })`. If the count is 1, it resolves recipients and calls `notify()` in chunks of 1,000 (R7). This is the only code path that sends `announcement.published`. | FR-27, FR-29 |
+| `getPublicNews({ page })` | `isPublic ∧ visibleWhere(now)`. The DTO is `{ id, title, excerpt, body, publishAt, coverFileId, attachments[{ id, name }] }`, with no author email and no audience. | FR-31 |
 
-### 2.3 API layer (`src/app/api/**/route.ts`, thin: `withHandler` → Zod → service → `ok()`)
+Helpers that live beside the service:
 
-These match the PRD API table exactly. `api-contracts.json` (next sub-task) owns the shapes.
+- **`src/server/announcements/excerpt.ts`**: `toPlainText(md, max)`, a regex strip plus truncation (ADR-5). Its output is only ever rendered as escaped text (NFR-4). It produces the 200-character card excerpt (FR-18) and the 300-character email body (FR-28).
+- **`src/server/announcements/maintenance.ts`**: `publishDueAnnouncements(now)`. It does `findMany({ where: { status: SCHEDULED, notifiedAt: null, publishAt: { lte: now } }, take: 50, select: { id } })`, then runs `claimAndNotify` for each id and logs `{ claimed }`. It copies the claim pattern in `quiz/maintenance.ts` (FR-27, NFR-11).
+- **`src/server/announcements/files.ts`**: `announcementFileResolver(user, file)`. It loads the announcement by `file.contextId`. If `isPublic ∧ isVisible`, it allows access (including when `user` is null). Otherwise:
+  - no user: deny
+  - ADMIN or author: allow
+  - `isVisible ∧ isUserInAudience`: allow
+  - anything else: deny
 
-| Route | Role check | Service | Req |
-|---|---|---|---|
-| `GET/POST /api/grading-scales`, `PATCH/DELETE /api/grading-scales/[id]` | GET: `requireUser`; writes: ADMIN | scales-service | FR-16, FR-39 |
-| `GET/PUT /api/courses/[id]/grade-categories` | view / manage | categories-service (PUT body also carries `gradingScaleId`) | FR-17, FR-40 |
-| `GET /api/courses/[id]/gradebook?termId=` (`&format=csv` → `text/csv`) | manage | gradebook-service | FR-18–FR-21, FR-24, FR-25, NFR-2 |
-| `POST /api/courses/[id]/grade-items` | manage | createManualItem | FR-22 |
-| `PATCH/DELETE /api/grade-items/[id]` | manage (via the item's course) | updateItem / deleteItem. Non-MANUAL items accept only `isVisible`, and DELETE is MANUAL only. | FR-9, FR-24 |
-| `POST /api/grade-items/[id]/mark-missing` | manage | markAllMissing (`now > dueAt`, ungraded rows only) | FR-24 |
-| `PUT /api/grade-items/[id]/grades/[studentId]` | manage + enrolled student | putGrade. Non-MANUAL items accept only `comment` (FR-9). | FR-9, FR-20, FR-38, NFR-4 |
-| `PUT /api/courses/[id]/term-overrides/[studentId]` | manage | putTermOverride | FR-14, FR-23, NFR-4 |
-| `GET /api/students/[id]/grades?termId=&courseId=` | `assertCanViewStudent` | student-grades-service | FR-26–FR-28, FR-42 |
-| `GET /api/report-cards?termId=&gradeLevelId=&sectionId=&studentId=` | ADMIN; homeroom TEACHER (own sections); with `studentId`, view-student rules plus PUBLISHED-only for student/parent | listReportCards / listForStudent | FR-29, FR-33, FR-36 |
-| `POST /api/report-cards/generate` | ADMIN | generateDrafts | FR-30, FR-31, NFR-3 |
-| `GET /api/report-cards/[id]` | `assertCanViewReportCard` | getReportCard | FR-37 |
-| `PATCH /api/report-cards/[id]` | field-level (§4) | patchComments | FR-32 |
-| `POST /api/report-cards/publish`, `POST /api/report-cards/unpublish` | ADMIN | publish / unpublish | FR-34 |
+  It is registered in `registerBuiltInContexts` in `src/server/files/contexts.ts` (FR-30, B8).
 
-`mark-missing` is the only route not in the PRD table. It implements the FR-24 column action server-side, because a client loop of N PUTs would write N audit rows and be slow. The `?format=csv` and `courseId`/`studentId` query parameters extend existing PRD routes rather than adding new ones.
+### 2.5 Existing modules touched (NFR-8)
 
-### 2.4 UI (`src/app/(app)/…`, MUI only, every component looked up via mui-mcp first, per NFR-7)
-
-| Page / component | Notes | Req |
+| File | Change | Req |
 |---|---|---|
-| `admin/grading-scales/page.tsx` + `ScaleEditorDialog` | `DataTable` list. The dialog uses a band editor (TextField rows, add/remove) with Zod errors inline and a "Default" `Switch`. | FR-16 |
-| `courses/[courseId]/gradebook/settings/page.tsx` | Category rows (name, weight, drop lowest, order), a live `Σ weights / 100` `Chip` (error colour ≠ 100, Save disabled), and a scale `Select` ("School default" = null). | FR-17 |
-| `courses/[courseId]/gradebook/page.tsx` + `src/components/gradebook/GradebookGrid.tsx` | The single client component that owns the DataGrid (ADR-4, R7). Term `Select`, `columnGroupingModel` by category, custom `renderHeader` (title, due date, max, source icon), `renderCell` (score / EX / M red / — / late `AccessTime` icon), and `isCellEditable` = MANUAL only. Editing runs through `renderEditCell` + `onCellKeyDown` (digits, E, M, Delete, Enter/arrows), then `processRowUpdate` → PUT, `onProcessRowUpdateError` → per-cell error, and `hideFooter`. There are **no pinned columns**. Toolbar: "Add manual item", "Export CSV", "Settings". | FR-18–FR-25, NFR-8 |
-| `AddManualItemDialog`, `TermOverrideDialog`, `ItemStatsDialog` | Dialogs. Stats (average, median, high, low) are computed client-side from the payload over counted scores. | FR-22, FR-23, FR-24 |
-| `src/components/gradebook/StudentGradesView.tsx` | Course `Card`s with percent, letter and `gradeColour` `Chip`. `Accordion` expands to items and category subtotals. One component serves three hosts: | FR-26–FR-28 |
-| ↳ `students/[id]/grades/page.tsx` | student tab | FR-26 |
-| ↳ `grades/page.tsx` | STUDENT: self. PARENT: child `Select` from `getAccessibleStudentIds`. | FR-27 |
-| ↳ `courses/[courseId]/grades/page.tsx` | filtered to one course | FR-28 |
-| `admin/report-cards/page.tsx` | Term / grade level / section filters, `DataTable` with status `Chip` and warnings, and "Generate drafts", "Publish all", "Print all" actions. Confirmations use `ConfirmDialog`. | FR-29, FR-30, FR-34, FR-35 |
-| `report-cards/page.tsx` | Homeroom TEACHER: their sections' cards for the selected term | FR-33 |
-| `report-cards/[id]/page.tsx` | Review page: `ReportCardDocument` preview plus homeroom/principal comment fields (disabled per role or when PUBLISHED), and Publish / Unpublish (reason dialog) for ADMIN | FR-32, FR-34 |
-| `report-cards/[id]/print/page.tsx`, `report-cards/print/page.tsx?termId=&…` | Server components rendering `ReportCardDocument` from the **snapshot only**. `GlobalStyles`: `@page { size: A4 portrait; margin: 12mm }`, `@media print` hides the app shell and buttons, each card gets `break-after: page`, and rows get `break-inside: avoid`. A `PrintButton` calls `window.print()`. Bulk print shows filtered PUBLISHED cards only. | FR-35, NFR-11 |
-| `students/[id]/report-cards/page.tsx` | List of cards, each linking to the print view | FR-36 |
-| Config | `courseTabs`: `gradebook` (ADMIN, TEACHER) and `grades` (STUDENT, PARENT). `studentTabs`: `grades` and `report-cards`. `navigation`: the four entries from A4. | FR-18, FR-26–FR-28, FR-33, FR-36 |
+| `src/server/notifications/types.ts` | Add `'announcement.published'` (COMMUNICATION, `defaultEmail: true`, `mandatoryInApp: false`, roles ALL) and `'announcement.reminder'` (COMMUNICATION, `defaultEmail: true`, `mandatoryInApp: true`, roles ALL). | FR-26 |
+| `src/server/notifications/notify.ts` | Optional `NotifyInput.mandatoryInApp` override (A9). | FR-26 |
+| `src/app/api/internal/email/dispatch/route.ts` | Add an isolated `try { await publishDueAnnouncements(now) } catch (e) { logger.error }` block alongside the existing passes. | FR-27 |
+| `src/server/files/contexts.ts` | `register('announcement', announcementFileResolver)`. | FR-30 |
+| `src/config/public-routes.ts` | Add `'/api/public/news'` to `PUBLIC_API_PATHS`. | FR-31 |
+| `src/config/navigation.ts` + sidebar component | Add an optional `badgeEndpoint?: string` to `NavItem`, and an Announcements entry for all roles with `badgeEndpoint: '/api/announcements/unread-count'`. The sidebar wraps the icon in MUI `Badge` and polls every 30 s, gated by visibility, copying `NotificationBell`. | FR-32 |
+| `src/config/course-tabs.ts` | `{ key: 'announcements', label: 'Announcements', href: id => '/courses/' + id + '/announcements', roles: ALL_ROLES }`. | FR-21 |
+| `prisma/seed.ts` | Six announcements, idempotent by `(title, authorId)`. MATH-7A and Grade 7 targets are skipped when missing. Already-published seeds get `notifiedAt = now`, so seeding never sends notifications. | FR-35 |
 
-Every page server-checks the role with `requireUser`/`requireRole` plus the same entity assert as its API (NFR-6). It never relies on hidden links.
+### 2.6 API layer: `src/app/api/**` (FR-34)
 
-### 2.5 Scripts and seed
+Every handler is `withHandler` → `requireUser` or `requireRole` → `parseQuery` or `parseBody` (Zod) → one service call → `ok` or `paginated`. No business logic lives in routes.
 
-- `package.json`: `"gradebook:backfill": "tsx scripts/gradebook-backfill.ts"`. The script calls `backfillGradebook()` and exits (FR-8, ADR-7).
-- `prisma/seed.ts`:
-  1. scale "Standard A–F" (default)
-  2. Homework 30 (drop 1) / Quizzes 30 / Exams 40 for each 7A course
-  3. `backfillGradebook()`
-  4. ENG-7A manual item "Oral presentation" graded for all enrolled students
-  5. Semester 1 `TermGradeOverride.teacherComment` for MATH-7A and ENG-7A
-  6. `generateDrafts(S1, 7A students)`
+| Route file | Methods | Role gate |
+|---|---|---|
+| `announcements/route.ts` | GET (feed), POST (create) | any / ADMIN, TEACHER |
+| `announcements/unread-count/route.ts` | GET | any |
+| `announcements/preview-audience/route.ts` | POST | ADMIN, TEACHER |
+| `announcements/manage/route.ts` | GET | ADMIN, TEACHER |
+| `announcements/[id]/route.ts` | GET, PATCH | any (service gates) / ADMIN, TEACHER |
+| `announcements/[id]/archive/route.ts` | POST | ADMIN, TEACHER |
+| `announcements/[id]/ack/route.ts` | POST | any (service gates) |
+| `announcements/[id]/stats/route.ts` | GET (`?format=csv` → `text/csv` + `Content-Disposition`) | ADMIN, TEACHER |
+| `announcements/[id]/remind/route.ts` | POST | ADMIN, TEACHER |
+| `public/news/route.ts` | GET (no auth, `rateLimit` by IP, `parsePagination` clamp) | public |
 
-  Categories go in before the backfill so seeded assignments and quizzes can be attached to them (FR-41).
+STUDENT and PARENT callers hitting the ADMIN/TEACHER routes get 403 from `requireRole` (FR-11). The exact request and response shapes are owned by `arch-api-contracts`.
+
+### 2.7 UI layer: `src/app/(app)/announcements/**` (FR-13..FR-24, FR-32, FR-33, NFR-1, NFR-5)
+
+Each page is a server component that enforces access through the same service calls (NFR-3) and renders client components. All UI uses MUI only, and every component is looked up through mui-mcp before use.
+
+| Route | Components |
+|---|---|
+| `/announcements` | `PageHeader` with a "New announcement" button for ADMIN and TEACHER (FR-33). MUI `Tabs` for All, Unread and Requires acknowledgement. A list of `AnnouncementCard` (`Card`, `CardMedia` cover thumbnail via `/api/files/:id`, title, author and role, date in the school timezone, `Chip` labels, excerpt, attachment count, a "For Sam" `Chip` for parents, and an unread dot with `visuallyHidden` "Unread"). `Pagination` and `EmptyState`. |
+| `/announcements/[id]` | Title and metadata, then `MarkdownView` for the body (NFR-4) and `FileList` for attachments. When `requiresAck`, a `Button` reading "I acknowledge" that becomes a disabled "Acknowledged on 14 Sep" (`formatInSchoolTz`, NFR-7). Edit and Stats links for the author and admins. |
+| `/announcements/new`, `/announcements/[id]/edit` | `AnnouncementComposer` (react-hook-form + zodResolver): `TextField` title, `MarkdownEditor`, `FileUpload` (cover, context `announcement`), `FileUpload` + `FileList` (attachments), and `AudienceBuilder`. `AudienceBuilder` has rows of `Select` type → `Autocomplete` entity (grade levels, sections, courses, roles; teachers see only their own courses and homeroom) → three `Checkbox`es, plus a debounced (400 ms) preview line "Will reach N people: …". Further fields: `Switch`es for pinned, requires acknowledgement and public (admins only), a `RadioGroup` for Publish now / Schedule / Save draft, and `DateTimePicker`s for publishAt and expiresAt, converted from the school timezone to UTC on submit. Server errors surface through `useToast()`. |
+| `/announcements/manage` | `DataTable` with the columns status chip (`displayStatus`), title, audience summary, reach, read % and ack %. Row actions are Edit, Stats and Archive (`ConfirmDialog`). |
+| `/announcements/[id]/stats` | `StatCard`s for recipients, read % and ack %. A `DataTable` of recipients with an Unread / Not acknowledged `ToggleButtonGroup`, an "Export CSV" link (`?format=csv`) and "Send reminder" (`ConfirmDialog`; a 429 response is shown as a toast with the retry time). |
+| `/courses/[id]/announcements` | The feed list component with `courseId`, behind `assertCanViewCourse`. |
 
 ---
 
 ## 3. Data Flow
 
-### 3.1 Source → gradebook sync (write path)
+### 3.1 Create and publish now (FR-10, FR-13..FR-15, FR-27, FR-28)
 
 ```
-Teacher publishes assignment ─► assignments-service (tx) ─► upsertItemFromAssignment(tx)
-                                                              ├─ termFor(dueAt, courseYearTerms, tz)  → null ⇒ warn+skip
-                                                              └─ GradeItem upsert by sourceId (isVisible only on transition)
-Teacher returns submission  ─► gradeSubmission/bulkReturn/gradeOffline (tx)
-                                  └─ status==RETURNED ? syncSubmissionGrade(tx): Grade upsert {score: finalScore,
-                                                                                  excused: exemption exists}
-Quiz attempt graded         ─► recomputeAttempt → commit → syncQuizGrade(quiz, student)
-                                  └─ GRADED ∧ resultsVisible ∧ ¬isPractice ? getStudentQuizScore → scale to maxPoints → upsert
-Results released / closed   ─► releaseResults | maintenance claim ─► syncQuizGrades(quiz)  (bulk, batched)
+Composer ──POST /api/announcements──► withHandler → requireRole(ADMIN,TEACHER) → parseBody(announcementInputSchema)
+  → assertCanTarget(user, audiences, isPublic)          ── 403 on violation (AC-3)
+  → countAudienceByRole(audiences).total === 0 ?        ── 400 VALIDATION_ERROR (not for drafts)
+  → $transaction: create Announcement{status:PUBLISHED, publishAt:now} + audiences + attachments; attachFiles(...)
+  → (after commit) claimAndNotify(id, now)
+       updateMany(id, notifiedAt null, visible) → count 1
+       → resolveAudienceUserIds → notify({type:'announcement.published', userIds (chunks of 1k), title,
+           body: toPlainText(body,300), link:/announcements/id, mandatoryInApp: requiresAck,
+           email:{template:'generic-notification', data:{title, body, link, ctaLabel:'Read announcement'}}})
+  → 201 { announcement }
 ```
 
-Because unreleased scores are **never written** into `Grade`, privacy holds at the storage layer as well as in serializers (NFR-5, layer 1 of 3).
-
-Quiz scaling: `score = result.score / result.maxScore × GradeItem.maxPoints`, where `maxPoints = quiz maxScore`, in Decimal with `fixed2` at write.
-
-### 3.2 Calculation (pure, `grade-calc.ts`)
+### 3.2 Scheduled publish (FR-16, FR-27, AC-4)
 
 ```
-input: { items[], grades by itemId, categories[], bands, override?, now }
-counted(item) = item.isVisible ∧ ¬grade.excused ∧ (grade.score ≠ null ∨ (grade.missing ∧ item.dueAt ∧ now > item.dueAt))
-earned = score ?? 0
-per category: sort counted by pct asc (tie: dueAt, id) → drop min(dropLowest, n−1) → Σearned/Σmax×100
-course: categories present with ≥1 counted ⇒ Σ(w·pct)/Σw   (Uncategorised w = 0, A8)
-        no categories / none counted       ⇒ Σearned/Σmax×100 over all counted
-        nothing counted                    ⇒ percent = null, letter = null ("—")
-percent = round half-up to 1 dp (only here) → letter = first band with percent ≥ minPercent
-override: percent? → replaces percent (letter re-derived unless letter set, A12); letter? → replaces letter only
+Create with mode=schedule → status SCHEDULED, publishAt=T, notifiedAt null   (no notify)
+Before T: visibleWhere excludes it (publishAt > now)  → absent from feed, detail 404 for non-authors
+At/after T: visibleWhere includes it immediately on read (no cron needed)
+Cron  POST /api/internal/email/dispatch (CRON_SECRET) → publishDueAnnouncements(now)
+       → findMany(SCHEDULED, notifiedAt null, publishAt<=now, take 50)
+       → claimAndNotify(id) per row; concurrent runs: only one updateMany gets count 1 → exactly one send
 ```
 
-The output per student is `{ categories: [{id, name, weight, percent, earned, possible, droppedItemIds}], percent, letter, descriptor, computedPercent, computedLetter, overridden }`. The gradebook, the student views and report-card generation all call this **one** function, which guarantees FR-15 / AC-1 (78.0% C+ in both places).
-
-### 3.3 Gradebook read (NFR-2: 35×80 < 800 ms)
-
-`GET gradebook` → `assertCanManageCourse` → `load.ts`:
-
-1. active enrollments + students, sorted by last name
-2. items `(courseId, termId)`
-3. grades for those item ids
-4. categories
-5. override rows + course scale or default
-
-Then two lookup queries for click-through and late flags: `Submission {id, isLate}` by `assignmentId in` and `QuizAttempt {id}` by `quizId in`. That's seven indexed queries in total. The pure calc runs for each student in memory, and the response is one denormalised payload. The client builds the columns, and the grid virtualises rows and columns.
-
-### 3.4 Manual grade edit
+### 3.3 Feed read (FR-17, FR-22, NFR-2)
 
 ```
-cell edit ─► processRowUpdate ─► PUT /api/grade-items/:id/grades/:studentId
-   service (tx): load old grade → reject non-comment fields if item.source ≠ MANUAL (FR-9)
-                 → upsert → audit('grade.update', {old, new})
-   after commit: old.score == null ∧ new.score ≠ null ∧ MANUAL ⇒ notifyStudentAndParents('grade.posted')  (A9)
-   response: updated grade + recomputed student row (so the term % cell refreshes)
+GET /api/announcements?tab=&courseId=&page=
+  → getAudienceKeys(user)            ~4 indexed queries (parent: children → profiles, section members, enrollments)
+  → findMany(visibleWhere(now) ∧ audiences.some(audienceWhere(keys)) ∧ tab filter)
+       EXISTS over AnnouncementAudience(type, refId) index; Announcement(status, publishAt) index
+  → page 1: pinned take 3 first, then the rest newest-first
+  → DTO: excerpt (toPlainText 200), labels (audienceLabels, batched), unread flag, forChildren (keys.childByKey)
 ```
 
-On error the client rolls back the optimistic value and flags the cell.
+The target is under 200 ms for a parent with 3 children and 2,000 announcements. NFR-10 includes an optional timing check in the integration suite.
 
-### 3.5 Report card lifecycle
-
-```
-generate {termId, studentIds} (ADMIN)
-  ├─ load once: students (+section, homeroom, gradeLevel), school settings, term+year, default scale,
-  │             enrollments for those students in courses of the term's year,
-  │             load.ts for all those courseIds (in-filters), attendance getReport(term range) ×1
-  ├─ compute in memory: grade-calc per (student, course) → buildSnapshot(v:1)
-  └─ write (chunks of 100, tx): createMany(skipDuplicates) for new;
-                                updateMany({ where:{ id, status:'DRAFT' }, data:{ snapshot, generatedAt } }) for existing
-     PUBLISHED rows are filtered out by the WHERE clause, which enforces immutability (FR-31 / AC-8)
-publish {ids}   ─► updateMany({ id in ids, status:'DRAFT' } → PUBLISHED, publishedAt, publishedById)
-                   → audit('reportCard.publish') → after commit notify report_card.published per card
-unpublish {ids, reason} ─► PUBLISHED → DRAFT, clear publishedAt/ById, audit('reportCard.unpublish', {old, new, reason})
-print            ─► reads snapshot only; never recomputes
-```
-
-Nothing in `src/server/gradebook/` imports `src/server/report-cards/` or writes `ReportCard`. Grade edits therefore cannot touch snapshots.
-
-**Snapshot v1 shape**, owned by `snapshotSchema`:
+### 3.4 Detail, read and acknowledge (FR-19, FR-20)
 
 ```
-{ v: 1,
-  school:     { name, logoUrl },
-  student:    { name, admissionNumber, gradeLevel, section, homeroomTeacher },
-  term:       { name, startDate, endDate, academicYear },
-  courses:    [{ subject, code, teacher, percent, letter, descriptor, teacherComment }],
-  attendance: { rate, absences, lates, ...counts },
-  scale:      { name, bands } }
+GET /:id → admin|author|(visible ∧ member) else 404 → member: upsert AnnouncementRead{readAt}
+POST /:id/ack → visible ∧ member else 404; !requiresAck → 409 → upsert {acknowledgedAt: existing ?? now}
 ```
 
-`attendance.rate` uses the same formula the existing attendance report consumers use; dev must not invent a new one (B13). Each course's letter uses that course's effective scale. The legend shows the default scale and also lists any course-specific scale used.
+### 3.5 Stats and reminder (FR-24, FR-25, AC-5)
 
-**Missing-data warnings (FR-29)** are computed in the same batched pass:
+```
+GET /:id/stats → author|admin else 404 → recipients = resolveAudienceUserIds; join reads
+   50 recipients, 30 acked → ackPct 60
+POST /:id/remind → claim lastRemindedAt (≤ now−24h) → 0 rows → 429 {retryAfter}
+   → notify('announcement.reminder', recipients − acked)  → { notified: 20 }
+```
 
-- a count of courses with eligible-but-ungraded items (visible, past due, no score, not missing, not excused)
-- courses with no `teacherComment` override for the student
+### 3.6 Files and public news (FR-30, FR-31, AC-7)
 
-### 3.6 Student/parent read (privacy, NFR-5 layers 2 and 3)
-
-`GET /api/students/:id/grades`: `assertCanViewStudent` → `load.ts` with `isVisible = true` filtered **in the query** → calc → serializer emits only whitelisted fields (no `updatedById`, no hidden items).
-
-Report-card endpoints apply `assertCanViewReportCard`. STUDENT and PARENT pass only if `card.status === 'PUBLISHED'` and they're the student or a linked parent. Anyone else unauthorised gets **NOT_FOUND**, so a 7B student can't tell that Sam's card exists (AC-7).
+```
+GET /api/files/:id (already public route) → access registry → announcementFileResolver(user|null, file)
+GET /api/public/news?page= (no session) → getPublicNews → isPublic ∧ visible → public DTO
+```
 
 ---
 
-## 4. Access Control Matrix (NFR-6)
+## 4. Cross-cutting Rules
 
-| Action | ADMIN | TEACHER | STUDENT | PARENT |
-|---|---|---|---|---|
-| Read scales | ✓ | ✓ | ✓ | ✓ |
-| Write scales | ✓ | — | — | — |
-| Categories GET | ✓ | view course | view course | view course |
-| Categories PUT | ✓ | teaches course | — | — |
-| Gradebook / items / grades / overrides | ✓ | teaches course (`assertCanManageCourse`) | — | — |
-| Student grades | ✓ | teaches student or is homeroom (existing student-access) | self | linked child |
-| Report cards list / generate | list + generate | list: own homeroom sections | own published (via `studentId`) | child's published |
-| Report card GET | ✓ | teaches any course of the student, or is homeroom | self, PUBLISHED only | linked, PUBLISHED only |
-| `homeroomComment` PATCH | ✓ | homeroom teacher of the student's section, DRAFT only | — | — |
-| `principalComment` PATCH | ✓ (DRAFT only) | — | — | — |
-| Publish / unpublish | ✓ | — | — | — |
+- **Security (NFR-3, NFR-6).** Every handler and server page calls `requireUser` or `requireRole`. Ownership, membership and targeting checks live in the service, so pages and routes share them. Non-members get 404; targeting violations get 403.
+- **Sanitisation (NFR-4).** The body renders only through `MarkdownView` (react-markdown + rehype-sanitize). Excerpts and email bodies are plain text from `toPlainText`, rendered as escaped text and never through `dangerouslySetInnerHTML`.
+- **Timezones (NFR-7).** All columns are UTC. Composer inputs are interpreted in `getSchoolTimezone()` (imported from `assignments-service.ts`, B15) and converted with `date-fns-tz`. All dates are displayed with `formatInSchoolTz`.
+- **Logging (NFR-11).** All new server code logs through `logger` from `src/lib/logger.ts`. `console.*` is used only in the existing seed style.
+- **UI rule (NFR-1).** MUI only. Toasts go through `useToast`, confirmations through `ConfirmDialog`, pickers through `Autocomplete` and `DateTimePicker`. The existing `eslint-no-restricted-imports` unit test guards against banned libraries. If mui-mcp is unreachable during development, report a blocker.
+- **Scope (NFR-9).** No comments, reactions, translation, SMS or public website pages. Only `getPublicNews` and `/api/public/news` are exposed.
 
----
-
-## 5. Cross-cutting
-
-- **Audit (NFR-4):**
-  - required: `grade.update` (manual, and comment edits on synced grades), `grade.markMissing`, `termOverride.upsert`, `reportCard.unpublish` (with reason), each carrying `{old, new}`
-  - extra: `reportCard.publish`, `gradingScale.create/update/delete`, `gradeCategories.replace`
-- **Notifications (FR-38):** sent after commit, using `notify()`, which never throws, so a notification failure can't roll back a grade.
-- **Errors:** `AppError` codes `VALIDATION_ERROR` (weights ≠ 100, bad bands, non-MANUAL field edit, mark-missing before due), `CONFLICT` (scale in use, editing a PUBLISHED card), `NOT_FOUND`, `FORBIDDEN`.
-- **Logging:** `logger` only, never `console.log` (NFR-9).
-- **Timezone (NFR-10):** all date rules go through `getSchoolTimezone()` + `schoolToday`. UI dates use `DateDisplay`.
-- **Out of scope (NFR-13):** no GPA computation, class rank, transcripts or standards-based grading.
-
----
-
-## 6. Test Plan Mapping (NFR-12)
+## 5. Test Plan Mapping (NFR-10)
 
 | Layer | File | Covers |
 |---|---|---|
-| Unit | `src/server/gradebook/grade-calc.test.ts` | no categories, empty categories, Uncategorised (A8), drop lowest (AC-2) and never-drop-all, missing vs ungraded vs excused (AC-5), past-due boundary, overrides (letter-only AC-6, percent-only A12), rounding 89.95 → 90.0 → A−, 77.0 → C+, the FR-15 golden 78.0 C+ |
-| Unit | `term-placement.test.ts` | containment at tz day boundaries, current-term fallback, null |
-| Integration | `gradebook-sync.test.ts` | return → Grade, save-without-return → none (AC-3), exemption on/off, quiz GRADED + IMMEDIATE / AFTER_CLOSE / MANUAL release, practice skipped, archive hides, delete removes, teacher hide survives re-save (A7) |
-| Integration | `backfill.test.ts` | run twice → identical counts |
-| Integration | `report-cards.test.ts` | generate → publish → edit grade → snapshot unchanged (AC-8), regenerate skips PUBLISHED, 7B student gets NOT_FOUND (AC-7), notifications sent |
-| Integration | `perf` (optional, CI-skippable) | 35×80 gradebook < 800 ms, 600×8 generation < 30 s |
-| Playwright | `gradebook.spec.ts`, `report-cards.spec.ts` | keyboard edits (digits, E, M, Delete, Enter/arrows), admin generate + publish, parent opens print view with sidebar hidden under print media |
+| Unit | `tests/unit/announcements/audience-match.test.ts` | `matchesAudience` for every type × flag combination × role, using hand-built keys and no DB (FR-3..FR-6). |
+| Unit | `tests/unit/announcements/permissions.test.ts` | `assertCanTarget` for admin, teacher course, co-teacher, homeroom, foreign course, SCHOOL, STAFF, ROLE, GRADE_LEVEL and `isPublic` (FR-9, FR-10). |
+| Unit | `tests/unit/announcements/excerpt.test.ts` | `toPlainText` stripping and truncation (FR-18, FR-28). |
+| Unit | `tests/unit/validators/announcements.test.ts` | Zod limits and refinements (FR-2). |
+| Integration | `tests/integration/announcements/audience-agreement.test.ts` | For every seed and fixture user × every audience row, `isUserInAudience` equals membership in `resolveAudienceUserIds` (FR-7). |
+| Integration | `tests/integration/announcements/publish.test.ts` | `publishDueAnnouncements` run twice and concurrently produces one notification set; FR-29 no re-notify on PATCH; AC-4. |
+| Integration | `tests/integration/announcements/api.test.ts` | AC-1, AC-2, AC-3 (403), AC-5 (60%, 20 notified, 429), AC-6, AC-7, AC-8 (the fixture creates Pat's 6A child). |
+| E2E | `tests/e2e/announcements.spec.ts` | Admin composes a Grade 7 parents announcement with ack, Pat reads and acknowledges, admin opens stats. |
 
 ---
 
-## 7. Requirements Traceability
+## 6. Requirements Traceability
 
 | Req | Design element(s) |
 |---|---|
-| FR-1 | §2.1 migration: PRD FR-1 models verbatim, plus indexes and the partial unique default index |
-| FR-2 | §2.1 `Course.gradingScaleId`, `Assignment/Quiz.categoryId` (SetNull). §2.2 validator and editor `Select` hooks. |
-| FR-3 | `gradebook-sync.upsertItemFromAssignment/Quiz`, `term-placement.termFor` (A6, A10). Hooks in §2.2. |
-| FR-4 | `hideItemForSource`, `deleteItemForSource` (same transaction). A7, A15. |
-| FR-5 | `syncSubmissionGrade` from `gradeSubmission` / `bulkReturn` / `gradeOffline`, only when RETURNED (§3.1) |
-| FR-6 | `setExemption` → `syncSubmissionGrade` (A1) |
-| FR-7 | `syncQuizGrade` after `recomputeAttempt` callers, `syncQuizGrades` on release and close, existing `getStudentQuizScore` + `resultsVisible` (A2) |
-| FR-8 | `gradebook/backfill.ts`, `scripts/gradebook-backfill.ts`, npm script, seed call (§2.5) |
-| FR-9 | `putGrade` / `updateItem` reject non-comment and non-`isVisible` fields on synced items. Grid `isCellEditable`. |
-| FR-10 | `grade-calc.ts` `counted()` predicate (§3.2) |
-| FR-11 | `applyDropLowest`, `categoryPercent` |
-| FR-12 | course aggregation with renormalised weights, Uncategorised bucket, points fallback (A8) |
-| FR-13 | `roundHalfUp1` + `letterFor`, `effectiveScale` (A3) |
-| FR-14 | `applyOverride` (A12), `putTermOverride` |
-| FR-15 | single shared calc for the gradebook and student views. Golden unit test. |
-| FR-16 | `scales-service`, `/admin/grading-scales`, `bandsSchema`, partial unique index (A11) |
-| FR-17 | `categories-service`, gradebook settings page with live sum, scale select |
-| FR-18 | `GradebookGrid` (MIT DataGrid, column groups, virtualisation, sticky header), `getGradebook`, `courseTabs.gradebook` |
-| FR-19 | `GradebookGrid` `renderCell`. The payload carries `isLate`. |
-| FR-20 | `renderEditCell` + `onCellKeyDown` + `processRowUpdate`, PUT grade, optimistic update with per-cell error (§3.4) |
-| FR-21 | payload `submissionId` / `attemptId` → links to the existing grading and attempt pages |
-| FR-22 | `AddManualItemDialog`, `POST /api/courses/[id]/grade-items`, `createManualItem` |
-| FR-23 | `TermOverrideDialog`, `PUT term-overrides`, `termOverrideSchema` (≤ 1000) |
-| FR-24 | column menu: `PATCH isVisible`, `POST mark-missing`, `ItemStatsDialog` |
-| FR-25 | `exportGradebookCsv` via `toCsv`, `?format=csv` |
-| FR-26 | `StudentGradesView`, `studentTabs.grades`, `gradeColour` |
-| FR-27 | `/grades` page with parent child select, nav entry (A4) |
-| FR-28 | `courses/[courseId]/grades`, `courseTabs.grades` |
-| FR-29 | `/admin/report-cards`, `listReportCards` with warnings (§3.5) |
-| FR-30 | `generateDrafts`, `buildSnapshot` v1, attendance `getReport` |
-| FR-31 | DRAFT-only `updateMany`. Gradebook never writes ReportCard (§3.5). |
-| FR-32 | `report-cards/[id]` review page, `patchComments`, field-level access (§4, A13) |
-| FR-33 | `/report-cards` homeroom list, TEACHER nav entry |
-| FR-34 | `publish` / `unpublish`, notify after commit, audit with reason (A13) |
-| FR-35 | print pages, `ReportCardDocument`, `@page` A4 + `@media print` GlobalStyles, `PrintButton` |
-| FR-36 | `studentTabs['report-cards']`, `listForStudent` (PUBLISHED-only for student/parent) |
-| FR-37 | `report-cards/access.assertCanViewReportCard` (NOT_FOUND for others) |
-| FR-38 | `types.ts` registrations, `grade.posted` on first score (A9), `report_card.published` |
-| FR-39 | §2.3 route table: `withHandler` → `validators/gradebook.ts` → services, existing course-access |
-| FR-40 | `categories-service.replaceCategories` (transaction, `dec(sum).eq(100)`) |
-| FR-41 | `prisma/seed.ts` sequence (§2.5) |
-| FR-42 | `student-grades-service` (visible-only query + whitelist serializer) |
-| NFR-1 | `grade-calc.ts` pure Decimal, single final rounding, unit matrix (§6) |
-| NFR-2 | `load.ts` 7 indexed queries, in-memory calc, DataGrid virtualisation, `GradeItem(courseId, termId)` index |
-| NFR-3 | batched `load.ts` with `in` filters, one attendance groupBy, chunked writes (§3.5) |
-| NFR-4 | `audit()` calls listed in §5 with `{old, new}` |
-| NFR-5 | three layers: sync gating (§3.1), visible-only serializer (§3.6), PUBLISHED-only card guard |
-| NFR-6 | §4 matrix. Every route and server page calls `requireUser`/`requireRole` plus the entity asserts. |
-| NFR-7 | §2.4 MUI-only components looked up via mui-mcp, `useToast`, `ConfirmDialog`/`Dialog`, `Autocomplete` |
-| NFR-8 | `GradebookGrid` MIT props only, no pinned columns |
-| NFR-9 | new code only in `src/server/gradebook/` and `src/server/report-cards/`, one-line hooks, reuse table (§2.2), `logger` |
-| NFR-10 | `term-placement` (tz dates), instant past-due (A5), `DateDisplay` |
-| NFR-11 | A4 `@page`, print media rules, `break-after` / `break-inside` |
-| NFR-12 | §6 test plan |
-| NFR-13 | `gpa` stored only. No rank or transcript components. |
+| FR-1 | §2.1 schema and migration `20261112000000_add_announcements`; additions listed in §1 |
+| FR-2 | §2.2 `src/lib/validators/announcements.ts` |
+| FR-3 | §2.3 `resolveAudienceUserIds`, `matchesAudience` (SCHOOL, STAFF, ROLE); ACTIVE filter (A3) |
+| FR-4 | §2.3 GRADE_LEVEL branches, `teachGradeLevelIds` (current year, non-archived, A6) |
+| FR-5 | §2.3 SECTION branches, SectionMember plus homeroom plus section courses (A1) |
+| FR-6 | §2.3 COURSE branches, ACTIVE enrollment, `teacherId` ∪ `coTeacherIds` |
+| FR-7 | §2.3 `isUserInAudience` on `AudienceKeys`; §5 agreement test |
+| FR-8 | §2.3 generic `AudienceRow` input, no Announcement imports |
+| FR-9 | §2.4 `assertCanTarget` ADMIN branch |
+| FR-10 | §2.4 `assertCanTarget` TEACHER branch on create, PATCH and preview; A10 |
+| FR-11 | §2.6 `requireRole(ADMIN, TEACHER)` on write routes |
+| FR-12 | §2.4 `updateAnnouncement`, `archiveAnnouncement`, `audit()`; A7 |
+| FR-13 | §2.7 `AnnouncementComposer`, `AudienceBuilder` |
+| FR-14 | §2.4 `previewAudience`, §2.3 `countAudienceByRole`; §2.7 debounced preview line |
+| FR-15 | §2.4 zero-recipient check on publish or schedule only (A2) |
+| FR-16 | §2.4 `visibleWhere`, `isVisible`; §3.2 |
+| FR-17 | §2.4 `listFeed` (tabs, pinned 3, newest first, pagination); A4, A11 |
+| FR-18 | §2.4 feed DTO, `excerpt.ts`, `audienceLabels`; §2.7 `AnnouncementCard` |
+| FR-19 | §2.4 `getForViewer` with read upsert; §2.7 detail page with `MarkdownView` |
+| FR-20 | §2.4 `acknowledge`; §2.7 ack button with `formatInSchoolTz` |
+| FR-21 | §2.5 course-tabs entry; §2.4 `listFeed` `courseId` filter with `assertCanViewCourse`; §2.7 course tab page |
+| FR-22 | §2.3 `childByKey`; §2.4 `forChildren` in the DTO; §2.7 "For Sam" chip |
+| FR-23 | §2.4 `listManage`, `displayStatus`; §2.7 manage page |
+| FR-24 | §2.4 `getStats`, `statsCsv`; §2.6 `?format=csv`; §2.7 stats page |
+| FR-25 | §2.4 `sendReminder`, `lastRemindedAt` claim, 429 (A8) |
+| FR-26 | §2.5 `types.ts` entries plus the `notify` `mandatoryInApp` override (A9) |
+| FR-27 | §2.4 `claimAndNotify`, `maintenance.ts` `publishDueAnnouncements`; §2.5 dispatch route hook; §3.1, §3.2 |
+| FR-28 | §3.1 notify email data (`generic-notification`, `toPlainText` 300, "Read announcement") |
+| FR-29 | §2.4 `updateAnnouncement` never touches `notifiedAt`; the `claimAndNotify` claim |
+| FR-30 | §2.4 `files.ts` `announcementFileResolver`; §2.5 `contexts.ts` registration |
+| FR-31 | §2.4 `getPublicNews`; §2.6 `public/news/route.ts`; §2.5 `public-routes.ts` |
+| FR-32 | §2.5 `NavItem.badgeEndpoint` plus sidebar `Badge`; §2.4 `unreadCount` |
+| FR-33 | §2.7 feed `PageHeader` button for ADMIN and TEACHER |
+| FR-34 | §2.6 route table, `withHandler` and Zod |
+| FR-35 | §2.5 `prisma/seed.ts` (6 announcements, skip-if-missing, `notifiedAt` preset) |
+| FR-36 | §2.3 and §2.4 files under `src/server/announcements/` |
+| NFR-1 | §2.7 MUI-only components; §4 UI rule |
+| NFR-2 | §2.1 indexes; §2.3 `audienceWhere` `EXISTS`; §3.3 |
+| NFR-3 | §2.4 `assertCanTarget`; §2.6 role gates; §4 security |
+| NFR-4 | §2.4 `excerpt.ts`; §2.7 `MarkdownView`; §4 sanitisation |
+| NFR-5 | §2.7 unread dot with `visuallyHidden` "Unread" |
+| NFR-6 | §2.4 `visibleWhere`, 404 for non-members; A10 |
+| NFR-7 | §2.7 `DateTimePicker` in the school timezone; §4 timezones |
+| NFR-8 | §2.5 existing modules reused; ADR-1 |
+| NFR-9 | §4 scope |
+| NFR-10 | §5 test plan |
+| NFR-11 | §2.4 `maintenance.ts` logging; §4 logging |

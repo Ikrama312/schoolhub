@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
-const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; script-src 'self';";
+// ponytail: `next dev` needs eval (React Refresh) + inline RSC bootstrap scripts; prod stays strict.
+// Prod will need a per-request nonce in middleware for Next's inline scripts.
+const DEV_SCRIPT = process.env.NODE_ENV === 'development' ? " 'unsafe-eval' 'unsafe-inline'" : '';
+const CSP = `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; script-src 'self'${DEV_SCRIPT};`;
 
 const headersWith = (frameOptions, csp) => [
   { key: 'X-Content-Type-Options', value: 'nosniff' },

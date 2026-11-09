@@ -1,143 +1,105 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T12:14:35Z",
+  "ticketId": "SH-12",
+  "timestamp": "2026-11-09T16:38:39Z",
   "phase": "dev-planning",
   "version": "1.0",
   "modules": [
     {
-      "name": "src/lib/validators/gradebook.ts",
-      "dependsOn": [
-        "src/lib/validators/assignments.ts"
-      ]
+      "name": "prisma",
+      "dependsOn": []
     },
     {
-      "name": "src/server/gradebook",
+      "name": "src/lib/validators",
+      "dependsOn": []
+    },
+    {
+      "name": "src/server/announcements",
       "dependsOn": [
-        "src/server/assignments/grading-math.ts",
-        "src/server/assignments/assignments-service.ts",
-        "src/server/quiz/attempt-service.ts",
-        "src/server/quiz/grading.ts",
-        "src/server/attendance/attendance-rules.ts",
-        "src/server/auth/course-access.ts",
-        "src/server/auth/student-access.ts",
+        "prisma",
+        "src/lib/validators",
+        "src/server/notifications",
+        "src/server/files",
         "src/server/csv.ts",
         "src/server/audit.ts",
-        "src/server/notifications",
-        "src/lib/validators/gradebook.ts",
-        "src/server/db.ts"
+        "src/server/http.ts",
+        "src/server/courses",
+        "src/lib/dates.ts",
+        "src/lib/logger.ts"
       ]
     },
     {
-      "name": "src/server/report-cards",
+      "name": "src/server/notifications",
       "dependsOn": [
-        "src/server/gradebook",
-        "src/server/attendance/attendance-service.ts",
-        "src/server/auth/student-access.ts",
-        "src/server/notifications",
-        "src/server/audit.ts",
-        "src/server/db.ts"
+        "prisma",
+        "src/server/email"
       ]
     },
     {
-      "name": "src/server/assignments/assignments-service.ts",
+      "name": "src/server/files",
       "dependsOn": [
-        "src/server/gradebook"
+        "src/server/announcements"
       ]
     },
     {
-      "name": "src/server/quiz",
+      "name": "src/app/api/announcements",
       "dependsOn": [
-        "src/server/gradebook"
+        "src/server/announcements",
+        "src/lib/validators",
+        "src/server/http.ts",
+        "src/server/auth"
       ]
     },
     {
-      "name": "src/app/api/grading-scales",
+      "name": "src/app/api/public/news",
       "dependsOn": [
-        "src/server/gradebook",
-        "src/lib/validators/gradebook.ts",
-        "src/server/http.ts"
+        "src/server/announcements",
+        "src/server/rate-limit.ts",
+        "src/server/http.ts",
+        "src/config/public-routes.ts"
       ]
     },
     {
-      "name": "src/app/api/courses/[id]/(gradebook|grade-categories|grade-items|term-overrides)",
+      "name": "src/app/api/internal/email/dispatch",
       "dependsOn": [
-        "src/server/gradebook",
-        "src/lib/validators/gradebook.ts",
-        "src/server/http.ts"
+        "src/server/announcements"
       ]
     },
     {
-      "name": "src/app/api/grade-items",
+      "name": "src/config",
+      "dependsOn": []
+    },
+    {
+      "name": "src/app/(app)/shell.tsx",
       "dependsOn": [
-        "src/server/gradebook",
-        "src/lib/validators/gradebook.ts",
-        "src/server/http.ts"
+        "src/config",
+        "src/app/api/announcements"
       ]
     },
     {
-      "name": "src/app/api/students/[id]/grades",
+      "name": "src/app/(app)/announcements",
       "dependsOn": [
-        "src/server/gradebook",
-        "src/server/http.ts"
+        "src/server/announcements",
+        "src/lib/validators",
+        "src/components",
+        "src/lib/dates.ts",
+        "src/server/auth"
       ]
     },
     {
-      "name": "src/app/api/report-cards",
+      "name": "src/app/(app)/courses/[courseId]/announcements",
       "dependsOn": [
-        "src/server/report-cards",
-        "src/lib/validators/gradebook.ts",
-        "src/server/http.ts"
+        "src/app/(app)/announcements",
+        "src/server/courses"
       ]
     },
     {
-      "name": "src/components/gradebook",
+      "name": "tests",
       "dependsOn": [
-        "src/lib/validators/gradebook.ts",
-        "src/components/Toast",
-        "src/components/DateDisplay",
-        "@mui/x-data-grid",
-        "@mui/material"
+        "src/server/announcements",
+        "src/lib/validators",
+        "src/app/api/announcements",
+        "prisma"
       ]
-    },
-    {
-      "name": "src/components/report-cards",
-      "dependsOn": [
-        "src/server/report-cards/snapshot.ts",
-        "@mui/material"
-      ]
-    },
-    {
-      "name": "src/app/(app)/(gradebook, grades, report-cards, admin pages)",
-      "dependsOn": [
-        "src/components/gradebook",
-        "src/components/report-cards",
-        "src/components/DataTable",
-        "src/components/ConfirmDialog",
-        "src/server/gradebook",
-        "src/server/report-cards",
-        "src/server/auth/requireRole.ts",
-        "src/config"
-      ]
-    },
-    {
-      "name": "scripts/gradebook-backfill.ts",
-      "dependsOn": [
-        "src/server/gradebook/backfill.ts"
-      ]
-    },
-    {
-      "name": "prisma/seed.ts",
-      "dependsOn": [
-        "src/server/gradebook",
-        "src/server/report-cards"
-      ]
-    },
-    {
-      "name": "src/server/gradebook/grade-calc.ts",
-      "dependsOn": [
-        "src/server/assignments/grading-math.ts"
-      ],
-      "note": "pure: no Prisma client import, types only"
     }
   ]
 }

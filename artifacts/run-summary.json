@@ -1,18 +1,18 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T16:01:17.472Z",
-  "succeeded": true,
+  "ticketId": "SH-12",
+  "timestamp": "2026-11-09T16:40:31.636Z",
+  "succeeded": false,
   "phases": {
     "intake": {
       "succeededCount": 1,
       "failedCount": 0,
       "cost": {
-        "totalUsd": 0.8144498,
+        "totalUsd": 0.7724338000000001,
         "tokens": {
-          "input": 16,
-          "output": 14324,
-          "cacheRead": 305249,
-          "cacheWrite": 58357
+          "input": 24,
+          "output": 15811,
+          "cacheRead": 544059,
+          "cacheWrite": 55180
         }
       }
     },
@@ -20,12 +20,12 @@
       "succeededCount": 4,
       "failedCount": 0,
       "cost": {
-        "totalUsd": 3.708793,
+        "totalUsd": 2.8389604,
         "tokens": {
-          "input": 86,
-          "output": 66417,
-          "cacheRead": 2093665,
-          "cacheWrite": 245172
+          "input": 72,
+          "output": 57789,
+          "cacheRead": 1654187,
+          "cacheWrite": 234555
         }
       }
     },
@@ -33,51 +33,51 @@
       "succeededCount": 1,
       "failedCount": 0,
       "cost": {
-        "totalUsd": 1.0455864,
+        "totalUsd": 0.8641557999999998,
         "tokens": {
           "input": 20,
-          "output": 17409,
-          "cacheRead": 507192,
-          "cacheWrite": 74486
+          "output": 14657,
+          "cacheRead": 610959,
+          "cacheWrite": 80120
         }
       }
     },
     "dev": {
-      "succeededCount": 1,
-      "failedCount": 0,
+      "succeededCount": 0,
+      "failedCount": 1,
       "cost": {
-        "totalUsd": 13.308635399999998,
+        "totalUsd": 0,
         "tokens": {
-          "input": 240,
-          "output": 182290,
-          "cacheRead": 32141162,
-          "cacheWrite": 409362
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0
         }
       }
     },
     "qa": {
-      "succeededCount": 1,
-      "failedCount": 0,
+      "succeededCount": 0,
+      "failedCount": 1,
       "cost": {
-        "totalUsd": 2.649695999999999,
+        "totalUsd": 0,
         "tokens": {
-          "input": 114,
-          "output": 41628,
-          "cacheRead": 5382130,
-          "cacheWrite": 138371
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0
         }
       }
     },
     "ui-verification": {
-      "succeededCount": 1,
-      "failedCount": 0,
+      "succeededCount": 0,
+      "failedCount": 1,
       "cost": {
-        "totalUsd": 6.9043086,
+        "totalUsd": 0,
         "tokens": {
-          "input": 128,
-          "output": 55878,
-          "cacheRead": 6811128,
-          "cacheWrite": 875240
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0
         }
       }
     }
@@ -88,7 +88,7 @@
       "byErrorClass": {
         "Unknown": {
           "retries": 0,
-          "exhaustions": 35
+          "exhaustions": 40
         },
         "WallClockHardCap": {
           "retries": 0,
@@ -102,7 +102,7 @@
       "byPhase": {
         "dev": {
           "retries": 0,
-          "exhaustions": 35
+          "exhaustions": 38
         },
         "dev-planning": {
           "retries": 0,
@@ -114,15 +114,19 @@
         },
         "ui-verification": {
           "retries": 1,
-          "exhaustions": 0
+          "exhaustions": 1
+        },
+        "qa": {
+          "retries": 0,
+          "exhaustions": 1
         }
       },
       "totalRetries": 1,
-      "totalExhaustions": 37
+      "totalExhaustions": 42
     },
     "verdict": "Repeated \"Unknown\" errors — check artifacts/telemetry/api-retries.jsonl for details."
   },
   "cost": {
-    "totalUsd": 28.431469199999995
+    "totalUsd": 4.47555
   }
 }

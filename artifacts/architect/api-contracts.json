@@ -1,670 +1,426 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T17:45:00Z",
+  "ticketId": "SH-12",
+  "timestamp": "2026-11-09T19:30:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "conventions": {
-    "basePath": "/api (existing SchoolHub convention, not /api/v1; route files live under src/app/api/**/route.ts). Requirement: FR-39, NFR-9.",
-    "handlerPipeline": "withHandler → requireUser/requireRole → Zod schema from src/lib/validators/gradebook.ts → service in src/server/gradebook/ or src/server/report-cards/ → ok(data) / ok(data, {status: 201}). Requirement: FR-39, NFR-6.",
-    "successEnvelope": "{ \"data\": <responseSchema> }. None of these endpoints is paginated: the largest list (report cards for one term, up to ~600 rows) must be complete so 'Publish all' / 'Print all' can act on the full filtered list.",
-    "errorEnvelope": "{ \"error\": { \"code\": ApiErrorCode, \"message\": string, \"details\"?: unknown } } from src/server/http.ts. VALIDATION_ERROR 400 (Zod: details = error.flatten()), UNAUTHENTICATED 401, FORBIDDEN 403, NOT_FOUND 404, CONFLICT 409, INTERNAL 500.",
-    "decimals": "Input: number | string with at most 2 decimals (same `decimal(min,max,label)` helper pattern as validators/assignments.ts). Output: points and weights are 2 dp strings via fixed2 (\"18.00\"). Computed percents are 1 dp strings rounded half-up once (\"78.0\"), or null when nothing counts. Requirement: NFR-1, FR-13.",
-    "dates": "ISO 8601 UTC strings. Clients render with DateDisplay in SchoolSettings.timezone. Requirement: NFR-10.",
-    "accessTerms": "manage = assertCanManageCourse (ADMIN, or TEACHER who teaches the course). view course = assertCanViewCourse. view student = assertCanViewStudent (self, linked parent, teacher of the student, homeroom teacher, ADMIN). Unauthorised access to a specific entity returns NOT_FOUND where the existing assert does so. Requirement: NFR-6, FR-39.",
-    "privacy": "Student/parent-facing responses (GET /api/students/:id/grades, GET /api/report-cards with studentId, GET /api/report-cards/:id) never include hidden items, unreleased scores, updatedById or unpublished cards. Requirement: NFR-5, FR-42, FR-37."
+    "replaces": "This file replaces the SH-11 contracts that were here before.",
+    "basePath": "/api (the existing SchoolHub convention, not /api/v1). Route files are src/app/api/**/route.ts. Requirement: FR-34.",
+    "handlerPipeline": "withHandler → requireUser / requireRole → parseQuery / parseBody with a Zod schema from src/lib/validators/announcements.ts → one call into src/server/announcements/announcements-service.ts → ok(data) / ok(data, {status: 201}) / paginated(data, meta). No business logic in routes. Requirements: FR-34, FR-36, NFR-8.",
+    "successEnvelope": "{ \"data\": <responseSchema> }. Paginated endpoints return { \"data\": [...], \"meta\": { page, pageSize, total } } via paginated() in src/server/http.ts. Requirement: FR-34.",
+    "pagination": "?page (≥1, default 1) & ?pageSize (default 20, max 100 via parsePagination; GET /api/announcements/manage clamps to 50 because it computes live reach per row). Requirements: FR-17, FR-23, FR-31.",
+    "errorEnvelope": "{ \"error\": { \"code\": ApiErrorCode, \"message\": string, \"details\"?: unknown } }. VALIDATION_ERROR 400 (Zod: details = error.flatten()), UNAUTHENTICATED 401, FORBIDDEN 403, NOT_FOUND 404, CONFLICT 409, RATE_LIMITED 429, INTERNAL 500. Requirement: FR-34.",
+    "accessErrors": "Targeting violations on create, update and preview return 403 FORBIDDEN (AC-3). STUDENT/PARENT on ADMIN/TEACHER routes get 403 from requireRole (FR-11). Callers who may not see a specific announcement (non-member, non-author, or not yet visible) get 404 NOT_FOUND on detail, ack, stats, remind, PATCH and archive, so its existence is not leaked (system-design A10). Requirements: NFR-3, NFR-6.",
+    "dates": "All timestamps are ISO 8601 UTC strings. The composer converts SchoolSettings.timezone input to UTC before sending. Clients display with formatInSchoolTz. Requirement: NFR-7.",
+    "visibility": "visible = status ∈ {SCHEDULED, PUBLISHED} ∧ publishAt ≤ now ∧ (expiresAt null ∨ expiresAt > now), evaluated at read time. Requirements: FR-16, NFR-6.",
+    "sanitisation": "`body` is raw Markdown, rendered client-side only through MarkdownView (rehype-sanitize). `excerpt` is plain text from toPlainText and must be rendered as escaped text. Requirement: NFR-4."
   },
 
   "components": {
-    "Decimal2In": { "oneOf": [{ "type": "number" }, { "type": "string", "pattern": "^\\d+(\\.\\d{1,2})?$" }] },
-    "Decimal2Out": { "type": "string", "pattern": "^-?\\d+\\.\\d{2}$", "example": "18.00" },
-    "Percent1Out": { "type": ["string", "null"], "pattern": "^\\d+\\.\\d$", "example": "78.0" },
-    "Band": {
+    "AudienceRow": {
+      "description": "Generic audience row (FR-8). refId is required unless the type is SCHOOL or STAFF. For ROLE it must be a Role value. For GRADE_LEVEL, SECTION and COURSE, at least one include flag must be true. Requirements: FR-1, FR-3..FR-6.",
       "type": "object",
-      "required": ["letter", "minPercent"],
       "properties": {
-        "letter": { "type": "string", "minLength": 1, "maxLength": 5 },
-        "minPercent": { "type": "number", "minimum": 0, "maximum": 100 },
-        "gpa": { "type": "number", "minimum": 0, "maximum": 10, "description": "Stored only, never computed (NFR-13)." },
-        "descriptor": { "type": "string", "maxLength": 100 }
-      }
+        "type": { "enum": ["SCHOOL", "STAFF", "ROLE", "GRADE_LEVEL", "SECTION", "COURSE"] },
+        "refId": { "type": ["string", "null"], "description": "GradeLevel.id | Section.id | Course.id | Role value" },
+        "includeStudents": { "type": "boolean", "default": true },
+        "includeParents": { "type": "boolean", "default": true },
+        "includeTeachers": { "type": "boolean", "default": true }
+      },
+      "required": ["type"]
     },
-    "Bands": {
-      "type": "array",
-      "minItems": 1,
-      "items": { "$ref": "#/components/Band" },
-      "description": "bandsSchema: minPercent strictly descending, last band minPercent = 0, letters unique (case-sensitive). Server re-sorts nothing; out-of-order input is a VALIDATION_ERROR. Requirement: FR-16."
+    "AnnouncementInput": {
+      "description": "Body of POST /api/announcements. Mirrors announcementInputSchema. Requirements: FR-2, FR-13, FR-15, FR-16.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 150, "description": "Trimmed" },
+        "body": { "type": "string", "minLength": 1, "maxLength": 20000, "description": "Markdown" },
+        "audiences": { "type": "array", "items": { "$ref": "#/components/AudienceRow" }, "minItems": 0, "maxItems": 20 },
+        "pinned": { "type": "boolean", "default": false },
+        "requiresAck": { "type": "boolean", "default": false },
+        "isPublic": { "type": "boolean", "default": false, "description": "ADMIN only. true from a TEACHER → 403 (FR-10)" },
+        "coverFileId": { "type": ["string", "null"], "description": "FileObject id uploaded with context 'announcement'" },
+        "attachmentFileIds": { "type": "array", "items": { "type": "string" }, "maxItems": 10, "default": [] },
+        "mode": { "enum": ["draft", "publish", "schedule"] },
+        "publishAt": { "type": ["string", "null"], "format": "date-time", "description": "Required and > now when mode = schedule. Ignored for publish (set to now)" },
+        "expiresAt": { "type": ["string", "null"], "format": "date-time", "description": "Must be > (publishAt ?? now)" }
+      },
+      "required": ["title", "body", "audiences", "mode"]
     },
-    "GradingScale": {
+    "AnnouncementPatch": {
+      "description": "AnnouncementInput with every field optional (announcementPatchSchema). audiences, when present, replaces all rows. Requirements: FR-12, FR-29.",
+      "type": "object",
+      "allOf": [{ "$ref": "#/components/AnnouncementInput" }],
+      "required": []
+    },
+    "Author": {
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "isDefault": { "type": "boolean" },
-        "bands": { "$ref": "#/components/Bands" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
-      }
+        "role": { "enum": ["ADMIN", "TEACHER"] }
+      },
+      "required": ["id", "name", "role"]
     },
-    "GradeCategory": {
+    "Attachment": {
+      "description": "Download via the existing GET /api/files/:id, gated by the 'announcement' file context (FR-30).",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
+        "id": { "type": "string", "description": "FileObject id" },
         "name": { "type": "string" },
-        "weightPercent": { "$ref": "#/components/Decimal2Out" },
-        "dropLowest": { "type": "integer", "minimum": 0 },
-        "order": { "type": "integer" }
-      }
+        "mimeType": { "type": "string" },
+        "size": { "type": "integer" }
+      },
+      "required": ["id", "name"]
     },
-    "GradeItem": {
+    "FeedItem": {
+      "description": "Feed card DTO. Requirements: FR-17, FR-18, FR-22, NFR-5.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "courseId": { "type": "string" },
-        "termId": { "type": "string" },
-        "categoryId": { "type": ["string", "null"] },
         "title": { "type": "string" },
-        "maxPoints": { "$ref": "#/components/Decimal2Out" },
-        "dueAt": { "type": ["string", "null"], "format": "date-time" },
-        "source": { "enum": ["ASSIGNMENT", "QUIZ", "MANUAL"] },
-        "sourceId": { "type": ["string", "null"] },
-        "isVisible": { "type": "boolean" }
-      }
+        "excerpt": { "type": "string", "maxLength": 200, "description": "Plain text (toPlainText(body, 200))" },
+        "coverFileId": { "type": ["string", "null"] },
+        "author": { "$ref": "#/components/Author" },
+        "publishAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+        "pinned": { "type": "boolean", "description": "true only for the ≤3 items lifted to the top of page 1" },
+        "requiresAck": { "type": "boolean" },
+        "labels": { "type": "array", "items": { "type": "string" }, "description": "Audience chips, e.g. 'Grade 7 · Parents'" },
+        "attachmentCount": { "type": "integer" },
+        "unread": { "type": "boolean", "description": "No AnnouncementRead.readAt for the caller. UI shows a dot with visually hidden text 'Unread'" },
+        "acknowledgedAt": { "type": ["string", "null"], "format": "date-time" },
+        "forChildren": { "type": "array", "items": { "type": "object", "properties": { "id": { "type": "string" }, "firstName": { "type": "string" } } }, "description": "PARENT callers only; empty otherwise. The linked children that put the parent in a GRADE_LEVEL, SECTION or COURSE audience ('For Sam')" }
+      },
+      "required": ["id", "title", "excerpt", "author", "publishAt", "pinned", "requiresAck", "labels", "attachmentCount", "unread", "forChildren"]
     },
-    "Grade": {
-      "type": "object",
-      "description": "Teacher-facing grade cell. A student with no Grade row is returned as score null, excused false, missing false.",
-      "properties": {
-        "gradeItemId": { "type": "string" },
-        "studentId": { "type": "string" },
-        "score": { "oneOf": [{ "$ref": "#/components/Decimal2Out" }, { "type": "null" }] },
-        "excused": { "type": "boolean" },
-        "missing": { "type": "boolean" },
-        "comment": { "type": ["string", "null"] },
-        "updatedAt": { "type": ["string", "null"], "format": "date-time" }
-      }
-    },
-    "TermOverride": {
-      "type": "object",
-      "properties": {
-        "percent": { "oneOf": [{ "$ref": "#/components/Decimal2Out" }, { "type": "null" }] },
-        "letter": { "type": ["string", "null"] },
-        "teacherComment": { "type": ["string", "null"] }
-      }
-    },
-    "CategoryResult": {
-      "type": "object",
-      "description": "id null = implicit 'Uncategorised' bucket (weight 0 when the course has categories, A8).",
-      "properties": {
-        "id": { "type": ["string", "null"] },
-        "name": { "type": "string" },
-        "weightPercent": { "$ref": "#/components/Decimal2Out" },
-        "percent": { "$ref": "#/components/Percent1Out" },
-        "earned": { "$ref": "#/components/Decimal2Out" },
-        "possible": { "$ref": "#/components/Decimal2Out" },
-        "droppedItemIds": { "type": "array", "items": { "type": "string" } }
-      }
-    },
-    "StudentTermResult": {
-      "type": "object",
-      "description": "Output of grade-calc.computeStudentTerm, the single shared calculation (FR-10–FR-15). percent/letter are final (override applied); computed* are pre-override.",
-      "properties": {
-        "categories": { "type": "array", "items": { "$ref": "#/components/CategoryResult" } },
-        "percent": { "$ref": "#/components/Percent1Out" },
-        "letter": { "type": ["string", "null"] },
-        "descriptor": { "type": ["string", "null"] },
-        "computedPercent": { "$ref": "#/components/Percent1Out" },
-        "computedLetter": { "type": ["string", "null"] },
-        "overridden": { "type": "boolean" },
-        "override": { "oneOf": [{ "$ref": "#/components/TermOverride" }, { "type": "null" }] }
-      }
-    },
-    "TermRef": {
+    "AnnouncementDetail": {
+      "description": "Full record for detail and edit. Requirements: FR-13, FR-19, FR-20.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
-        "startDate": { "type": "string", "format": "date" },
-        "endDate": { "type": "string", "format": "date" },
-        "isCurrent": { "type": "boolean" }
-      }
+        "title": { "type": "string" },
+        "body": { "type": "string", "description": "Raw Markdown. Render only via MarkdownView" },
+        "status": { "enum": ["DRAFT", "SCHEDULED", "PUBLISHED", "ARCHIVED"] },
+        "displayStatus": { "enum": ["DRAFT", "SCHEDULED", "PUBLISHED", "EXPIRED", "ARCHIVED"] },
+        "author": { "$ref": "#/components/Author" },
+        "audiences": { "type": "array", "items": { "$ref": "#/components/AudienceRow" }, "description": "Returned only when canEdit; [] otherwise" },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "pinned": { "type": "boolean" },
+        "requiresAck": { "type": "boolean" },
+        "isPublic": { "type": "boolean" },
+        "coverFileId": { "type": ["string", "null"] },
+        "attachments": { "type": "array", "items": { "$ref": "#/components/Attachment" } },
+        "publishAt": { "type": ["string", "null"], "format": "date-time" },
+        "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "myRead": { "type": ["object", "null"], "properties": { "readAt": { "type": ["string", "null"], "format": "date-time" }, "acknowledgedAt": { "type": ["string", "null"], "format": "date-time" } }, "description": "null when the caller is not an audience member (for example an admin outside the audience)" },
+        "canEdit": { "type": "boolean", "description": "ADMIN, or the author while not ARCHIVED" },
+        "canViewStats": { "type": "boolean", "description": "ADMIN or the author" }
+      },
+      "required": ["id", "title", "body", "status", "displayStatus", "author", "labels", "pinned", "requiresAck", "isPublic", "attachments", "canEdit", "canViewStats"]
     },
-    "ReportCardSnapshotV1": {
+    "AudienceCounts": {
+      "description": "Requirements: FR-14, FR-15.",
       "type": "object",
-      "description": "snapshotSchema in src/server/report-cards/snapshot.ts. Frozen at generation; never recomputed on read or print (FR-31).",
       "properties": {
-        "v": { "const": 1 },
-        "school": { "type": "object", "properties": { "name": { "type": "string" }, "logoUrl": { "type": ["string", "null"] } } },
-        "student": { "type": "object", "properties": {
-          "name": { "type": "string" }, "admissionNumber": { "type": ["string", "null"] },
-          "gradeLevel": { "type": "string" }, "section": { "type": "string" }, "homeroomTeacher": { "type": ["string", "null"] } } },
-        "term": { "type": "object", "properties": {
-          "name": { "type": "string" }, "startDate": { "type": "string", "format": "date" },
-          "endDate": { "type": "string", "format": "date" }, "academicYear": { "type": "string" } } },
-        "courses": { "type": "array", "items": { "type": "object", "properties": {
-          "subject": { "type": "string" }, "code": { "type": "string" }, "teacher": { "type": ["string", "null"] },
-          "percent": { "$ref": "#/components/Percent1Out" }, "letter": { "type": ["string", "null"] },
-          "descriptor": { "type": ["string", "null"] }, "teacherComment": { "type": ["string", "null"] },
-          "scaleName": { "type": "string" } } } },
-        "attendance": { "type": "object", "properties": {
-          "rate": { "type": ["string", "null"], "description": "Same formula as the existing attendance getReport consumers (B13)." },
-          "absences": { "type": "integer" }, "lates": { "type": "integer" },
-          "counts": { "type": "object", "additionalProperties": { "type": "integer" } } } },
-        "scale": { "type": "object", "properties": { "name": { "type": "string" }, "bands": { "$ref": "#/components/Bands" } } },
-        "extraScales": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "bands": { "$ref": "#/components/Bands" } } },
-          "description": "Course-specific scales used by any course on the card, for the legend." }
-      }
+        "total": { "type": "integer" },
+        "byRole": {
+          "type": "object",
+          "properties": {
+            "STUDENT": { "type": "integer" },
+            "PARENT": { "type": "integer" },
+            "TEACHER": { "type": "integer" },
+            "ADMIN": { "type": "integer" }
+          },
+          "required": ["STUDENT", "PARENT", "TEACHER", "ADMIN"]
+        }
+      },
+      "required": ["total", "byRole"]
     }
   },
 
   "endpoints": [
     {
       "method": "GET",
-      "path": "/api/grading-scales",
-      "description": "List all grading scales, default first then by name. Any authenticated user (requireUser).",
-      "auth": "any authenticated user",
-      "requestSchema": {},
-      "responseSchema": { "type": "array", "items": { "$ref": "#/components/GradingScale" } },
-      "errors": ["UNAUTHENTICATED"],
-      "requirementIds": ["FR-16", "FR-17", "FR-39"]
+      "path": "/api/announcements",
+      "description": "Feed for the caller (any authenticated role). Only visible announcements whose audience includes the caller, resolved with audiences.some(audienceWhere(keys)) and never by expanding recipients (NFR-2). Page 1 starts with up to 3 pinned items (newest first, pinned=true), followed by the page of remaining items in publishAt desc, id desc order. meta.total excludes those lifted pins. Extra pinned items appear in date order with pinned=false (A4). With courseId, the caller must pass assertCanViewCourse (else 404) and results are limited to rows with a COURSE audience for that course. Expired, scheduled-future, draft and archived items are never returned.",
+      "auth": "requireUser",
+      "requestSchema": {
+        "query": {
+          "tab": { "enum": ["all", "unread", "ack"], "default": "all", "description": "unread = no readAt; ack = requiresAck and not acknowledged by the caller" },
+          "courseId": { "type": "string", "description": "Optional. Course 'Announcements' tab" },
+          "page": { "type": "integer", "minimum": 1, "default": 1 },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+        }
+      },
+      "responseSchema": {
+        "status": 200,
+        "body": {
+          "data": { "type": "array", "items": { "$ref": "#/components/FeedItem" } },
+          "meta": { "page": "integer", "pageSize": "integer", "total": "integer" }
+        }
+      },
+      "errors": ["400 VALIDATION_ERROR (bad query)", "401 UNAUTHENTICATED", "404 NOT_FOUND (courseId the caller cannot view)"],
+      "requirementIds": ["FR-17", "FR-18", "FR-21", "FR-22", "FR-34", "NFR-2", "NFR-5", "NFR-6"]
     },
     {
       "method": "POST",
-      "path": "/api/grading-scales",
-      "description": "Create a scale (scaleSchema). If isDefault is true, the other scales' isDefault is cleared in the same transaction. If no scale exists yet, the new scale becomes the default whatever isDefault says. The partial unique index grading_scale_one_default is the backstop. Audit gradingScale.create. Returns 201.",
-      "auth": "ADMIN",
-      "requestSchema": {
-        "type": "object",
-        "required": ["name", "bands"],
-        "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
-          "isDefault": { "type": "boolean", "default": false },
-          "bands": { "$ref": "#/components/Bands" }
-        }
+      "path": "/api/announcements",
+      "description": "Create an announcement. assertCanTarget(user, audiences, isPublic) runs first. A TEACHER may target only COURSE rows for courses where they are teacherId or in coTeacherIds, and SECTION rows for the section they homeroom. Anything else, or isPublic=true, returns 403. For mode publish or schedule, zero resolved recipients returns 400 VALIDATION_ERROR (details.reason='NO_RECIPIENTS'). Drafts may have zero recipients. A single transaction writes the announcement, audience rows and attachment rows and calls attachFiles. mode=publish sets status PUBLISHED and publishAt=now, then claimAndNotify sends announcement.published exactly once (generic-notification email, 300-character plain-text body, 'Read announcement' link to /announcements/:id, mandatoryInApp = requiresAck). mode=schedule sets status SCHEDULED and does not notify. mode=draft sets status DRAFT.",
+      "auth": "requireRole(ADMIN, TEACHER)",
+      "requestSchema": { "body": { "$ref": "#/components/AnnouncementInput" } },
+      "responseSchema": {
+        "status": 201,
+        "body": { "data": { "$ref": "#/components/AnnouncementDetail" } }
       },
-      "responseSchema": { "$ref": "#/components/GradingScale" },
-      "errors": ["VALIDATION_ERROR", "FORBIDDEN"],
-      "requirementIds": ["FR-16", "FR-39", "NFR-13"]
-    },
-    {
-      "method": "PATCH",
-      "path": "/api/grading-scales/:id",
-      "description": "Partial update. isDefault: true clears the other defaults in a transaction. isDefault: false on the current default is a VALIDATION_ERROR (make another scale default instead), so exactly one default always exists. Published report cards keep their embedded legend. Audit gradingScale.update with {old, new}.",
-      "auth": "ADMIN",
-      "requestSchema": {
-        "type": "object",
-        "minProperties": 1,
-        "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 100 },
-          "isDefault": { "type": "boolean" },
-          "bands": { "$ref": "#/components/Bands" }
-        }
-      },
-      "responseSchema": { "$ref": "#/components/GradingScale" },
-      "errors": ["VALIDATION_ERROR", "FORBIDDEN", "NOT_FOUND"],
-      "requirementIds": ["FR-16", "FR-39"]
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/grading-scales/:id",
-      "description": "Delete a scale. CONFLICT if it is the default or any Course.gradingScaleId references it (details: { courseCount }) (A11). Audit gradingScale.delete.",
-      "auth": "ADMIN",
-      "requestSchema": {},
-      "responseSchema": { "type": "object", "properties": { "id": { "type": "string" } } },
-      "errors": ["CONFLICT", "FORBIDDEN", "NOT_FOUND"],
-      "requirementIds": ["FR-16", "FR-39"]
+      "errors": ["400 VALIDATION_ERROR (Zod: title > 150, body > 20,000, schedule without a future publishAt, expiresAt ≤ publishAt; or NO_RECIPIENTS on publish/schedule)", "401 UNAUTHENTICATED", "403 FORBIDDEN (STUDENT/PARENT; teacher targeting SCHOOL/STAFF/ROLE/GRADE_LEVEL, a foreign course or section, or isPublic)", "404 NOT_FOUND (coverFileId or attachment not owned by the caller or not uploaded)"],
+      "requirementIds": ["FR-2", "FR-9", "FR-10", "FR-11", "FR-13", "FR-15", "FR-16", "FR-26", "FR-27", "FR-28", "FR-34", "NFR-3"]
     },
     {
       "method": "GET",
-      "path": "/api/courses/:id/grade-categories",
-      "description": "The course's categories ordered by `order`, plus its scale setting. gradingScaleId null means the school default; effectiveScale is the scale actually used.",
-      "auth": "view course",
+      "path": "/api/announcements/unread-count",
+      "description": "Sidebar badge count. Uses the same where clause as the feed's 'all' tab plus reads.none{userId, readAt not null}. Polled every 30 seconds, only while the page is visible.",
+      "auth": "requireUser",
       "requestSchema": {},
       "responseSchema": {
-        "type": "object",
-        "properties": {
-          "gradingScaleId": { "type": ["string", "null"] },
-          "effectiveScale": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
-          "categories": { "type": "array", "items": { "$ref": "#/components/GradeCategory" } }
-        }
+        "status": 200,
+        "body": { "data": { "count": { "type": "integer", "minimum": 0 } } }
       },
-      "errors": ["NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-17", "FR-2", "FR-39"]
-    },
-    {
-      "method": "PUT",
-      "path": "/api/courses/:id/grade-categories",
-      "description": "Replace the full category list in one transaction: rows with an id are updated, rows without one are created, and existing categories missing from the list are deleted (GradeItem/Assignment/Quiz.categoryId → null via SetNull). A non-empty list must total exactly 100 using dec(sum).eq(100); otherwise VALIDATION_ERROR with details { sum: \"90.00\" } so the UI can show 'Weights total 90 / 100'. An empty list is allowed (the course then uses points totals, FR-12). Names are unique within the request (case-insensitive). Ids must belong to this course (else VALIDATION_ERROR). If gradingScaleId is present it is set too (null = school default; an unknown id is VALIDATION_ERROR). Audit gradeCategories.replace with {old, new}. Returns the same shape as GET.",
-      "auth": "manage",
-      "requestSchema": {
-        "type": "object",
-        "required": ["categories"],
-        "properties": {
-          "categories": {
-            "type": "array",
-            "maxItems": 20,
-            "items": {
-              "type": "object",
-              "required": ["name", "weightPercent", "order"],
-              "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string", "minLength": 1, "maxLength": 60 },
-                "weightPercent": { "allOf": [{ "$ref": "#/components/Decimal2In" }], "minimum": 0, "maximum": 100 },
-                "dropLowest": { "type": "integer", "minimum": 0, "maximum": 50, "default": 0 },
-                "order": { "type": "integer", "minimum": 0 }
-              }
-            }
-          },
-          "gradingScaleId": { "type": ["string", "null"] }
-        }
-      },
-      "responseSchema": { "$ref": "#/endpoints/4/responseSchema" },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-17", "FR-40", "FR-2", "FR-12", "NFR-1", "NFR-4"]
-    },
-    {
-      "method": "GET",
-      "path": "/api/courses/:id/gradebook",
-      "description": "Full gradebook for one term in one denormalised payload, loaded with the batched load.ts queries plus the submission/attempt lookups, and computed in memory (NFR-2: 35×80 < 800 ms). Query: termId (optional; defaults to the term containing today in the course's academic year, else the first term). format=csv returns text/csv (Content-Disposition: attachment; filename=\"<courseCode>-<termName>-gradebook.csv\") built with toCsv: columns Last name, First name, one per item ('<title> (/<max>)', cell = score | EX | M | blank), one per category average, Term %, Letter. That is the grid as displayed: same row order, and hidden items included as the teacher sees them. Students are active enrollments sorted by lastName, firstName. Items are sorted by category order, then dueAt (nulls last), then title. Each grade cell carries isLate and submissionId/attemptId for the late icon and click-through.",
-      "auth": "manage",
-      "requestSchema": {
-        "query": {
-          "termId": { "type": "string" },
-          "format": { "enum": ["json", "csv"], "default": "json" }
-        }
-      },
-      "responseSchema": {
-        "type": "object",
-        "properties": {
-          "course": { "type": "object", "properties": { "id": { "type": "string" }, "code": { "type": "string" }, "name": { "type": "string" } } },
-          "term": { "$ref": "#/components/TermRef" },
-          "terms": { "type": "array", "items": { "$ref": "#/components/TermRef" } },
-          "scale": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "bands": { "$ref": "#/components/Bands" } } },
-          "categories": { "type": "array", "items": { "$ref": "#/components/GradeCategory" } },
-          "items": { "type": "array", "items": { "$ref": "#/components/GradeItem" } },
-          "rows": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "student": { "type": "object", "properties": {
-                  "id": { "type": "string" }, "firstName": { "type": "string" }, "lastName": { "type": "string" },
-                  "admissionNumber": { "type": ["string", "null"] } } },
-                "cells": {
-                  "type": "object",
-                  "description": "Keyed by gradeItemId; every item has a cell.",
-                  "additionalProperties": {
-                    "allOf": [{ "$ref": "#/components/Grade" }],
-                    "properties": {
-                      "isLate": { "type": "boolean" },
-                      "submissionId": { "type": ["string", "null"], "description": "ASSIGNMENT items: link to the existing submission grading page (FR-21)." },
-                      "attemptId": { "type": ["string", "null"], "description": "QUIZ items: the attempt the score came from, by scoring policy." }
-                    }
-                  }
-                },
-                "result": { "$ref": "#/components/StudentTermResult" }
-              }
-            }
-          }
-        }
-      },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-18", "FR-19", "FR-21", "FR-24", "FR-25", "FR-15", "FR-10", "FR-12", "FR-13", "FR-14", "NFR-2", "NFR-8"]
+      "errors": ["401 UNAUTHENTICATED"],
+      "requirementIds": ["FR-32", "FR-34", "NFR-2"]
     },
     {
       "method": "POST",
-      "path": "/api/courses/:id/grade-items",
-      "description": "Create a MANUAL grade item (manualItemSchema). categoryId must belong to the course. termId must be a term of the course's academic year. Returns 201.",
-      "auth": "manage",
+      "path": "/api/announcements/preview-audience",
+      "description": "Live recipient count for the composer ('Will reach 412 people: 180 students, 214 parents, 18 teachers'). assertCanTarget(user, audiences, false) runs first, so teachers cannot probe the size of audiences they cannot target. Then countAudienceByRole. ACTIVE, non-archived users only, deduplicated. The client debounces calls by 400 ms.",
+      "auth": "requireRole(ADMIN, TEACHER)",
       "requestSchema": {
-        "type": "object",
-        "required": ["title", "maxPoints", "termId"],
-        "properties": {
-          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "categoryId": { "type": ["string", "null"] },
-          "maxPoints": { "allOf": [{ "$ref": "#/components/Decimal2In" }], "exclusiveMinimum": 0, "maximum": 1000 },
-          "dueAt": { "type": ["string", "null"], "format": "date-time" },
-          "termId": { "type": "string" }
-        }
-      },
-      "responseSchema": { "$ref": "#/components/GradeItem" },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-22", "FR-39"]
-    },
-    {
-      "method": "PATCH",
-      "path": "/api/grade-items/:id",
-      "description": "Update an item (itemPatchSchema). MANUAL items accept every field. ASSIGNMENT/QUIZ items accept only isVisible; any other field is a VALIDATION_ERROR ('Edit this item at its source'). isVisible: false hides the item from students/parents and removes it from calculation (FR-24). Sync changes isVisible only on source visibility transitions, so a teacher's hide survives source re-saves (A7). Lowering maxPoints below an existing score on a MANUAL item is a VALIDATION_ERROR.",
-      "auth": "manage (via the item's course)",
-      "requestSchema": {
-        "type": "object",
-        "minProperties": 1,
-        "properties": {
-          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "categoryId": { "type": ["string", "null"] },
-          "maxPoints": { "allOf": [{ "$ref": "#/components/Decimal2In" }], "exclusiveMinimum": 0, "maximum": 1000 },
-          "dueAt": { "type": ["string", "null"], "format": "date-time" },
-          "termId": { "type": "string" },
-          "isVisible": { "type": "boolean" }
-        }
-      },
-      "responseSchema": { "$ref": "#/components/GradeItem" },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-9", "FR-24", "FR-22", "NFR-5"]
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/grade-items/:id",
-      "description": "Delete a MANUAL item; its grades cascade. Non-MANUAL items are a VALIDATION_ERROR, because deleting the source deletes them (FR-4). Audit gradeItem.delete with the item and its grades as `old`.",
-      "auth": "manage (via the item's course)",
-      "requestSchema": {},
-      "responseSchema": { "type": "object", "properties": { "id": { "type": "string" } } },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-9", "FR-22", "NFR-4"]
-    },
-    {
-      "method": "POST",
-      "path": "/api/grade-items/:id/mark-missing",
-      "description": "Column action 'Set all ungraded to missing'. Requires item.dueAt to be set and now > dueAt (A5); otherwise VALIDATION_ERROR. For every actively enrolled student whose grade has score null, excused false and missing false (including students with no Grade row), sets missing = true in one transaction. Allowed on any source: it only touches rows with no score, so it never overrides a synced score (FR-9). A later sync that writes a score makes it count normally. One audit row grade.markMissing with { itemId, studentIds }. No notifications.",
-      "auth": "manage (via the item's course)",
-      "requestSchema": {},
-      "responseSchema": { "type": "object", "properties": { "updatedCount": { "type": "integer" }, "studentIds": { "type": "array", "items": { "type": "string" } } } },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-24", "FR-10", "NFR-4", "NFR-10"]
-    },
-    {
-      "method": "PUT",
-      "path": "/api/grade-items/:id/grades/:studentId",
-      "description": "Upsert one grade cell (gradePutSchema; at least one field). MANUAL items: all fields; score must satisfy 0 ≤ score ≤ maxPoints. Grid keys map to E → {excused: true}, M → {missing: true}, Delete → {score: null, excused: false, missing: false}. ASSIGNMENT/QUIZ items: comment only; any other field is a VALIDATION_ERROR (FR-9). studentId must be actively enrolled in the item's course (else NOT_FOUND). Audit grade.update with {old, new} for every change. After commit, if the item is MANUAL and score went from null to a value, notifyStudentAndParents('grade.posted') once (A9). Returns the saved cell plus the student's recomputed term result so the grid refreshes the category and term columns.",
-      "auth": "manage (via the item's course)",
-      "requestSchema": {
-        "type": "object",
-        "minProperties": 1,
-        "properties": {
-          "score": { "oneOf": [{ "$ref": "#/components/Decimal2In" }, { "type": "null" }] },
-          "excused": { "type": "boolean" },
-          "missing": { "type": "boolean" },
-          "comment": { "type": ["string", "null"], "maxLength": 1000 }
+        "body": {
+          "audiences": { "type": "array", "items": { "$ref": "#/components/AudienceRow" }, "maxItems": 20 }
         }
       },
       "responseSchema": {
-        "type": "object",
-        "properties": {
-          "grade": { "$ref": "#/components/Grade" },
-          "result": { "$ref": "#/components/StudentTermResult" }
-        }
+        "status": 200,
+        "body": { "data": { "$ref": "#/components/AudienceCounts" } }
       },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-20", "FR-9", "FR-19", "FR-38", "NFR-4", "NFR-1"]
-    },
-    {
-      "method": "PUT",
-      "path": "/api/courses/:id/term-overrides/:studentId",
-      "description": "Upsert a TermGradeOverride (termOverrideSchema). termId must be a term of the course's year. letter must exist in the course's effective scale (else VALIDATION_ERROR). Percent-only re-derives the letter from the scale (A12). Letter-only keeps the computed percent (FR-14, AC-6). Setting all three to null clears the override but keeps the row. studentId must be enrolled (else NOT_FOUND). Audit termOverride.upsert with {old, new}. Returns the override and the recomputed result.",
-      "auth": "manage",
-      "requestSchema": {
-        "type": "object",
-        "required": ["termId"],
-        "properties": {
-          "termId": { "type": "string" },
-          "percent": { "oneOf": [{ "allOf": [{ "$ref": "#/components/Decimal2In" }], "minimum": 0, "maximum": 100 }, { "type": "null" }] },
-          "letter": { "type": ["string", "null"], "maxLength": 5 },
-          "teacherComment": { "type": ["string", "null"], "maxLength": 1000 }
-        }
-      },
-      "responseSchema": {
-        "type": "object",
-        "properties": {
-          "override": { "$ref": "#/components/TermOverride" },
-          "result": { "$ref": "#/components/StudentTermResult" }
-        }
-      },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-23", "FR-14", "NFR-4"]
+      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (role, or teacher targeting violation)"],
+      "requirementIds": ["FR-3", "FR-4", "FR-5", "FR-6", "FR-10", "FR-14", "FR-34", "NFR-3"]
     },
     {
       "method": "GET",
-      "path": "/api/students/:id/grades",
-      "description": "Student/parent grades view for one term (default: current term). Optional courseId limits the response to one course (course Grades tab, FR-28). Only visible items are loaded (filtered in the query), and the calculation runs over those items, so totals match what is shown. Grade rows only ever hold released scores (sync gating), so no further score filtering is needed. Courses are the student's active enrollments in the term's academic year, ordered by course name. colour: ≥ 80 success (green), 60–79.9 warning (amber), < 60 error (red), null when percent is null. Whitelist serializer: no updatedById, no hidden items, no submission/attempt ids.",
-      "auth": "view student",
+      "path": "/api/announcements/manage",
+      "description": "Manage list with no visibility filter, so it includes drafts, scheduled, expired and archived items. TEACHER sees authorId = me; ADMIN sees all. Ordered by updatedAt desc. reach, readPct and ackPct are computed live against the current resolveAudienceUserIds, and reads from users who have left the audience are excluded. Percentages are integers rounded half-up; they are null when reach is 0, and ackPct is null when requiresAck is false.",
+      "auth": "requireRole(ADMIN, TEACHER)",
       "requestSchema": {
         "query": {
-          "termId": { "type": "string" },
-          "courseId": { "type": "string" }
+          "status": { "enum": ["DRAFT", "SCHEDULED", "PUBLISHED", "EXPIRED", "ARCHIVED"], "description": "Optional filter on displayStatus" },
+          "page": { "type": "integer", "minimum": 1, "default": 1 },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 }
         }
       },
       "responseSchema": {
-        "type": "object",
-        "properties": {
-          "student": { "type": "object", "properties": { "id": { "type": "string" }, "firstName": { "type": "string" }, "lastName": { "type": "string" } } },
-          "term": { "$ref": "#/components/TermRef" },
-          "terms": { "type": "array", "items": { "$ref": "#/components/TermRef" } },
-          "courses": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "course": { "type": "object", "properties": {
-                  "id": { "type": "string" }, "code": { "type": "string" }, "name": { "type": "string" }, "teacherName": { "type": ["string", "null"] } } },
-                "percent": { "$ref": "#/components/Percent1Out" },
-                "letter": { "type": ["string", "null"] },
-                "descriptor": { "type": ["string", "null"] },
-                "colour": { "enum": ["success", "warning", "error", null] },
-                "categories": { "type": "array", "items": { "$ref": "#/components/CategoryResult" } },
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": { "type": "string" },
-                      "title": { "type": "string" },
-                      "categoryId": { "type": ["string", "null"] },
-                      "categoryName": { "type": "string" },
-                      "maxPoints": { "$ref": "#/components/Decimal2Out" },
-                      "dueAt": { "type": ["string", "null"], "format": "date-time" },
-                      "score": { "oneOf": [{ "$ref": "#/components/Decimal2Out" }, { "type": "null" }] },
-                      "percent": { "$ref": "#/components/Percent1Out" },
-                      "comment": { "type": ["string", "null"] },
-                      "missing": { "type": "boolean" },
-                      "excused": { "type": "boolean" },
-                      "dropped": { "type": "boolean" }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-42", "FR-26", "FR-27", "FR-28", "FR-15", "NFR-5", "NFR-6"]
-    },
-    {
-      "method": "GET",
-      "path": "/api/report-cards",
-      "description": "Two modes. (A) Without studentId: the admin/homeroom roster for a term. termId is required; gradeLevelId and sectionId are optional filters. ADMIN sees all sections. A TEACHER is limited to sections where Section.homeroomTeacherId = user (filters outside those return an empty list). Other roles get FORBIDDEN. Returns one row per active student in scope, including students with no card yet (status NOT_GENERATED), sorted by section then lastName. Warnings are computed in the same batched pass (NFR-3). (B) With studentId: the student's cards across terms (termId optional filter), newest term first, for the Report cards tab (FR-36). Access is view student. STUDENT/PARENT get PUBLISHED cards only. ADMIN and the student's teachers get all.",
-      "auth": "(A) ADMIN, homeroom TEACHER; (B) view student",
-      "requestSchema": {
-        "query": {
-          "termId": { "type": "string", "description": "Required in mode A." },
-          "gradeLevelId": { "type": "string" },
-          "sectionId": { "type": "string" },
-          "studentId": { "type": "string" }
-        }
-      },
-      "responseSchema": {
-        "oneOf": [
-          {
-            "title": "RosterRow[] (mode A)",
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "student": { "type": "object", "properties": {
-                  "id": { "type": "string" }, "firstName": { "type": "string" }, "lastName": { "type": "string" },
-                  "admissionNumber": { "type": ["string", "null"] },
-                  "gradeLevel": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
-                  "section": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } } } },
-                "status": { "enum": ["NOT_GENERATED", "DRAFT", "PUBLISHED"] },
-                "reportCard": { "oneOf": [{ "type": "null" }, { "type": "object", "properties": {
-                  "id": { "type": "string" }, "generatedAt": { "type": "string", "format": "date-time" },
-                  "publishedAt": { "type": ["string", "null"], "format": "date-time" },
-                  "hasHomeroomComment": { "type": "boolean" }, "hasPrincipalComment": { "type": "boolean" } } }] },
-                "warnings": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "type": { "enum": ["UNGRADED_ITEMS", "MISSING_TEACHER_COMMENT"] },
-                      "courseId": { "type": "string" },
-                      "courseCode": { "type": "string" },
-                      "count": { "type": "integer", "description": "UNGRADED_ITEMS: visible, past-due items with no score that are neither missing nor excused." }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          {
-            "title": "StudentCard[] (mode B)",
+        "status": 200,
+        "body": {
+          "data": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
                 "id": { "type": "string" },
-                "term": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "academicYear": { "type": "string" } } },
-                "status": { "enum": ["DRAFT", "PUBLISHED"] },
-                "publishedAt": { "type": ["string", "null"], "format": "date-time" }
-              }
+                "title": { "type": "string" },
+                "status": { "enum": ["DRAFT", "SCHEDULED", "PUBLISHED", "ARCHIVED"] },
+                "displayStatus": { "enum": ["DRAFT", "SCHEDULED", "PUBLISHED", "EXPIRED", "ARCHIVED"] },
+                "author": { "$ref": "#/components/Author" },
+                "audienceSummary": { "type": "array", "items": { "type": "string" }, "description": "audienceLabels(rows)" },
+                "pinned": { "type": "boolean" },
+                "requiresAck": { "type": "boolean" },
+                "isPublic": { "type": "boolean" },
+                "publishAt": { "type": ["string", "null"], "format": "date-time" },
+                "expiresAt": { "type": ["string", "null"], "format": "date-time" },
+                "reach": { "type": "integer" },
+                "readPct": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+                "ackPct": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+                "updatedAt": { "type": "string", "format": "date-time" }
+              },
+              "required": ["id", "title", "status", "displayStatus", "author", "audienceSummary", "reach", "readPct", "ackPct"]
             }
-          }
-        ]
-      },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-29", "FR-33", "FR-36", "FR-37", "NFR-3", "NFR-5", "NFR-6"]
-    },
-    {
-      "method": "POST",
-      "path": "/api/report-cards/generate",
-      "description": "Build or refresh snapshots (generateSchema). Students not enrolled in the term's academic year are skipped. Missing cards are created as DRAFT (createMany skipDuplicates). Existing DRAFT cards get a new snapshot and generatedAt via updateMany WHERE status = 'DRAFT'. PUBLISHED cards are never touched (FR-31, AC-8). Comments on existing drafts are preserved. Batched loads, in-memory calc, writes in chunks of 100 (NFR-3: 600 × 8 < 30 s).",
-      "auth": "ADMIN",
-      "requestSchema": {
-        "type": "object",
-        "required": ["termId", "studentIds"],
-        "properties": {
-          "termId": { "type": "string" },
-          "studentIds": { "type": "array", "minItems": 1, "maxItems": 2000, "uniqueItems": true, "items": { "type": "string" } }
+          },
+          "meta": { "page": "integer", "pageSize": "integer", "total": "integer" }
         }
       },
-      "responseSchema": {
-        "type": "object",
-        "properties": {
-          "created": { "type": "integer" },
-          "refreshed": { "type": "integer" },
-          "skippedPublished": { "type": "integer" },
-          "skippedNotEnrolled": { "type": "array", "items": { "type": "string" } }
-        }
-      },
-      "errors": ["VALIDATION_ERROR", "NOT_FOUND", "FORBIDDEN"],
-      "requirementIds": ["FR-30", "FR-31", "NFR-3"]
+      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (STUDENT/PARENT)"],
+      "requirementIds": ["FR-23", "FR-34", "NFR-3"]
     },
     {
       "method": "GET",
-      "path": "/api/report-cards/:id",
-      "description": "One card for the review and print pages. assertCanViewReportCard: ADMIN; a TEACHER who teaches any course of the student or is their homeroom teacher; the STUDENT themselves or a linked PARENT only when status = PUBLISHED. Everyone else gets NOT_FOUND, so a 7B student cannot tell that Sam's card exists (FR-37, AC-7). The body comes from the snapshot only and is never recomputed. permissions tells the review page which fields to enable. publishedById is omitted for STUDENT/PARENT.",
-      "auth": "assertCanViewReportCard",
-      "requestSchema": {},
+      "path": "/api/announcements/:id",
+      "description": "Detail. Allowed for ADMIN, the author (any status), or an audience member while the announcement is visible. Everyone else gets 404, including members before publishAt or after expiry. For audience members only, the call upserts AnnouncementRead.readAt and keeps the first readAt. The edit page (/announcements/:id/edit) uses the same endpoint and reads audiences from it when canEdit.",
+      "auth": "requireUser (service gates)",
+      "requestSchema": { "params": { "id": { "type": "string" } } },
       "responseSchema": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "studentId": { "type": "string" },
-          "termId": { "type": "string" },
-          "status": { "enum": ["DRAFT", "PUBLISHED"] },
-          "snapshot": { "$ref": "#/components/ReportCardSnapshotV1" },
-          "homeroomComment": { "type": ["string", "null"] },
-          "principalComment": { "type": ["string", "null"] },
-          "generatedAt": { "type": "string", "format": "date-time" },
-          "publishedAt": { "type": ["string", "null"], "format": "date-time" },
-          "publishedById": { "type": ["string", "null"] },
-          "permissions": { "type": "object", "properties": {
-            "canEditHomeroomComment": { "type": "boolean" },
-            "canEditPrincipalComment": { "type": "boolean" },
-            "canPublish": { "type": "boolean" } } }
-        }
+        "status": 200,
+        "body": { "data": { "$ref": "#/components/AnnouncementDetail" } }
       },
-      "errors": ["NOT_FOUND"],
-      "requirementIds": ["FR-37", "FR-32", "FR-35", "FR-36", "NFR-5", "NFR-11"]
+      "errors": ["401 UNAUTHENTICATED", "404 NOT_FOUND (missing, or not visible to the caller)"],
+      "requirementIds": ["FR-19", "FR-30", "FR-34", "NFR-4", "NFR-6"]
     },
     {
       "method": "PATCH",
-      "path": "/api/report-cards/:id",
-      "description": "Edit comments (reportCardPatchSchema). Access is checked per field: homeroomComment needs ADMIN or the homeroom teacher of the student's section; principalComment needs ADMIN only. A field the caller may not edit is FORBIDDEN. Callers who cannot view the card get NOT_FOUND. Only DRAFT cards can be edited; PUBLISHED returns CONFLICT ('Unpublish to edit') (A13). Returns the same shape as GET.",
-      "auth": "ADMIN; homeroom TEACHER (homeroomComment only)",
+      "path": "/api/announcements/:id",
+      "description": "Update. Allowed for the author or ADMIN; others get 404. A non-admin editing an ARCHIVED row gets 409 CONFLICT (archive is terminal for authors). If audiences or isPublic is in the patch, assertCanTarget re-runs on the resulting values. audiences, when sent, replaces all rows. attachmentFileIds, when sent, re-syncs attachments (attaches new ones, detaches removed ones). A transition from DRAFT to publish or schedule re-checks for zero recipients and, for publish, calls claimAndNotify. Edits to an already-notified announcement, including audience changes, never re-notify, because notifiedAt is never cleared. An ADMIN editing someone else's announcement writes audit('announcement.update'). mode=draft on a PUBLISHED row returns 409 (unpublishing is done by archiving).",
+      "auth": "requireRole(ADMIN, TEACHER)",
       "requestSchema": {
-        "type": "object",
-        "minProperties": 1,
-        "properties": {
-          "homeroomComment": { "type": ["string", "null"], "maxLength": 1000 },
-          "principalComment": { "type": ["string", "null"], "maxLength": 1000 }
-        }
+        "params": { "id": { "type": "string" } },
+        "body": { "$ref": "#/components/AnnouncementPatch" }
       },
-      "responseSchema": { "$ref": "#/endpoints/16/responseSchema" },
-      "errors": ["VALIDATION_ERROR", "FORBIDDEN", "NOT_FOUND", "CONFLICT"],
-      "requirementIds": ["FR-32", "FR-33", "NFR-6"]
+      "responseSchema": {
+        "status": 200,
+        "body": { "data": { "$ref": "#/components/AnnouncementDetail" } }
+      },
+      "errors": ["400 VALIDATION_ERROR (Zod or NO_RECIPIENTS)", "401 UNAUTHENTICATED", "403 FORBIDDEN (role or targeting violation)", "404 NOT_FOUND (not author/admin)", "409 CONFLICT (author editing ARCHIVED; PUBLISHED → draft)"],
+      "requirementIds": ["FR-2", "FR-10", "FR-12", "FR-13", "FR-15", "FR-27", "FR-29", "FR-34", "NFR-3"]
     },
     {
       "method": "POST",
-      "path": "/api/report-cards/publish",
-      "description": "Publish one card or a bulk filtered list (publishSchema). Only DRAFT cards change: updateMany WHERE id IN ids AND status = 'DRAFT' sets status PUBLISHED, publishedAt = now and publishedById = user. Ids that are unknown or already published are returned in skippedIds. Audit reportCard.publish. After commit, notify report_card.published (defaultEmail true) to the student and linked parents for each published card.",
-      "auth": "ADMIN",
-      "requestSchema": {
-        "type": "object",
-        "required": ["ids"],
-        "properties": {
-          "ids": { "type": "array", "minItems": 1, "maxItems": 2000, "uniqueItems": true, "items": { "type": "string" } }
-        }
-      },
+      "path": "/api/announcements/:id/archive",
+      "description": "Archive: sets status ARCHIVED. Allowed for the author or ADMIN; others get 404. Idempotent: archiving an already-archived row returns 200 with the current record. An ADMIN archiving someone else's announcement writes audit('announcement.archive').",
+      "auth": "requireRole(ADMIN, TEACHER)",
+      "requestSchema": { "params": { "id": { "type": "string" } }, "body": {} },
       "responseSchema": {
-        "type": "object",
-        "properties": {
-          "publishedIds": { "type": "array", "items": { "type": "string" } },
-          "skippedIds": { "type": "array", "items": { "type": "string" } }
-        }
+        "status": 200,
+        "body": { "data": { "id": "string", "status": "ARCHIVED" } }
       },
-      "errors": ["VALIDATION_ERROR", "FORBIDDEN"],
-      "requirementIds": ["FR-34", "FR-38"]
+      "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN (STUDENT/PARENT)", "404 NOT_FOUND"],
+      "requirementIds": ["FR-12", "FR-34", "NFR-3"]
     },
     {
       "method": "POST",
-      "path": "/api/report-cards/unpublish",
-      "description": "Unpublish (unpublishSchema; reason required). PUBLISHED cards return to DRAFT and publishedAt/publishedById are cleared (A13). Others are returned in skippedIds. One audit row reportCard.unpublish per card with {old, new, reason}. No notification.",
-      "auth": "ADMIN",
+      "path": "/api/announcements/:id/ack",
+      "description": "Acknowledge. Requires a visible announcement and audience membership; otherwise 404. A row with requiresAck=false returns 409. Upserts AnnouncementRead, sets acknowledgedAt once and also sets readAt if it was empty. Repeat calls are idempotent and return the original acknowledgedAt. The UI shows 'Acknowledged on 14 Sep' in the school timezone.",
+      "auth": "requireUser (service gates)",
+      "requestSchema": { "params": { "id": { "type": "string" } }, "body": {} },
+      "responseSchema": {
+        "status": 200,
+        "body": { "data": { "readAt": { "type": "string", "format": "date-time" }, "acknowledgedAt": { "type": "string", "format": "date-time" } } }
+      },
+      "errors": ["401 UNAUTHENTICATED", "404 NOT_FOUND (not visible or not a member)", "409 CONFLICT (requiresAck=false)"],
+      "requirementIds": ["FR-20", "FR-34", "NFR-6", "NFR-7"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/announcements/:id/stats",
+      "description": "Per-announcement stats. Allowed for the author or ADMIN; others get 404. Recipients come from the live resolveAudienceUserIds, left-joined to AnnouncementRead. The counts always describe the full audience, while the filter applies only to the rows. With format=csv, the response is text/csv with Content-Disposition: attachment; filename=\"announcement-<id>-recipients.csv\", built by toCsv from src/server/csv.ts with the columns Name, Role, Read at and Acknowledged at, dates in the school timezone, and the filter applied. Rows are sorted by name.",
+      "auth": "requireRole(ADMIN, TEACHER)",
       "requestSchema": {
-        "type": "object",
-        "required": ["ids", "reason"],
-        "properties": {
-          "ids": { "type": "array", "minItems": 1, "maxItems": 2000, "uniqueItems": true, "items": { "type": "string" } },
-          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        "params": { "id": { "type": "string" } },
+        "query": {
+          "filter": { "enum": ["unread", "unacked"], "description": "Optional. unacked is only meaningful when requiresAck" },
+          "format": { "enum": ["csv"], "description": "Optional" }
         }
       },
       "responseSchema": {
-        "type": "object",
-        "properties": {
-          "unpublishedIds": { "type": "array", "items": { "type": "string" } },
-          "skippedIds": { "type": "array", "items": { "type": "string" } }
+        "status": 200,
+        "body": {
+          "data": {
+            "counts": {
+              "type": "object",
+              "properties": {
+                "recipients": { "type": "integer" },
+                "read": { "type": "integer" },
+                "acknowledged": { "type": "integer" },
+                "readPct": { "type": ["integer", "null"], "description": "Rounded half-up; null when recipients is 0" },
+                "ackPct": { "type": ["integer", "null"], "description": "null when !requiresAck or recipients is 0. AC-5: 30/50 → 60" }
+              }
+            },
+            "requiresAck": { "type": "boolean" },
+            "lastRemindedAt": { "type": ["string", "null"], "format": "date-time" },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "userId": { "type": "string" },
+                  "name": { "type": "string" },
+                  "role": { "enum": ["ADMIN", "TEACHER", "STUDENT", "PARENT"] },
+                  "readAt": { "type": ["string", "null"], "format": "date-time" },
+                  "acknowledgedAt": { "type": ["string", "null"], "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "csvVariant": "200 text/csv; charset=utf-8 (no JSON envelope)"
+      },
+      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (STUDENT/PARENT)", "404 NOT_FOUND (not author/admin)"],
+      "requirementIds": ["FR-24", "FR-34", "NFR-6", "NFR-7"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/announcements/:id/remind",
+      "description": "Send a reminder to recipients who have not acknowledged. Allowed for the author or ADMIN; others get 404. The announcement must have requiresAck and be visible; otherwise 409. The throttle is claimed atomically: updateMany where lastRemindedAt is null or ≤ now − 24h sets lastRemindedAt = now. If no row is claimed, the response is 429 RATE_LIMITED with details.retryAfter (ISO, lastRemindedAt + 24h). Otherwise it calls notify('announcement.reminder', mandatoryInApp) for recipients minus acknowledged users. If nobody is left to remind, it still claims the throttle and returns notified: 0. AC-5: 50 recipients with 30 acknowledged → notified 20.",
+      "auth": "requireRole(ADMIN, TEACHER)",
+      "requestSchema": { "params": { "id": { "type": "string" } }, "body": {} },
+      "responseSchema": {
+        "status": 200,
+        "body": { "data": { "notified": { "type": "integer" }, "remindedAt": { "type": "string", "format": "date-time" } } }
+      },
+      "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN (STUDENT/PARENT)", "404 NOT_FOUND", "409 CONFLICT (!requiresAck or not visible)", "429 RATE_LIMITED { details: { retryAfter } }"],
+      "requirementIds": ["FR-25", "FR-26", "FR-34"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/public/news",
+      "description": "Public news for the future PRD-18 website. No authentication. The path is added to PUBLIC_API_PATHS in src/config/public-routes.ts. Rate-limited by client IP with the existing src/server/rate-limit.ts, which returns 429 RATE_LIMITED. Returns isPublic ∧ visible announcements, newest first. The DTO deliberately omits author identity, audience and read data. Cover images and attachments are served through GET /api/files/:id, which the 'announcement' file resolver allows anonymously only for public, visible announcements.",
+      "auth": "none (public)",
+      "requestSchema": {
+        "query": {
+          "page": { "type": "integer", "minimum": 1, "default": 1 },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
         }
       },
-      "errors": ["VALIDATION_ERROR", "FORBIDDEN"],
-      "requirementIds": ["FR-34", "NFR-4"]
+      "responseSchema": {
+        "status": 200,
+        "body": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "excerpt": { "type": "string", "maxLength": 200 },
+                "body": { "type": "string", "description": "Raw Markdown; consumers must sanitise (MarkdownView)" },
+                "publishAt": { "type": "string", "format": "date-time" },
+                "coverFileId": { "type": ["string", "null"] },
+                "attachments": { "type": "array", "items": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } } }
+              },
+              "required": ["id", "title", "excerpt", "body", "publishAt", "attachments"]
+            }
+          },
+          "meta": { "page": "integer", "pageSize": "integer", "total": "integer" }
+        }
+      },
+      "errors": ["400 VALIDATION_ERROR", "429 RATE_LIMITED"],
+      "requirementIds": ["FR-30", "FR-31", "FR-34", "NFR-4", "NFR-9"]
     }
   ],
 
-  "nonHttpContracts": [
-    { "kind": "notification", "name": "grade.posted", "recipients": "STUDENT + linked PARENTs", "defaultEmail": false, "payload": { "courseId": "string", "gradeItemId": "string", "itemTitle": "string" }, "requirementIds": ["FR-38"] },
-    { "kind": "notification", "name": "report_card.published", "recipients": "STUDENT + linked PARENTs", "defaultEmail": true, "payload": { "reportCardId": "string", "termName": "string" }, "requirementIds": ["FR-34", "FR-38"] },
-    { "kind": "npm-script", "name": "gradebook:backfill", "command": "tsx scripts/gradebook-backfill.ts", "output": "logger.info summary { items, grades } and exit 0; idempotent", "requirementIds": ["FR-8"] },
-    { "kind": "page", "name": "/report-cards/[id]/print and /report-cards/print?termId=&gradeLevelId=&sectionId=", "note": "Server components call report-card-service directly (no extra API). Same access as GET /api/report-cards/:id; bulk print renders PUBLISHED cards only.", "requirementIds": ["FR-35", "NFR-11"] }
+  "internalHooks": [
+    {
+      "method": "POST",
+      "path": "/api/internal/email/dispatch",
+      "description": "Existing endpoint, gated by CRON_SECRET; its contract is unchanged. It gains an isolated publishDueAnnouncements(now) pass (findMany SCHEDULED ∧ notifiedAt null ∧ publishAt ≤ now, take 50 → claimAndNotify each). The pass is idempotent under concurrent runs. The response may add an 'announcementsPublished' integer next to the existing counters.",
+      "requirementIds": ["FR-27", "NFR-11"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/files/:id",
+      "description": "Existing endpoint; its contract is unchanged. It gains the new 'announcement' access context: allowed for anyone (including anonymous callers) if isPublic ∧ visible; otherwise for ADMIN, the author, or a member while visible; otherwise denied.",
+      "requirementIds": ["FR-30", "NFR-6"]
+    }
   ],
 
   "status": "complete"

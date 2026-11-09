@@ -1,29 +1,31 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T12:00:00Z",
+  "ticketId": "SH-12",
+  "timestamp": "2026-11-09T18:00:00Z",
   "phase": "intake",
   "version": "1.0",
   "status": "complete",
-  "requirementsCount": 55,
-  "functionalCount": 42,
-  "nonFunctionalCount": 13,
-  "overallConfidencePct": 95,
+  "requirementsCount": 47,
+  "functionalCount": 36,
+  "nonFunctionalCount": 11,
+  "overallConfidencePct": 94,
   "techStack": "react",
   "figmaPresent": false,
   "blockers": [],
   "assumptionsFlagged": [
-    "FR-6 (MEDIUM): removing a GradeExemption clears excused and re-syncs the score.",
-    "FR-7: getStudentQuizScore does not exist. Build it on src/server/quiz/grading.ts applyScoringPolicy + resultsVisible.",
-    "FR-13: in the seed scale 89.95 → 90.0 lands in A− (90), not A (93). The test should assert 90.0 and the 90-band letter.",
-    "FR-27/FR-33 (MEDIUM): add nav entries for /grades (STUDENT, PARENT) and /report-cards (TEACHER).",
-    "NFR-10 (MEDIUM): 'past due' = now > dueAt. Items with no term to place them in are skipped and a warning is logged."
+    "FR-5 (MEDIUM): SECTION membership means current academic-year SectionMember rows.",
+    "FR-15 (MEDIUM): drafts may have zero recipients. The refusal applies only on publish or schedule.",
+    "FR-25 (MEDIUM): the FR-1 schema has no field to store the 24h reminder throttle. Suggestion: a nullable Announcement.lastRemindedAt column and 429 RATE_LIMITED. The architect decides.",
+    "FR-17: when more than 3 announcements are pinned, the extra ones fall into newest-first order.",
+    "AC-8: the seed has no 6A section and no ParentStudentLink rows. The test fixture must create Pat's 6A child.",
+    "Shared components are in src/components/<Name>/, not src/components/shared/. Reuse them where they are."
   ],
   "keyRisks": [
-    "NFR-5 privacy: student and parent serializers must exclude hidden items, unreturned submissions and not-yet-visible quiz results. Sync only on return or visibility, so Grade rows never hold unreleased scores.",
-    "FR-31 snapshot immutability: regeneration must filter status = DRAFT, and grade edits must never touch ReportCard.",
-    "NFR-3: 600×8 generation must batch-load items, grades, overrides and attendance per course or term, then run the pure calc in memory.",
-    "FR-20: keyboard editing (E/M/Delete) within MIT DataGrid processRowUpdate and custom edit cells must be checked against the mui-mcp docs for v9.5.0.",
-    "FR-2: adding categoryId to the Assignment and Quiz editors touches PRD-09/10 code. Only add the field; don't change existing behaviour."
+    "NFR-2: isUserInAudience and the feed query must work as SQL/Prisma joins on AnnouncementAudience (OR over the type branches), not by resolving the full recipient set. The 200 ms target is for a parent with 3 children and 2,000 rows.",
+    "FR-7 / NFR-10: isUserInAudience and resolveAudienceUserIds are two code paths that must agree for every seed user. Keep the rule definitions in one place.",
+    "FR-27: publishDueAnnouncements must claim notifiedAt atomically (updateMany where notifiedAt IS NULL) so concurrent maintenance runs never double-notify. Hook it into /api/internal/email/dispatch.",
+    "FR-30: the 'announcement' file-access resolver must allow anonymous callers only for isPublic + PUBLISHED + not expired + publishAt <= now.",
+    "NFR-3 / FR-10: teacher audience checks must cover coTeacherIds and homeroom, and must reject isPublic and the SCHOOL, STAFF, ROLE and GRADE_LEVEL types on both POST and PATCH.",
+    "FR-32: NavItem has no badge field. Extend navigation minimally and reuse the NotificationBell polling pattern."
   ],
   "nextPhase": "architect"
 }

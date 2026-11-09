@@ -1,150 +1,166 @@
-# Tech Stack Decisions: PRD-11 Gradebook, Grading Scales & Report Cards
+# Tech Stack Decisions: PRD-12 Announcements & News
 
-Ticket: SH-11 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-09T13:00:00Z · Status: complete
+Ticket: SH-12 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-09T18:30:00Z · Status: complete
 
-**Base stack (checked against the workspace).** `artifacts/intake/tech-stack.json` reports `react` at 100% confidence, and `package.json` matches it: Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict, Prisma 5.20.0 (`@prisma/client` 5.20.0) on PostgreSQL 16, Zod 3.23.8, papaparse ^5.4.1, tsx 4.16.2, MUI 9.5.0 (material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts), `@mui/x-internals` overridden to 9.1.0, Vitest 2.1.1 and Playwright 1.47.2.
+**Base stack (checked against `package.json`).** `artifacts/intake/tech-stack.json` reports `react` at 100% confidence, and the workspace matches it:
 
-Intake reported no blockers (`handoff-to-architect.json`, `blockers: []`, confidence 95%). No NFR pushes toward a different stack:
+- Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict
+- Prisma 5.20.0 on PostgreSQL 16, Zod 3.23.8
+- MUI 9.5.0: material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts
+- react-markdown 10.1.0, rehype-sanitize 6.0.0, remark-gfm 4.0.1
+- date-fns 3.6.0, date-fns-tz 3.2.0, papaparse ^5.4.1
+- `@react-email/*` and nodemailer
 
-- **NFR-2** (35×80 gradebook in under 800 ms): three indexed queries (items, grades, enrolments), then the pure calculation in memory.
-- **NFR-3** (600 students × 8 courses in under 30 s): batch loading per course and term, then in-memory calculation.
-- **NFR-11** (A4 print): CSS `@media print`.
+Intake reported no blockers (`blockers: []`, confidence 94%). No NFR calls for a different stack:
 
-None of these needs a cache, a queue, a PDF engine or a grid library. **Overall decision: keep the stack and add no dependencies (NFR-7, NFR-9).**
+- **NFR-2** (feed for a parent with 3 children over 2,000 rows in under 200 ms): one Prisma query with an `EXISTS`-style `some` filter on `AnnouncementAudience`, using indexed columns.
+- **FR-27** (exactly-once publish notification): an atomic `updateMany ... where notifiedAt IS NULL` claim inside the existing cron route.
+
+None of this needs a cache, a queue, a job runner or a search engine.
+
+**Overall decision: keep the stack and add no dependencies (NFR-8, NFR-9).**
 
 ---
 
 ## ADR-1: Keep the existing stack and add no dependencies
 
-**Context.** NFR-9 forbids re-scaffolding and requires reuse of existing code. NFR-7 limits UI to MUI 9.5.0 and MUI X. Every capability PRD-11 needs is already installed or already in the repo.
+**Context.** NFR-8 requires reusing existing services and components. NFR-1 limits UI to MUI. Everything PRD-12 needs is already installed or already in the repo.
 
-**Decision.** Add nothing to `dependencies` or `devDependencies`. Map each need to something that already exists:
+**Decision.** Add nothing to `dependencies` or `devDependencies`. Each need maps to something that already exists:
 
 | Need | Use | Req |
 |---|---|---|
-| Grade maths | `Decimal`, `dec`, `fixed2` from `src/server/assignments/grading-math.ts` (Prisma.Decimal). Import them; don't copy them. | FR-10–FR-15, NFR-1 |
-| Validation | Zod schemas in `src/lib/validators/gradebook.ts`, shared by the client forms and the route handlers | FR-16, FR-17, FR-39, FR-40 |
-| Gradebook grid | `DataGrid` from `@mui/x-data-grid` (MIT), used directly (see ADR-4) | FR-18–FR-21, FR-24, NFR-8 |
-| Admin lists (scales, report cards) | Existing `src/components/DataTable` | FR-16, FR-29 |
-| Band and category editors | MUI `TextField`, `Select`, `Autocomplete`, `Dialog` | FR-16, FR-17, FR-22, FR-23 |
-| Date and term inputs | `@mui/x-date-pickers` `DatePicker` | FR-22 |
-| CSV export | `toCsv` from `src/server/csv.ts` | FR-25 |
-| Quiz score | `applyScoringPolicy` + `resultsVisible` from `src/server/quiz/grading.ts` (see ADR-6) | FR-7 |
-| Access control | `assertCanViewCourse` / `assertCanManageCourse` (`src/server/auth/course-access.ts`) and `assertCanViewStudent` / `getAccessibleStudentIds` (`src/server/auth/student-access.ts`) | FR-37, FR-39, FR-42, NFR-6 |
-| Term attendance summary | Reuse the `attendance-service.ts` groupBy aggregation, run once per term for the filtered students | FR-30, NFR-3 |
-| Timezone date rules | `schoolToday` (`src/server/attendance/attendance-rules.ts`) with `SchoolSettings.timezone` | FR-3, FR-10, FR-24, NFR-10 |
-| Notifications and audit | `notify()` (`src/server/notifications/notify.ts`, types in `types.ts`) and `audit()` (`src/server/audit.ts`) | FR-34, FR-38, NFR-4 |
-| Confirmations and toasts | Existing `ConfirmDialog` and `Toast`/`useToast` | FR-34, NFR-7 |
-| Printing | `@media print` + `window.print()` | FR-35, NFR-11 |
-| Backfill runner | `tsx` (already a devDependency) | FR-8 |
+| Schema and migration | Prisma 5.20 migration: 2 enums and 4 models, plus back-relations on `User` and `FileObject` | FR-1 |
+| Validation | Zod schemas in `src/lib/validators/announcements.ts`, shared by the composer form (`react-hook-form` + `@hookform/resolvers`) and the route handlers | FR-2, FR-34 |
+| Route handlers | `withHandler`, `ok`, `paginated`, `parsePagination`, `parseBody`, `parseQuery` and `AppError` from `src/server/http.ts` | FR-17, FR-34 |
+| Body editing and rendering | `src/components/MarkdownEditor` and `src/components/MarkdownView` (react-markdown + rehype-sanitize) | FR-13, FR-19, NFR-4 |
+| Cover image and attachments | `FileUpload` and `FileList`, plus `registerFileAccess('announcement', …)` in `src/server/files/contexts.ts` | FR-13, FR-30 |
+| Audience entity pickers | MUI `Autocomplete` (grade, section, course, role) and the existing `UserPicker` where users are involved | FR-13, NFR-1 |
+| publishAt and expiresAt inputs | `@mui/x-date-pickers` `DateTimePicker`, converted with `date-fns-tz` in `SchoolSettings.timezone` | FR-13, FR-16, NFR-7 |
+| Manage list and recipient table | `src/components/DataTable` | FR-23, FR-24 |
+| CSV export | `src/server/csv.ts` | FR-24 |
+| Notifications and email | `notify()`, a new type in `src/server/notifications/types.ts`, and the `generic-notification` template | FR-26, FR-27, FR-28 |
+| Audit | `audit()` from `src/server/audit.ts` | FR-12 |
+| "Acknowledged on 14 Sep" | `formatInSchoolTz` from `src/lib/dates.ts` | FR-20, NFR-7 |
+| Toasts and confirmations | `useToast()`, `ConfirmDialog` | NFR-1 |
+| Logging | `logger` from `src/lib/logger.ts` | NFR-11 |
 
-**Consequences.** `package.json` changes only by one script (ADR-7). There's no lockfile churn or license review, and nothing new for QA's banned-import scan. Every UI component still has to be looked up via mui-mcp before use (NFR-7).
+**Consequences.** There are no install or lockfile changes, and the banned-library QA check (NFR-1) stays trivially green. All new code goes in `src/server/announcements/`, `src/lib/validators/announcements.ts`, `src/app/(app)/announcements/**`, and `src/app/api/announcements/**` plus `src/app/api/public/news` (FR-36).
 
 ---
 
-## ADR-2: Store grades as Prisma `Decimal` and calculate in pure functions
+## ADR-2: Use Prisma relation filters for audience membership, with one shared rule module
 
-**Context.** NFR-1 requires Decimal arithmetic and pure, unit-tested calculation. FR-13 rounds half-up at band edges (89.95 → 90.0), which floating point can get wrong. FR-15 must reproduce 78.0% C+ exactly.
+**Context.** FR-7 and NFR-2 require membership checks through SQL joins, never by loading all recipients. FR-7 and NFR-10 require `isUserInAudience` and `resolveAudienceUserIds` to agree for every seed user. FR-8 requires the module to be generic so PRD-14 calendar events can reuse it.
 
 **Decision.**
-- Make `Grade.score`, `GradeItem.maxPoints`, `GradeCategory.weight`, `GradingScale` band `minPercent` and `TermGradeOverride.percent` `Decimal` columns, with precision set by the FR-1 schema spec.
-- Put `src/server/gradebook/grade-calc.ts` on plain inputs only: items, grades, categories, scale, override and `now`. It does no Prisma I/O, and it computes everything in `Decimal`.
-- Round the course percent once, at the end, with `toDecimalPlaces(1, Decimal.ROUND_HALF_UP)`, then do the band lookup (FR-13).
-- Convert to `number` or `string` only at the serializer boundary.
 
-**Consequences.** Calculation is deterministic and the Vitest matrix (NFR-1, NFR-12) needs no database. NFR-3 follows from this: batched loading feeds the same pure function. Callers must not round category percents before weighting, because only the final value is rounded.
+1. `src/server/announcements/audience.ts` defines the audience row shape generically: `{ type, refId, includeStudents, includeParents, includeTeachers }`. It does not import Announcement.
+2. The module exports three functions, all built from one per-type rule table so the rules are written once:
+   - `resolveAudienceUserIds(audiences)`: per-type Prisma `user.findMany({ where: … , select: { id } })`, unioned into a `Set`.
+   - `isUserInAudience(user, audiences)`: the same per-type `where`, AND-ed with `id = user.id`, as a single `count`/`findFirst`.
+   - `audienceWhereForUser(user)`: a Prisma `AnnouncementAudience` `where` fragment (an OR over the type branches) for the feed. The feed then runs `announcement.findMany({ where: { audiences: { some: audienceWhereForUser(user) } } })`. The user's context is precomputed once per request with a few indexed lookups: role, grade level, current-year section ids, active course ids, managed course ids, homeroom section, and the same values for each linked child of a parent. The branches then compare `refId` against small id lists.
+3. Prisma relation filters (`some`) compile to `EXISTS` subqueries. Use `$queryRaw` only if a measured test misses the 200 ms target. Add a `ponytail:` note at that spot.
+4. Indexes in the migration:
+   - `AnnouncementAudience(type, refId)`
+   - `AnnouncementAudience(announcementId)`
+   - `Announcement(status, publishAt)`
+   - `Announcement(isPublic, status)`
+   - `AnnouncementRead(userId)`, needed because the composite PK `(announcementId, userId)` doesn't serve lookups by `userId` alone (unread-count and the Unread tab)
+
+**Consequences.** There is no raw SQL by default, and the code stays type-safe. The property-style integration test (NFR-10) checks the shared rule table through both entry points. The feed cost does not grow with recipients: a parent with 3 children produces about 6 small `IN` lists.
 
 ---
 
-## ADR-3: Store grading scale bands as a JSON column validated by Zod
+## ADR-3: Decide visibility at read time and send the notification through the existing cron route
 
-**Context.** FR-1 says "exactly as specified". FR-16 validates bands as a set: strictly descending, lowest minimum 0, unique letters. Bands are always read and written together with their scale, and nothing queries a band on its own.
+**Context.**
 
-**Decision.** Follow the PRD's `GradingScale` model as written. If it defines bands as `Json`, keep them as a JSON array of `{ letter, minPercent, gpa?, descriptor? }`. Treat the array as one unit and validate it with a single Zod schema in `gradebook.ts`. Enforce "exactly one default" in a service transaction that clears the old default when a new one is set. Add a partial unique index (`WHERE "isDefault"`) in the migration SQL as a backstop.
-
-**Consequences.** The band editor saves in one write, and the scale reaches `grade-calc.ts` with no join. GPA is stored only and never computed (NFR-13). If the PRD's FR-1 instead specifies a separate band table, use it; this ADR then reduces to "validate as a set in Zod".
-
----
-
-## ADR-4: Build the gradebook on MIT `DataGrid` directly, not the `DataTable` wrapper
-
-**Context.** FR-18 to FR-21 and FR-24 need `columnGroupingModel`, `processRowUpdate`, custom edit cells, column menu items, row virtualisation (60×120) and a sticky header. NFR-8 forbids Pro and Premium features, so there are no pinned columns. The existing `DataTable` wraps `DataGrid` for URL-paginated, searchable server lists, and its props don't expose grouping or editing.
+- FR-16 and AC-4: a scheduled announcement becomes visible at `publishAt <= now` with no cron involved.
+- FR-27: the notification is sent exactly once.
+- The maintenance entry point is `POST /api/internal/email/dispatch`. It runs isolated, idempotent passes in `try/catch`, and `src/server/quiz/maintenance.ts` claims work with `updateMany where releasedAt: null`.
 
 **Decision.**
-- Use `<DataGrid>` from `@mui/x-data-grid` in a new `src/components/gradebook/GradebookGrid.tsx`.
-- Keep the default row and column virtualisation, and turn off pagination (`hideFooterPagination`).
-- Handle keyboard input (digit, E, M, Delete, Enter or arrow keys) in a custom `renderEditCell` and `onCellKeyDown`, then commit through `processRowUpdate` and `onProcessRowUpdateError` for per-cell error state.
-- Before writing, confirm every prop against the v9.5.0 docs through mui-mcp (`useMuiDocs`/`fetchDocs`). This is intake's FR-20 risk.
 
-**Consequences.** One consumer of raw `DataGrid` is justified by needs `DataTable` doesn't cover. Admin lists still use `DataTable` (FR-16, FR-29). Without pinned columns, the student-name column scrolls away horizontally, which the PRD accepts ("sticky header, no pinned columns").
+- The visibility predicate is `status IN (PUBLISHED, SCHEDULED) AND publishAt <= now AND (expiresAt IS NULL OR expiresAt > now)`. It is applied in the feed, the detail page, unread-count, public news and the file resolver. A SCHEDULED row whose time has passed is treated as published, so no status flip is needed for visibility.
+- `publishDueAnnouncements(now)` lives in `src/server/announcements/maintenance.ts` and is called from the dispatch route as another isolated `try/catch` block. For each due row it claims the row with `updateMany({ where: { id, notifiedAt: null }, data: { notifiedAt: now, status: PUBLISHED } })`. It sends `notify()` only when `count === 1`. Batches are 50 rows, matching `dispatchEmails`.
+- Publish-now uses the same claim and then notifies inline. Later audience edits never touch `notifiedAt`, which satisfies FR-29.
 
----
-
-## ADR-5: Sync with direct service calls inside existing transactions, not events or a queue
-
-**Context.** FR-3 to FR-7 must react to publish, unpublish, archive, delete, return, exemption and quiz-graded events. NFR-5 needs Grade rows to never hold scores that haven't been released. The repo has no event bus. Its only background process is `worker:email`, and it's out of scope.
-
-**Decision.** Add `src/server/gradebook/sync.ts` with idempotent upserts keyed on `(source, sourceId)` and `(gradeItemId, studentId)`. Call it from the existing assignment, quiz, submission-return and exemption services, inside their existing `prisma.$transaction` when there is one.
-- Saving a grade without returning it doesn't call sync (FR-5).
-- Practice quizzes return early (`Quiz.isPractice`).
-- An item with no matching term is skipped and logged with `logger.warn` (intake assumption, FR-3).
-
-**Consequences.** Sync can't drift out of step with the source write. Scores are written only on return or visibility, so privacy holds at the storage layer as well as in serializers. Each hook adds a few ms to the source write, which is fine at this scale. The backfill (ADR-7) reuses the same functions.
+**Consequences.** Concurrent cron runs cannot double-notify. No new scheduler is added. Notification latency for scheduled items equals the cron interval, and AC-4 allows this.
 
 ---
 
-## ADR-6: Create `getStudentQuizScore` from the existing quiz grading helpers
+## ADR-4: Reminder throttle uses an `Announcement.lastRemindedAt` column and 429 RATE_LIMITED
 
-**Context.** FR-7 names `getStudentQuizScore`, but it doesn't exist. `src/server/quiz/grading.ts` already exports `applyScoringPolicy(policy, attempts)`, which returns `{ score, maxScore, percent }` as fixed2 strings, `resultsVisible(quiz, attempt, now)` and `percentOf`.
-
-**Decision.** Add `getStudentQuizScore(quiz, gradedAttempts, now)` next to these helpers in `src/server/quiz/grading.ts`. It filters attempts to GRADED and results-visible, calls `applyScoringPolicy` and returns `score / maxScore × quiz.maxScore` as `Decimal`, or `null`. Sync stores that value as `Grade.score` against `GradeItem.maxPoints = quiz.maxScore`.
-
-**Consequences.** There's one source of truth for the quiz score policy, and PRD-10's helpers stay unchanged. When a quiz uses `AFTER_CLOSE` or `MANUAL` visibility, sync has to run again when results become visible. That means at close and on release; dev-planning should hook the release action. Otherwise the score fills in at backfill or at the next attempt event.
-
----
-
-## ADR-7: Run the backfill as a `tsx` script that reuses sync
-
-**Context.** FR-8 requires an idempotent `npm run gradebook:backfill`, and the seed must call it. NFR-12 needs an idempotency integration test.
-
-**Decision.** Add `scripts/gradebook-backfill.ts`, which exports `backfill()` and has a CLI entry point. The script is a loop over existing published assignments, non-practice quizzes, returned submissions, visible graded attempts and exemptions, calling the ADR-5 sync functions. Add one script line to `package.json`: `"gradebook:backfill": "tsx scripts/gradebook-backfill.ts"`. `prisma/seed.ts` imports and calls `backfill()` (FR-41).
-
-**Consequences.** Idempotency comes from the upsert keys, so there's no "already ran" flag. It follows the `worker:email` pattern. Running it twice gives identical row counts, which is the test assertion.
-
----
-
-## ADR-8: Freeze report cards as a JSON snapshot on the row
-
-**Context.** FR-30 lists a fixed set of snapshot fields. FR-31 and AC-8 need PUBLISHED cards to stay unchanged when grades are edited or cards are regenerated. NFR-3 requires generating 600 × 8 in under 30 s.
+**Context.** FR-25 refuses a second reminder within 24 hours and leaves the status code and storage to the architect. The FR-1 schema has no field for this. `src/server/rate-limit.ts` is per-process and in-memory, so it is the wrong tool for a durable per-announcement business rule. `http.ts` already maps `RATE_LIMITED` to 429.
 
 **Decision.**
-- Store `ReportCard.snapshot` as `Json` (per the FR-1 model), typed by a Zod schema in `src/server/report-cards/`.
-- Generation batch-loads per term and does no per-student queries:
-  - courses and enrolments for the filtered students
-  - items, grades, categories and overrides for those courses
-  - the scale
-  - one attendance groupBy for the term range
-- Run `grade-calc.ts` in memory, then `createMany` new cards and `update` existing ones, always filtered with `where: { status: 'DRAFT' }`.
-- Nothing in `src/server/gradebook/` writes to `ReportCard`.
 
-**Consequences.** The print view and student tab read only the snapshot, which is fast and immutable. Unpublishing returns a card to DRAFT, and the next generation can then refresh it (FR-34, with an audit entry). Snapshot JSON is not queryable, which is fine because nothing filters on it.
+- Add a nullable `lastRemindedAt DateTime?` to `Announcement`. This is the only deviation from the FR-1 field list, and intake suggested it.
+- Claim the reminder atomically: `updateMany({ where: { id, OR: [{ lastRemindedAt: null }, { lastRemindedAt: { lt: now - 24h } }] }, data: { lastRemindedAt: now } })`.
+- If `count === 0`, throw `AppError('RATE_LIMITED', …)`, which returns 429. The details include `retryAfter` (an ISO timestamp).
+- Otherwise notify recipients where the resolved audience has no `AnnouncementRead.acknowledgedAt`.
+
+**Consequences.** The rule survives restarts and multiple instances, and it is race-safe. 429 is the right semantic for "try again later". 409 would suggest a state conflict that the user could fix.
 
 ---
 
-## ADR-9: Build the print view with CSS, not a PDF library
+## ADR-5: Strip Markdown to plain text with a small local helper and no new library
 
-**Context.** FR-35 and NFR-11 need A4 portrait pages, a letterhead, signature lines, a hidden app sidebar and page breaks for "Print all". The intake stack notes say no PDF library is needed.
+**Context.**
 
-**Decision.** Render `/report-cards/[id]/print` and the bulk print route as server components. Use MUI `Table` and `Typography` styled through `sx` and theme `GlobalStyles` with `@page { size: A4 portrait }` and `@media print` rules that hide the app shell (sidebar, app bar, buttons). Add `break-after: page` per card. A small client `Button` calls `window.print()`.
+- FR-18 needs a 200-character plain-text excerpt.
+- FR-28 needs the first 300 characters of the body as plain text in the email.
+- NFR-4 requires sanitisation.
+- No Markdown-to-text helper exists in the repo. `remark`/`strip-markdown` are not direct dependencies.
 
-**Consequences.** There's no new dependency and no server-side rendering farm, and "Save as PDF" is the browser's own feature. Print fidelity depends on the browser. The Playwright test (NFR-12) checks the print media, not PDF bytes.
+**Decision.** Add `toPlainText(md, max)` in `src/server/announcements/excerpt.ts`. It strips code fences, images, links (keeping the link text), HTML tags, emphasis, heading and list markers with about six regexes, collapses whitespace, and truncates with `…`. Its output is only ever rendered as a React text node or as a react-email text prop, both of which escape it. It is never fed into `dangerouslySetInnerHTML`, so the sanitising boundary stays the escaping renderer. The full body always renders through `MarkdownView` (rehype-sanitize).
+
+**Consequences.** No dependency is added. Unusual Markdown, such as nested reference links, may leave stray characters in excerpts. That is cosmetic only. Mark it with `ponytail:`. If excerpts look wrong, switch to `remark` + `strip-markdown`.
 
 ---
 
-## ADR-10: Compare dates in the school timezone
+## ADR-6: Add a navigation badge as an optional `badge` field on NavItem, polled like NotificationBell
 
-**Context.** NFR-10 says the school timezone is the reference for date rules. Intake's assumption is that "past due" means `now > dueAt`, compared as an exact instant.
+**Context.** FR-32 needs an unread count on the sidebar. `NavItem` has no badge field. `NotificationBell` already polls with MUI `Badge`.
 
-**Decision.** Compare past-due status as a UTC instant (`now > dueAt`). This applies to FR-10 missing items and the FR-24 "mark all missing" action. For term containment (FR-3), convert `dueAt` or `availableUntil` to a school-local date with `schoolToday(date, tz)` and compare it with the term's `startDate` and `endDate`. Show all dates through the existing `DateDisplay` component in `SchoolSettings.timezone`.
+**Decision.**
 
-**Consequences.** Reusing the same helper as attendance avoids off-by-one-day errors at term boundaries. No date library is added.
+- Add an optional `badgeEndpoint?: string` to `NavItem`. The Announcements entry sets it to `/api/announcements/unread-count`.
+- The sidebar renders MUI `Badge` around the icon and reuses the NotificationBell fetch/poll interval logic, extracted only if it is a direct copy.
+- `unread-count` uses the visibility predicate from ADR-3 and `audienceWhereForUser` from ADR-2, plus `reads: { none: { userId } }`.
+- The unread dot has visually hidden text "Unread" (NFR-5).
+
+**Consequences.** This is one optional field and one conditional `Badge`, and existing nav items are unaffected.
+
+---
+
+## ADR-7: Security boundaries
+
+**Context.** NFR-3, NFR-6, FR-10, FR-11, FR-30 and FR-31.
+
+**Decision.**
+
+- **Role checks.** Every handler starts with `requireRole`.
+- **Teacher audience rules.** These checks live in one function, `assertCanTarget(user, audiences, isPublic)` in `announcements-service.ts`, called from both POST and PATCH. A teacher may target:
+  - COURSE, only when `teacherId` or `coTeacherIds` contains the teacher
+  - SECTION, only when `homeroomTeacherId` is the teacher
+
+  Any other type, or `isPublic`, returns 403.
+- **Non-members.** Detail, ack and stats return 404 to non-members. This avoids leaking that an announcement exists, and it matches the platform convention for hidden resources.
+- **File access resolver.** Anonymous access is allowed only for `isPublic && visible(now)`. Everyone else goes through `isUserInAudience`, the author check or the ADMIN check.
+- **Public route.** `/api/public/news` is added to `PUBLIC_API_PATHS`. It selects only public-safe fields: no audience, no author email.
+
+**Consequences.** One choke point governs targeting rules, so the unit tests (NFR-10) cover it directly.
+
+---
+
+## Open items handed to arch-design-system
+
+These come from the intake defaults, and the stack decisions don't change them:
+
+- FR-5: section membership means current academic year.
+- FR-15: drafts may have zero recipients.
+- FR-17: pins beyond 3 flow into newest-first order.
+- FR-12: archive is terminal for authors.
+- AC-8: the fixture creates Pat's 6A child.
