@@ -16,6 +16,7 @@ import {
   resultsVisible,
   seededShuffle,
 } from './grading';
+import { syncQuizGrade } from '@/server/gradebook/gradebook-sync';
 import { isOpen, toManagerAnswer, toManagerAttempt, toStudentAttempt, toStudentResult } from './serializers';
 import { assertCanAccessAttempt, attemptNotFound, manageCourseOrNotFound, quizNotFound, viewCourseOrNotFound } from './access';
 
@@ -112,17 +113,20 @@ export async function autoGradeAnswers(tx: Tx, attemptId: string, questionOrder:
  * race-safe. Returns true when this call did the submit.
  */
 export async function submitAttempt(attemptId: string, { auto }: { auto: boolean }, now = new Date()): Promise<boolean> {
-  return prisma.$transaction(async (tx) => {
+  const done = await prisma.$transaction(async (tx) => {
     const claimed = await tx.quizAttempt.updateMany({
       where: { id: attemptId, status: 'IN_PROGRESS' },
       data: { status: 'SUBMITTED', submittedAt: now, autoSubmitted: auto },
     });
-    if (claimed.count === 0) return false;
-    const { questionOrder } = await tx.quizAttempt.findUniqueOrThrow({ where: { id: attemptId }, select: { questionOrder: true } });
+    if (claimed.count === 0) return null;
+    const { questionOrder, quizId, studentId } = await tx.quizAttempt.findUniqueOrThrow({ where: { id: attemptId }, select: { questionOrder: true, quizId: true, studentId: true } });
     await autoGradeAnswers(tx, attemptId, questionOrder, { createMissing: true });
     await recomputeAttempt(tx, attemptId);
-    return true;
+    return { quizId, studentId };
   });
+  if (!done) return false;
+  await syncQuizGrade(done.quizId, done.studentId, now); // PRD-11 FR-7, after commit
+  return true;
 }
 
 /** FR-18 lazy path: past deadlineAt + grace → auto-submit. Returns true if it submitted. */
@@ -338,6 +342,7 @@ export async function gradeAnswerManually(user: AccessUser, attemptId: string, q
     const attempt = await recomputeAttempt(tx, attemptId);
     return { answer, attempt: attempt! };
   });
+  await syncQuizGrade(a.quizId, a.studentId); // PRD-11 FR-7
   await audit({
     actorId: user.id,
     action: 'quizAnswer.grade',

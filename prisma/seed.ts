@@ -162,6 +162,7 @@ async function main() {
   await seedAttendance();
   await seedAssignments();
   await seedQuizzes();
+  await seedGradebook();
 }
 
 /** Deterministic PRNG so every seed run produces the same attendance (FR-38). */
@@ -540,6 +541,97 @@ async function seedQuizzes() {
   )
     created++;
   logger.info('Seed: demo quizzes ready', { created });
+}
+
+/** PRD-11 seed: default scale, 7A categories, backfill, ENG-7A manual item, S1 comments, 7A drafts. Idempotent. */
+const STANDARD_BANDS: { letter: string; minPercent: number; gpa: number; descriptor: string }[] = [
+  { letter: 'A', minPercent: 93, gpa: 4.0, descriptor: 'Excellent' },
+  { letter: 'A-', minPercent: 90, gpa: 3.7, descriptor: 'Excellent' },
+  { letter: 'B+', minPercent: 87, gpa: 3.3, descriptor: 'Very good' },
+  { letter: 'B', minPercent: 83, gpa: 3.0, descriptor: 'Good' },
+  { letter: 'B-', minPercent: 80, gpa: 2.7, descriptor: 'Good' },
+  { letter: 'C+', minPercent: 77, gpa: 2.3, descriptor: 'Satisfactory' },
+  { letter: 'C', minPercent: 73, gpa: 2.0, descriptor: 'Satisfactory' },
+  { letter: 'C-', minPercent: 70, gpa: 1.7, descriptor: 'Satisfactory' },
+  { letter: 'D+', minPercent: 67, gpa: 1.3, descriptor: 'Needs improvement' },
+  { letter: 'D', minPercent: 63, gpa: 1.0, descriptor: 'Needs improvement' },
+  { letter: 'D-', minPercent: 60, gpa: 0.7, descriptor: 'Needs improvement' },
+  { letter: 'F', minPercent: 0, gpa: 0, descriptor: 'Failing' },
+];
+
+async function seedGradebook() {
+  if (!(await prisma.gradingScale.findFirst({ where: { name: 'Standard A–F' } }))) {
+    const hasDefault = (await prisma.gradingScale.count({ where: { isDefault: true } })) > 0;
+    await prisma.gradingScale.create({ data: { name: 'Standard A–F', isDefault: !hasDefault, bands: STANDARD_BANDS } });
+  }
+
+  const courses = await prisma.course.findMany({
+    where: { archivedAt: null, academicYear: { isCurrent: true }, section: { name: '7A' } },
+    select: { id: true, code: true, teacherId: true, _count: { select: { gradeCategories: true } } },
+  });
+  if (!courses.length) {
+    logger.info('Seed: no 7A courses, skipping gradebook demo data');
+    return;
+  }
+  // Categories go in before the backfill so seeded assignments/quizzes land in them (FR-41).
+  for (const c of courses) {
+    if (c._count.gradeCategories > 0) continue;
+    const [hw, quizzes, exams] = await Promise.all([
+      prisma.gradeCategory.create({ data: { courseId: c.id, name: 'Homework', weightPercent: '30', dropLowest: 1, order: 0 } }),
+      prisma.gradeCategory.create({ data: { courseId: c.id, name: 'Quizzes', weightPercent: '30', order: 1 } }),
+      prisma.gradeCategory.create({ data: { courseId: c.id, name: 'Exams', weightPercent: '40', order: 2 } }),
+    ]);
+    await prisma.assignment.updateMany({ where: { courseId: c.id, categoryId: null }, data: { categoryId: hw.id } });
+    await prisma.quiz.updateMany({ where: { courseId: c.id, categoryId: null, isPractice: false, title: { contains: 'Test', mode: 'insensitive' } }, data: { categoryId: exams.id } });
+    await prisma.quiz.updateMany({ where: { courseId: c.id, categoryId: null, isPractice: false }, data: { categoryId: quizzes.id } });
+    await prisma.gradeItem.updateMany({ where: { courseId: c.id, categoryId: null, source: 'ASSIGNMENT' }, data: { categoryId: hw.id } });
+  }
+
+  const { backfillGradebook } = await import('../src/server/gradebook/backfill');
+  logger.info('Seed: gradebook backfill', await backfillGradebook());
+
+  const year = await prisma.academicYear.findFirst({ where: { isCurrent: true }, select: { id: true } });
+  const s1 = year && (await prisma.term.findFirst({ where: { academicYearId: year.id, name: 'Semester 1' } }));
+  if (!s1) return;
+
+  const eng = courses.find((c) => c.code === 'ENG-7A' || c.code === 'ELA-7A');
+  const math = courses.find((c) => c.code === 'MATH-7A');
+  if (eng) {
+    const exams = await prisma.gradeCategory.findFirst({ where: { courseId: eng.id, name: 'Exams' }, select: { id: true } });
+    const item =
+      (await prisma.gradeItem.findFirst({ where: { courseId: eng.id, title: 'Oral presentation', source: 'MANUAL' } })) ??
+      (await prisma.gradeItem.create({
+        data: { courseId: eng.id, termId: s1.id, categoryId: exams?.id ?? null, title: 'Oral presentation', maxPoints: '20', dueAt: new Date('2026-10-30T20:00:00Z'), source: 'MANUAL' },
+      }));
+    const roster = await prisma.enrollment.findMany({ where: { courseId: eng.id, status: 'ACTIVE' }, select: { studentId: true }, orderBy: { studentId: 'asc' } });
+    await prisma.grade.createMany({
+      data: roster.map((r, i) => ({ gradeItemId: item.id, studentId: r.studentId, score: String(14 + (i % 7)), updatedById: eng.teacherId })),
+      skipDuplicates: true,
+    });
+  }
+  const comments: Record<string, string> = {
+    'MATH-7A': 'Works carefully and shows clear reasoning. Keep practising fractions.',
+    'ENG-7A': 'Reads widely and speaks with confidence. Focus on editing written work.',
+    'ELA-7A': 'Reads widely and speaks with confidence. Focus on editing written work.',
+  };
+  for (const c of [math, eng]) {
+    if (!c) continue;
+    const roster = await prisma.enrollment.findMany({ where: { courseId: c.id, status: 'ACTIVE' }, select: { studentId: true } });
+    for (const r of roster) {
+      await prisma.termGradeOverride.upsert({
+        where: { courseId_termId_studentId: { courseId: c.id, termId: s1.id, studentId: r.studentId } },
+        create: { courseId: c.id, termId: s1.id, studentId: r.studentId, teacherComment: comments[c.code], updatedById: c.teacherId },
+        update: {},
+      });
+    }
+  }
+
+  const admin = await prisma.user.findFirst({ where: { role: 'ADMIN', status: 'ACTIVE' }, select: { id: true } });
+  const members = await prisma.sectionMember.findMany({ where: { academicYearId: year.id, section: { name: '7A' } }, select: { studentId: true } });
+  if (admin && members.length) {
+    const { generateDrafts } = await import('../src/server/report-cards/report-card-service');
+    logger.info('Seed: 7A Semester 1 report card drafts', await generateDrafts({ id: admin.id, role: 'ADMIN' }, { termId: s1.id, studentIds: members.map((m) => m.studentId) }));
+  }
 }
 
 async function disconnectAll() {

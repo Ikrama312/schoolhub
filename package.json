@@ -18,6 +18,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
     "worker:email": "tsx scripts/worker-email.ts",
+    "gradebook:backfill": "tsx scripts/gradebook-backfill.ts",
     "format": "prettier --write ."
   },
   "dependencies": {

@@ -1,94 +1,99 @@
-# UI Verification Report — SH-10 (PRD-10 Quizzes & Online Exams)
+# UI Verification Report — SH-11 (PRD-11 Gradebook, Grading Scales & Report Cards)
 
+- **Ticket:** SH-11
+- **Timestamp:** 2026-11-09T15:23:52Z
 - **Status:** complete
-- **Timestamp:** 2026-11-09T08:24:01Z
-- **Findings:** 25 across 23 UI-facing requirements: **24 PASS / 1 FAIL / 0 BLOCKED**
-- **Design reference:** none (`figma-readiness.json` does not exist). Surfaces were checked against `requirements.json` only.
+- **Result:** 34 findings across 31 UI-facing requirements: **32 PASS, 2 FAIL, 0 BLOCKED**
 
-> This file replaces the stale SH-9 report. All screenshots in `screenshots/` are from this SH-10 run.
+> This file replaces the stale SH-10 report. `ui-verification-report.json` has the same findings in machine-readable form, and `uiv-raw.json` has the raw probe output.
 
 ## Headline
 
-The feature renders and works end to end in a production build. A teacher builds a quiz; a student takes it (going offline and reloading mid-attempt), submits it and sees the result; the teacher grades the essay; analytics and the parent view render.
+Every SH-11 surface rendered and behaved as specified. That covers the gradebook grid, settings, dialogs, column menu, CSV export, student/parent grades, the admin and homeroom report-card flows, the print views and access control. The FR-15 golden case renders **78.0% C+**.
 
-**One UI defect blocks a clean pass (UIV-1, FR-14):** the quiz player's sticky header uses `top: 0`. After the student scrolls, it slides under the app shell's fixed AppBar, which hides the **quiz title, countdown timer and save-status pill** (at 375 and 1280) and also the **Submit** button (at 1280). Measured after a 1200px scroll, the title and timer sit at top 16–18px under a 56px (375) / 64px (1280) AppBar, and `elementFromPoint` at the timer hits the AppBar. Suggested fix in `src/app/(app)/quizzes/[quizId]/take/QuizPlayer.tsx`: offset the sticky `top` by the toolbar height (e.g. `top: { xs: 56, sm: 64 }` or derived from `theme.mixins.toolbar`). Evidence: `student-player-scrolled-375.png` and `student-player-scrolled-1280.png`.
+Two visual defects need fixing:
+
+| ID | Severity | Surface | Problem | Suggested fix |
+|---|---|---|---|---|
+| **UIV-1** | moderate | Report card on-screen view at 375 px (`/report-cards/[id]/print`) | The Courses table is wider than the card. The Grade and Comment columns spill past the card border and the page scrolls horizontally. Students and parents open this page from their phones. A4 printing is unaffected. | Wrap the table in `TableContainer` (`overflowX: auto`) or stack the columns below `sm` in `ReportCardDocument.tsx` |
+| **UIV-2** | minor | Gradebook settings → Grading scale | The Select renders **blank** when the course uses the school default (`scaleId ''`). The "School default (Standard A–F)" option exists but isn't displayed, because MUI Select hides an empty value without `displayEmpty`. | `slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}` in `GradebookSettingsClient.tsx` |
+
+## Minor observations
+
+- **UIV-3 (a11y):** the invalid "Weights total 90 / 100" chip is pale red on pale red and nearly unreadable. axe reports color-contrast (serious) ×2. The red helper text next to Save still explains the problem.
+- **UIV-4 (a11y/layout):** at 375 px, the expanded `/grades` item table puts % and Comment off-screen in a scroll region that can't take keyboard focus. axe reports scrollable-region-focusable (serious).
+- **UIV-5:** axe reports empty-table-header (minor) on the DataGrids. This is the same pattern seen in SH-10.
+- **UIV-6 (not exercised in the UI; QA tests cover them):**
+  - arrow-key cell navigation
+  - a quiz-synced cell opening its attempt
+  - virtualisation at 60×120 and the NFR-2 timings
+  - DRAFT-only regeneration (FR-31)
+  - the roster's grade-level filter
+  - the `grade.posted` notification
+  - the green (≥80) card colour
+- **ENV-1:** the dev DB's current year (2026-2027) has **no terms**, so the feature is unusable in dev until an admin adds them. In that state the gradebook shows a clear info Alert. Verification used a temporary tagged term.
+- **ENV-2 (for QA/dev, not UI):** 9 orphaned `TermGradeOverride` rows predate this phase. Their courses were deleted, but the rows remain because the model has no FK to Course and `tests/e2e/report-cards.spec.ts` cleanup doesn't delete overrides. They were left in place.
 
 ## Method
 
-Production build (`npm run build`, exit 0) served with `next start -p 3300` against local Postgres :5433. The existing :3000 and :3001 servers were left alone. A throwaway Playwright driver outside the repo (/tmp/uiv-sh10/driver.cjs) created tagged fixtures (code 'uiv-sh10'): a teacher, 3 students, a parent linked to 1 student, one course, and 6 quizzes. The quizzes are open/IMMEDIATELY with 5 question types, upcoming/AFTER_CLOSE, CLOSED with showCorrectAnswers off, DRAFT with a publish problem, MANUAL with a pending attempt, and practice/one-per-page/1-minute. The driver signed in per role and drove every SH-10 surface at 1280x800 (teacher) and 375x667 (student/parent), with bypassCSP as in the e2e suite. The student took a quiz live: answered, went offline, reloaded and submitted. The teacher then graded it and the student saw the result. State changes were checked against the DB. A second script (/tmp/uiv-sh10/sticky.cjs) measured the sticky header against the AppBar after scrolling. Fixtures were removed afterwards (cleanedUp: true). Apart from one expected offline network error, no console or page errors were captured. figma-readiness.json does not exist, so the checks compare against requirements.json only. The login rate limit required one server restart between runs. Screenshots are in screenshots/ and the raw probe output is in uiv-raw.json.
+- Production build (`npm run build`, exit 0) served by `next start -p 3300` against Postgres :5433. The :3000/:3001 servers were left alone.
+- Throwaway Playwright driver `/tmp/uiv-sh11/driver.cjs`, outside the repo, with tagged fixtures `uiv-sh11`:
+  - users: an admin, a homeroom teacher, 2 section students, an outsider student, and a parent linked to both students
+  - courses: UIV Maths (Homework 40 / Exams 60, with manual items, a hidden item and a late synced assignment) and UIV English (no categories)
+  - a temporary term
+- Viewports: teacher/admin at 1280×800, student/parent at 375×667, plus cross-checks at the other width. Print media was emulated and PDFs were rendered to check A4 size and page count.
+- DB state was checked after each mutation.
+- The nav probe `/tmp/uiv-sh11/nav.cjs` confirmed sidebar entries per role.
+- All fixtures were removed (verified: 0 tagged users, courses, terms or sections remain).
+- The only console errors were the expected 404s from the access-denial checks.
+- `figma-readiness.json` does not exist, so the comparison is against `requirements.json` only.
 
 ## Findings
 
-| # | Requirement | Surface | Verdict | Notes |
-|---|---|---|---|---|
-| 1 | FR-11 | Course Quizzes tab /courses/[id]/quizzes (teacher, 1280) | ✅ PASS | The QUIZZES course tab is registered. The teacher table has the columns Title, Status, Window, Attempts, Average and Needs grading. It shows all 6 fixture quizzes, including the DRAFT and CLOSED ones and a Practice chip. Average updated from 58.3% to 77.1% after the live attempt. NEW QUIZ is present. Screenshot teacher-course-quizzes-1280.png. Minor issue: axe empty-table-header on the unlabeled actions column (UIV-3). |
-| 2 | FR-11 | Course Quizzes tab (student, 375) | ✅ PASS | Cards are grouped into Available now (Start), Upcoming (Opens …), Completed and Missed. The draft quiz is hidden. Each card shows questions, points, minutes and attempts used/allowed. After grading, the card shows 'Score: 11.50 / 12.00 (95.8%)' with VIEW RESULT. A pending MANUAL quiz shows 'Submitted — results will be available later.' No horizontal overflow at 375. Screenshots student-course-quizzes-375.png, student-course-quizzes-after-375.png, student-s3-quizzes-375.png. |
-| 3 | FR-11 | Course Quizzes tab (parent, 375) | ✅ PASS | Read-only list of the linked child's results ('UIV Fractions check — Blake Bell, Attempt 1: 7.00 / 12.00 (58.3%)'). It has no Start or Resume actions, and no draft or open quizzes are listed. Screenshot parent-course-quizzes-375.png. |
-| 4 | FR-37 | Navigation | ✅ PASS | Quizzes are reached through the course tab. As FR-37 allows, there is no sidebar entry. |
-| 5 | FR-6 | Quiz builder Settings tab /courses/[id]/quizzes/[id]/edit | ✅ PASS | Every Quiz field renders with a label: Title, Instructions, Opens, Closes, Time limit (with the hint 'Blank = untimed (1–300)'), Attempts allowed, Scoring policy, Results visible (3 options), Practice, Shuffle questions/options, One question per page and Show correct answers. 'NEW QUIZ' creates a DRAFT 'Untitled quiz' and redirects to /edit. The time-limit-versus-window error was NOT exercised in the UI: the probe's 300-minute value was shorter than the new quiz's 7-day window. That rule is covered by QA unit tests only. Screenshot teacher-builder-settings-1280.png. |
-| 6 | FR-28 | Accommodations table (Settings tab) | ✅ PASS | The 'Accommodations' table renders one row per enrolled student, with Extra minutes (0–300), Extra attempts (0–5) and SAVE, plus an info note about in-progress attempts. Saving a value was not exercised through the UI. |
-| 7 | FR-7 | Builder question list + per-type editors | ✅ PASS | The type picker plus ADD QUESTION added Single choice, Multiple choice, True/false, Short answer and Essay questions. The header updated each time (1 to 5 questions). Each question has a drag handle, up/down move buttons, Duplicate and Delete. Duplicate gave 6 questions; Delete opened a 'Delete question 2?' confirmation and then gave 5. The editors render the right controls: option rows with a correct radio (single) or checkbox (multiple), 'True is correct / False is correct', accepted answers with a Case sensitive switch, and essay 'Grading guidance (teachers only)'. Drag itself was not performed. Screenshot teacher-builder-questions-1280.png. |
-| 8 | FR-8 | Running points total + Preview as student | ✅ PASS | The header shows 'N questions · X points total' and updates live. Preview opens a dialog titled 'Preview as student — nothing is recorded' with a Preview chip and a 'Not recorded' pill. Answering in the preview created no attempt (attempt count 1 before and 1 after). Screenshot teacher-preview-1280.png. |
-| 9 | FR-9 | Publish checklist | ✅ PASS | A draft with a choice question that has no correct option shows the warning 'Before you can publish — Question 1 needs a correct answer.' and Publish is disabled. An empty new quiz also shows the checklist. Screenshot teacher-draft-checklist-1280.png. |
-| 10 | FR-10 | Builder edit lock once attempts exist | ✅ PASS | On a quiz with attempts, an info alert explains which edits are still allowed, with a REGRADE action. ADD QUESTION is disabled, and Grade and Analytics links appear. Regrade was not clicked. Screenshot teacher-builder-locked-1280.png. |
-| 11 | FR-12 | Player start screen /quizzes/[id]/take | ✅ PASS | Shows Markdown instructions (bold rendered), Questions 5, Total points 12, Time limit 20 minutes, Attempts '0 used of 2' and Closes. START ATTEMPT opens the confirmation 'Start this attempt? The 20-minute timer starts as soon as you start…'. Screenshots student-start-screen-375.png, student-start-confirm-375.png. |
-| 12 | FR-14 | Player layout (all-on-one-page and one-per-page) | ❌ FAIL | Inputs render correctly: native Radio for single choice and true/false, Checkbox for multiple choice, a TextField for short answer, and a multiline essay field with a 0/10000 counter. The LinearProgress reads '4 of 5 answered'. One-per-page mode shows a single question, a 'Question navigator' of buttons labelled answered/unanswered/flagged, and Previous/Next. The timer showed 00:59 in red (rgb(185,28,28)) on a 1-minute quiz. DEFECT (UIV-1): the sticky header uses top: 0 inside the app shell, so after scrolling it slides under the fixed AppBar (56px at 375, 64px at 1280). Measured after a 1200px scroll: the title and timer are at top 16–18px, under the AppBar, and elementFromPoint at the timer hits the AppBar. At 1280, Submit (top 16px) is hidden too. The quiz title, the countdown and the save-status pill are therefore not visible while answering lower questions. Screenshots student-player-scrolled-375.png, student-player-scrolled-1280.png, student-player-375.png, student-one-per-page-375.png. |
-| 13 | FR-15 | Autosave status pill | ✅ PASS | The pill showed 'Saving…' during the debounce, then 'All answers saved'. 4 answers were in the DB. With the browser offline, an essay edit showed 'Offline — answers saved on this device' and a localStorage key quiz-attempt:<id>. After reconnecting, the pill returned to 'All answers saved' and the DB had 5 answers. The only console error was the expected net::ERR_INTERNET_DISCONNECTED. Screenshot student-player-offline-375.png. |
-| 14 | FR-19 | Reload mid-attempt | ✅ PASS | After a page reload the same attempt resumed with the single-choice answer, the multiple-choice answers and the essay text intact. The DB had exactly 1 IN_PROGRESS attempt. |
-| 15 | FR-17 | Submit confirmation + outcome | ✅ PASS | The dialog reads 'Submit your answers? You have 1 unanswered question. …'. After confirming, the player went to the attempt page. The DB status was NEEDS_GRADING (the essay is ungraded), with an auto-score of 8. Screenshot student-submit-confirm-375.png. |
-| 16 | FR-20 | Results visibility states | ✅ PASS | IMMEDIATELY: the result page appeared right after submit; while the essay was pending it said 'Some answers are awaiting grading…' and showed no total. MANUAL, before release: the student result page shows only 'Submitted — results will be available later.' with no score. The teacher builder for the MANUAL quiz shows RELEASE RESULTS (not clicked). Screenshots student-result-needs-grading-375.png, student-result-pending-375.png, teacher-manual-release-1280.png. |
-| 17 | NFR-1 | Student-visible JSON before results | ✅ PASS | In the signed-in student browser context, GET /api/attempts/:id for a pending MANUAL attempt and GET /api/quizzes/:id contained no "correct" key and no explanation text. |
-| 18 | FR-21 | Attempt result page /quizzes/[id]/attempts/[id] | ✅ PASS | After grading it shows 11.50 / 12 and 95.8%, plus per-question Correct/Partly correct/Incorrect chips with points, 'Your answer', and 'Correct answer' and Explanation (showCorrectAnswers=true). Teacher feedback 'Clear method.' is shown. When showCorrectAnswers=false (parent view of the closed quiz), correct answers and explanations are hidden. No input fields and no overflow at 375. Screenshots student-result-graded-375.png, student-result-graded-1280.png, parent-result-375.png. |
-| 19 | FR-24 | Manual grading page /courses/[id]/quizzes/[id]/grade | ✅ PASS | BY STUDENT / BY QUESTION tabs, an attempt selector and per-answer cards with an Auto-graded / Needs grading / Graded by teacher chip. Points has the helper '0 – 4, steps of 0.5'; Feedback; SAVE. Entering 99 shows 'At most 2' and disables Save; 0.3 shows 'Points must be a multiple of 0.5'. By question shows the prompt, the essay guidance and every student's answer. Screenshots teacher-grade-by-student-1280.png, teacher-grade-invalid-1280.png, teacher-grade-by-question-1280.png. |
-| 20 | FR-25 | Attempt completes on last grade | ✅ PASS | Saving 3.5 points on the essay showed the 'Grade saved' toast. The DB attempt then became GRADED with score 11.5, and the page showed 'Everything is graded.'. Screenshot teacher-grade-saved-1280.png. |
-| 21 | FR-26 | Analytics summary + histogram | ✅ PASS | Tiles show Attempts 2, Average 9.25, Median 9.25, Highest 11.50, Lowest 7 and Avg. time 6m 06s. An MUI X BarChart has 10% buckets, with the bars at 50–60% and 90–100% matching 58.3% and 95.8%. Screenshot teacher-analytics-1280.png. axe found role-img-alt (serious) twice on the chart SVG and one heading-order issue (UIV-2). |
-| 22 | FR-27 | Analytics per-question table + CSV | ✅ PASS | The 'Per-question results' table shows %, avg points and option-distribution chips (green = correct, red = most-chosen wrong, with a legend). EXPORT CSV is present, and GET ?format=csv returned 200 with a header row and one row per attempt. |
-| 23 | FR-39 | Markdown prompts / image upload control | ✅ PASS | Markdown prompts render (bold in the start-screen instructions and prompt). The editor has Write/Preview tabs and 'ADD IMAGE 0/1'. Uploading an image and displaying it in a prompt were not exercised. |
-| 24 | NFR-3 | Player accessibility | ✅ PASS | axe on <main> of the player at 375 found no violations. The choice inputs are native radio and checkbox elements, the timer has the aria-label 'Time remaining mm:ss', and there is an aria-live='assertive' status region. Keyboard-only operation was not driven end to end. The sticky-header overlap (UIV-1) is a visual problem, not an AT problem. |
-| 25 | NFR-4 | MUI-only visual consistency | ✅ PASS | Every rendered surface uses the app's MUI theme (chips, cards, tables, x-charts) and matches the existing Assignments pages. No unstyled elements were seen. |
+| Req | Surface | Verdict | Notes |
+|---|---|---|---|
+| FR-2 | Assignment and quiz editor category select | PASS | None / Homework / Exams. The saved value displays. |
+| FR-9 | Synced vs manual cells | PASS | Synced cells aren't editable. The API rejects a synced score edit (400 "Only the comment can be changed here…"). |
+| FR-14 | Letter-only override | PASS | `78.0% B *`. Percent kept, letter B, comment saved. |
+| FR-15 | Golden case | PASS | 18/20 + 9/10 (HW 40%) and 70/100 (Exams 60%) give 90.0 / 70.0 → **78.0% C+**. The student view shows the same percent. |
+| FR-16 | `/admin/grading-scales` | PASS | Default chip, 12-band editor. Inline errors "Letters must be unique" and "Must be lower than the band above". Create and delete work. Deleting the default is disabled. Admin nav entries are present. |
+| FR-17 | Gradebook settings | **FAIL** | The live weight sum works, Save is disabled at 90, and the API returns 400. **UIV-2:** the scale select is blank. UIV-3: low-contrast chip. |
+| FR-18 | Gradebook grid | PASS | Category column groups and Averages group. Headers show icon, title, due date and /max. Hidden items are dimmed with an eye-off icon. Bold Term column, sorted by last name, no pinned columns. The grid scrolls horizontally at 375 and the page does not. |
+| FR-19 | Cell rendering | PASS | Score, `EX`, red bold `M`, `—`, and a clock icon on the late synced score. |
+| FR-20 | Keyboard editing | PASS | Digits+Enter, E, M and Delete each save with a PUT. 6 `grade.update` audit rows. Out-of-range input gives a red outline and a toast, and nothing is saved. |
+| FR-21 | Synced cell click | PASS | Opens `/assignments/<id>/grade?studentId=…`. |
+| FR-22 | Add manual item | PASS | Title, Category, Max points, Date, Term. Required validation works. The new column appears right away. |
+| FR-23 | Override dialog | PASS | Percent, Letter, Teacher comment. Saving shows a toast and `*` in the Term cell. |
+| FR-24 | Column menu | PASS | Hide/Show (eye-off icon, `isVisible` toggled), Set ungraded to missing (→ M, term 32.0% F, correct), Item statistics (avg/median/high/low). |
+| FR-25 | Export CSV | PASS | `text/csv` attachment that matches the grid, including EX, M and the override letter. |
+| FR-26 | Student Grades tab | PASS | Course cards with red (50.0 F) and amber (78.0 B) chips. The expanded view shows category subtotals and the item table. The hidden item is absent. (UIV-4) |
+| FR-27 | `/grades` + nav | PASS | Parent child selector switches between children. The "Grades" nav entry is present for STUDENT and PARENT at 1280 and 375. |
+| FR-28 | Course Grades tab (student) | PASS | Only that course's card. No Gradebook or Attendance tabs. |
+| FR-29 | Admin report-cards roster | PASS | Term, grade-level and section filters. Status chips and warning text. Count buttons. axe clean. |
+| FR-30 | Generate drafts / snapshot | PASS | All required fields render, including attendance and the scale legend. No logo because `logoUrl` is null. |
+| FR-31 | Regeneration | PASS | Confirm copy and published snapshots checked. Draft refresh after grade edits wasn't re-driven in the UI. |
+| FR-32 | Review page | PASS | Homeroom teacher can edit only the homeroom comment. Admin can edit both. Saves persist. The teacher has no publish controls. |
+| FR-33 | `/report-cards` homeroom list | PASS | TEACHER nav entry. Lists section drafts with warnings. |
+| FR-34 | Publish / Unpublish | PASS | Single and bulk publish. Unpublish requires a reason and writes an audit row. Notifications go to students and the parent. |
+| FR-35 | Print views | PASS | Letterhead, tables, signature lines. Chrome and the print button are hidden under print media. A4 portrait, 1 page per card. Print all: 2 pages with a page break. |
+| FR-35 | On-screen card at 375 | **FAIL** | **UIV-1:** the table overflows the card and the page. |
+| FR-36 | Student Report cards tab | PASS | Draft hidden ("No report cards yet"). Once published, listed with a link to the print view. |
+| FR-37 | Access control | PASS | Own draft → 404. Outsider → 404 on the page and the API. Parent and teacher allowed. |
+| FR-42 | Student grades API | PASS | Hidden item absent from the API and UI. The outsider gets 404. |
+| NFR-5 | Privacy | PASS | Same evidence as FR-37 and FR-42. |
+| NFR-7 | MUI-only UI | PASS | All surfaces use MUI components. No raw unstyled HTML seen. |
+| NFR-8 | DataGrid MIT tier | PASS | Column groups and editing only. No pinned columns, no Pro watermark. |
+| NFR-11 | Print layout | PASS | A4 portrait PDFs: `screenshots/parent-report-card.pdf` and `screenshots/print-all.pdf`. |
+| FR-26 | `/grades` table at 375 | PASS | Minor observation UIV-4 (scroll region not keyboard-focusable). |
+| FR-18 | Gradebook with no terms | PASS | ENV-1: info Alert instead of a crash. |
 
-## Additional findings
+## Evidence
 
-- **UIV-1** — FAIL (major): the player's sticky header (top: 0) hides under the fixed AppBar after scrolling. The title, timer and save pill are hidden at 375 and 1280, and Submit is also hidden at 1280. Fix: offset the sticky top by the toolbar height (theme.mixins.toolbar / {xs: 56, sm: 64}) in QuizPlayer.tsx.
-- **UIV-2** — minor: on the analytics BarChart SVG, axe reports role-img-alt (serious) twice; there is also one heading-order (moderate) issue on the analytics page.
-- **UIV-3** — minor: axe empty-table-header on the unlabeled actions column of the teacher quizzes table (shared DataTable pattern).
-- **UIV-4** — not exercised: the time-limit-longer-than-window validation in the Settings panel, saving accommodations, Regrade, Release results, drag reorder and image upload (QA covers them through unit, integration and e2e tests).
+The screenshots are in `screenshots/`:
 
-## Not UI-facing (not verified here)
-
-FR-1–5, FR-13, FR-16, FR-18, FR-22, FR-23 (limit enforcement), FR-29–36, FR-38 and NFR-2/5–10 are server, schema or test requirements with no visual surface of their own. They are covered by the QA report.
-
-## Screenshots
-
-- `screenshots/parent-course-quizzes-375.png`
-- `screenshots/parent-result-375.png`
-- `screenshots/student-course-quizzes-375.png`
-- `screenshots/student-course-quizzes-after-375.png`
-- `screenshots/student-one-per-page-375.png`
-- `screenshots/student-player-375.png`
-- `screenshots/student-player-offline-375.png`
-- `screenshots/student-player-scrolled-1280.png`
-- `screenshots/student-player-scrolled-375.png`
-- `screenshots/student-result-graded-1280.png`
-- `screenshots/student-result-graded-375.png`
-- `screenshots/student-result-needs-grading-375.png`
-- `screenshots/student-result-pending-375.png`
-- `screenshots/student-s3-quizzes-375.png`
-- `screenshots/student-start-confirm-375.png`
-- `screenshots/student-start-screen-375.png`
-- `screenshots/student-submit-confirm-375.png`
-- `screenshots/teacher-analytics-1280.png`
-- `screenshots/teacher-builder-empty-1280.png`
-- `screenshots/teacher-builder-locked-1280.png`
-- `screenshots/teacher-builder-questions-1280.png`
-- `screenshots/teacher-builder-settings-1280.png`
-- `screenshots/teacher-course-quizzes-1280.png`
-- `screenshots/teacher-draft-checklist-1280.png`
-- `screenshots/teacher-grade-by-question-1280.png`
-- `screenshots/teacher-grade-by-student-1280.png`
-- `screenshots/teacher-grade-invalid-1280.png`
-- `screenshots/teacher-grade-saved-1280.png`
-- `screenshots/teacher-manual-release-1280.png`
-- `screenshots/teacher-preview-1280.png`
-- `screenshots/teacher-question-editor-1280.png`
-- `screenshots/teacher-settings-timelimit-1280.png`
+- teacher: `teacher-gradebook-*`, `teacher-assignment-editor-category-1280`, `teacher-quiz-editor-category-1280`, `teacher-report-card*`
+- admin: `admin-grading-scale*`, `admin-report-cards-*`, `admin-report-card-*`
+- student: `student-grades*`, `student-course-grades-375`, `student-tab-*`, `student-report-card-print-375`
+- parent: `parent-grades*`, `parent-report-card-print-{375,1280}`
+- other: `outsider-report-card-375`, `nav-{student,parent}-{1280,375}`
+- PDFs: `parent-report-card.pdf`, `print-all.pdf`

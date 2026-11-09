@@ -1,53 +1,59 @@
-# Coverage Report — SH-10 (PRD-10 Quizzes & Online Exams)
+# Coverage Report — SH-11 (PRD-11 Gradebook, Grading Scales & Report Cards)
 
-> This file replaces the stale SH-9 coverage report.
+- ticketId: SH-11
+- timestamp: 2026-11-09T14:29:37Z
 
-- ticketId: SH-10
-- timestamp: 2026-11-09T07:58:00Z
+> This file replaces the stale SH-10 coverage report.
 
-## How coverage was measured
+## Method
 
-No coverage provider (`@vitest/coverage-v8` / `istanbul`) is installed. NFR-7 forbids new dependencies, so line coverage could not be collected.
-Instead, coverage is measured at two levels:
-1. **Export-level:** for each exported function in `src/server/quiz/*`, is it called directly by a test, or reached through a function that is?
-2. **Requirement-level:** see the Requirement Results table in `qa-report.md`.
+No coverage instrumenter is installed (`@vitest/coverage-v8` is not a dependency), and QA did not add one. Coverage is therefore mapped by hand: for each new or changed module, the tests that exercise it **and were run by QA in this phase**.
 
-## Test inventory (SH-10)
+## Tests run by QA
 
-| Suite | File | Tests | Result (QA run) |
-|---|---|---|---|
-| Unit | `tests/unit/quiz/grading.test.ts` | 16 | ✅ pass |
-| Unit | `tests/unit/quiz/quiz-validators.test.ts` | 15 | ✅ pass |
-| Unit | `tests/unit/quiz/serializers.test.ts` | 6 | ✅ pass |
-| Integration (Postgres :5433) | `tests/integration/quiz/attempts.test.ts` | 7 | ✅ pass |
-| Integration (Postgres :5433) | `tests/integration/quiz/regrade.test.ts` | 1 | ✅ pass |
-| Integration (Postgres :5433) | **`tests/integration/quiz/qa-sh10.test.ts` (new, QA)** | 8 | ✅ pass (2 runs) |
-| E2E (Playwright, `next start -p 3100`) | `tests/e2e/quizzes.spec.ts` | 4 | ✅ pass |
-| **Total** | | **57** | **57 / 57** |
-
-## Export-level coverage — `src/server/quiz/`
-
-| Module | Directly tested | Indirectly exercised | Not exercised by any automated test |
-|---|---|---|---|
-| `grading.ts` (pure) | 9/10 | `percentOf` (via analytics, list, serializers) | — |
-| `serializers.ts` | 5/8 | `toManagerQuestion/Answer/Attempt` (via `getQuiz`, `getAttemptView` manager view in qa-sh10) | — |
-| `validators/quiz.ts` | all schemas | — | — |
-| `analytics.ts` | 3/3 (`histogram`, `getQuizAnalytics`, `analyticsCsv`; new in QA) | — | — |
-| `maintenance.ts` | 2/2 | — | — |
-| `access.ts` | 0/6 directly | All 6: every service call goes through them. The NOT_FOUND paths are asserted for an outsider student, another teacher, an unlinked parent, and a parent before release (qa-sh10) | — |
-| `quiz-service.ts` | 12/16 | `getQuizForManager`, `getQuizForStudent` (via `getQuiz`), `notifyResultsReleased` (via `releaseResults` / maintenance) | `listAccommodations` (server page only; covered only by the e2e page render, if at all) |
-| `attempt-service.ts` | 7/15 | `recomputeAttempt`, `autoGradeAnswers`, `ensureNotExpired`, `getAccommodation`, `ensureQuizAttemptsNotExpired` (via start/save/submit/grade/list) | `listManagerAttempts`, `listOwnAttempts`, `getAttempt` (thin wrappers used by server pages and the GET route; the grading page is exercised by the e2e "teacher grades the essay" step) |
-
-**Summary:** 43 of 46 exported server functions (~93%) are exercised by unit or integration tests. The remaining 3 are thin read wrappers, reached only through server pages and e2e.
-
-## Not covered by automated tests
-
-| Area | Files | Notes |
+| Suite | Tests | Result |
 |---|---|---|
-| Route handlers (thin) | `src/app/api/quizzes/**`, `src/app/api/attempts/**`, `src/app/api/questions/**`, `src/app/api/courses/[id]/quizzes` | Tests call the services directly, and the e2e drives the routes through the UI. A static check confirmed every handler calls `requireUser`/`requireRole` and parses input with Zod. No handler-level HTTP test asserts the 409 status mapping (the service-level `CONFLICT` is tested). |
-| Builder: duplicate, drag reorder, preview | `QuestionList.tsx`, `QuizBuilder.tsx` | Present in the code (`useSortable`, the Duplicate IconButton, "Preview as student"). The e2e only covers add, type selection and publish. The server-side reorder is tested (qa-sh10). |
-| `useAutosave` offline queue / 5 s retry | `take/useAutosave.ts` | The e2e covers a reload mid-attempt. Offline/retry has no unit test. |
-| Timer warnings at 5 and 1 min (aria-live) | `take/QuizPlayer.tsx` L286–329 | Verified by code inspection only. |
-| Analytics page chart | `analytics/QuizAnalytics.tsx` | The data is tested. The rendering is not. |
-| Seed (FR-36) | `prisma/seed.ts` L455–557 | The dev DB has no MATH-7A / ENG-7A courses, so the seed skips quizzes. Verified by code inspection, plus the dev's fixture run recorded in the dev log. |
-| 300-student load (NFR-2) | — | Not load-tested. qa-sh10 asserts the median of 50 concurrent saves is under 50 ms, and that saves are upserts. |
+| `tests/unit/gradebook/grade-calc.test.ts` (Dev) | 17 | ✅ pass |
+| `tests/unit/gradebook/term-placement.test.ts` (Dev) | 4 | ✅ pass |
+| `tests/unit/gradebook/validators.test.ts` (**QA, new**) | 4 | ✅ pass |
+| `tests/integration/gradebook/gradebook-sync.test.ts` (Dev) | 8 | ✅ pass (Postgres) |
+| `tests/integration/gradebook/backfill.test.ts` (Dev) | 1 | ✅ pass (Postgres) |
+| `tests/integration/report-cards/report-cards.test.ts` (Dev) | 5 | ✅ pass (Postgres) |
+| `tests/integration/gradebook/qa-sh11.test.ts` (**QA, new**) | 7 | ✅ pass 3/3 runs (Postgres) |
+| `tests/e2e/gradebook.spec.ts` (Dev, Playwright, fresh prod build :3100) | 1 | ✅ pass |
+| `tests/e2e/report-cards.spec.ts` (Dev, Playwright, fresh prod build :3100) | 1 | ✅ pass |
+| **SH-11 total** | **48** | **48/48** |
+
+Integration tests are skipped without `TEST_DATABASE_URL`. QA ran them with `TEST_DATABASE_URL=$DATABASE_URL`, after confirming with `prisma migrate status` that the schema is up to date.
+
+## Per-module coverage
+
+| Module | Covered by | Coverage | Gaps |
+|---|---|---|---|
+| `src/server/gradebook/grade-calc.ts` | grade-calc unit (17), qa-sh11, e2e | **High.** Every exported function is tested: no categories, empty categories, drop lowest, never-drop-all, missing vs ungraded vs excused, hidden, strict due boundary, rounding at band edges (89.95→90.0 A−, 76.95→77.0 C+), letter-only / percent-only / both overrides, colour bands | `applyDropLowest` tie-breaks (equal ratios → dueAt → id) are not asserted |
+| `src/server/gradebook/term-placement.ts` | term-placement unit (4) | **High** | — |
+| `src/lib/validators/gradebook.ts` | validators unit (QA), qa-sh11 (via `.parse`) | **Medium-high.** Covers band rules, weight sum, unique category names, the 1,000-character comment cap | `reportCardPatchSchema`, `unpublishSchema` are only covered indirectly by report-cards integration |
+| `src/server/gradebook/gradebook-sync.ts` | gradebook-sync (8), backfill, qa-sh11 | **High.** Covers assignment publish/draft/archive/delete, return vs save, exemption on/off, A7 hide-survives-resave, quiz IMMEDIATELY / MANUAL / AFTER_CLOSE, practice | `assertCategoryInCourse` rejection (foreign category) is not asserted; the no-term skip path (A6) is only unit-covered via `termFor` |
+| `src/server/gradebook/backfill.ts` + `scripts/gradebook-backfill.ts` | backfill (1) | **Medium.** Idempotency is proven | The CLI wrapper (18 lines) is untested |
+| `src/server/gradebook/load.ts` | qa-sh11, report-cards, e2e | **High** (indirect) | — |
+| `src/server/gradebook/gradebook-service.ts` | qa-sh11 (7), e2e | **Medium-high.** Covers getGradebook (sort, result, 35×80 perf), createManualItem, putGrade (manual, synced-comment-only, out-of-course teacher, student refused, audit, grade.posted once), updateItem (synced reject / hide), markAllMissing (before / after due), putTermOverride (letter-only, unknown letter, audit) | `exportGradebookCsv` (FR-25), `deleteItem`, `updateItem` maxPoints-below-existing-score guard |
+| `src/server/gradebook/categories-service.ts` | qa-sh11 | **Medium.** Covers the weights≠100 reject and a valid replace | Foreign-id reject, gradingScaleId change |
+| `src/server/gradebook/scales-service.ts` | — (validators only) | **Low.** The service is untested. QA did not exercise create/update/delete, because those would flip the school default in the shared dev DB | Admin-only guard, default swap, A11 delete conflicts. The DB invariant is enforced by the partial unique index `grading_scale_one_default` (present in the DB) |
+| `src/server/gradebook/student-grades-service.ts` | qa-sh11, e2e (parent) | **High.** Covers student and parent views, hidden item excluded, unreturned score null, other student / unlinked parent refused | — |
+| `src/server/report-cards/report-card-service.ts`, `snapshot.ts`, `access.ts` | report-cards integration (5), report-cards e2e | **High.** Covers generate, roster warnings, draft hidden from family, comment field rules, publish + notifications, 7B NOT_FOUND, snapshot immutability, regenerate skips PUBLISHED, unpublish with reason | NFR-3 (600×8 < 30 s) is not load-tested |
+| `src/server/assignments/assignments-service.ts` (hooks) | gradebook-sync, existing assignment suites | **High** | See qa-report Headline 1: `publishOnce` change made `qa-sh9` flaky |
+| `src/server/quiz/*` (hooks) | gradebook-sync (3 quiz tests), existing quiz suites | **High** | — |
+| `src/server/notifications/types.ts` | qa-sh11 (grade.posted), report-cards (report_card.published) | **High** | — |
+| API route handlers (`src/app/api/**`, 17 files, 9–19 lines each) | e2e (gradebook PUT grades, report-card generate/publish/GET) | **Low-medium.** Handlers are thin (validator → service) | No HTTP-level tests for grading-scales, grade-categories, term-overrides, mark-missing, students/:id/grades |
+| UI: `GradebookGrid.tsx` | gradebook e2e | **Medium.** Covers keyboard edit (digits+Enter, E, M, Delete), 78.0% C+ | Column menu (hide/show, mark missing, stats), Export CSV button, synced-cell click-through, Add item / Override dialogs |
+| UI: `ReportCardDocument.tsx`, `PrintButton.tsx`, print pages | report-cards e2e | **Medium.** Covers the parent print view with chrome hidden under `print` media | Bulk "Print all" page |
+| UI: `StudentGradesView.tsx`, `/grades`, `/students/[id]/grades`, course Grades | — | **Low.** Only the data layer is tested (qa-sh11) | Rendering, child selector |
+| UI: admin grading-scales, gradebook settings, admin report-cards roster, homeroom list/review, student report-cards tab | report-cards e2e (admin roster only) | **Low** | Scale editor, settings live-sum chip, homeroom review page |
+| `prisma/seed.ts` (PRD-11 block) | Dev manual run on temp 7A fixtures (dev-log) | **Not re-run by QA.** The dev DB has no 7A courses, so the block would only log a skip | — |
+
+## Summary
+
+- **Server logic** (calc, sync, backfill, student grades, report cards): well covered. Every PRD "Test Requirements" item (calculation matrix, sync hooks, backfill idempotency, snapshot immutability, the 3 Playwright flows) exists and passes.
+- **Estimated line coverage of new server code: ~75–80%** (hand estimate). The main untested pieces are `scales-service.ts`, `exportGradebookCsv`, `deleteItem`, and the CLI wrapper.
+- **UI components: ~35–40%** (hand estimate). Only the two e2e flows exercise them.
+- **Recommended additions:** an HTTP test for `/api/grading-scales` on an isolated DB; a CSV export assertion; a Playwright check for the column menu and the student Grades tab.

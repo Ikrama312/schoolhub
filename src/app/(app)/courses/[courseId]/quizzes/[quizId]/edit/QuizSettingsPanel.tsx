@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import Alert from '@mui/material/Alert';
@@ -120,7 +120,16 @@ export function QuizSettingsPanel({
     oneQuestionPerPage: quiz.oneQuestionPerPage,
     resultsVisibility: quiz.resultsVisibility,
     showCorrectAnswers: quiz.showCorrectAnswers,
+    categoryId: quiz.categoryId ?? '',
   });
+  // PRD-11 FR-2: the course's gradebook categories ('' = none).
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch(`/api/courses/${quiz.courseId}/grade-categories`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setCategories(b?.data?.categories ?? []))
+      .catch(() => setCategories([]));
+  }, [quiz.courseId]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => setV((s) => ({ ...s, [k]: val }));
@@ -131,6 +140,7 @@ export function QuizSettingsPanel({
       availableFrom: v.availableFrom ? fromZonedTime(v.availableFrom, timezone).toISOString() : undefined,
       availableUntil: v.availableUntil ? fromZonedTime(v.availableUntil, timezone).toISOString() : undefined,
       timeLimitMinutes: v.timeLimitMinutes.trim() === '' ? null : v.timeLimitMinutes,
+      categoryId: v.categoryId || null,
     };
     const parsed = quizSettingsSchema.safeParse(input);
     if (!parsed.success) {
@@ -189,6 +199,14 @@ export function QuizSettingsPanel({
               <MenuItem value="IMMEDIATELY">Immediately after submit</MenuItem>
               <MenuItem value="AFTER_CLOSE">After the quiz closes</MenuItem>
               <MenuItem value="MANUAL">When I release them</MenuItem>
+            </TextField>
+            <TextField select label="Gradebook category" value={v.categoryId} onChange={(e) => set('categoryId', e.target.value)} sx={{ minWidth: 180 }} error={!!errors.categoryId} helperText={errors.categoryId}>
+              <MenuItem value="">None</MenuItem>
+              {categories.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
             </TextField>
           </Stack>
           <Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 2 }} useFlexGap>

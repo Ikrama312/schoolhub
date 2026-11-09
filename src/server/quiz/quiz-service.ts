@@ -6,6 +6,7 @@ import type { AccessUser } from '@/server/auth/student-access';
 import { notify, notifyStudentAndParents } from '@/server/notifications/notify';
 import { getSchoolTimezone } from '@/server/assignments/assignments-service';
 import { fixed2 } from '@/server/assignments/grading-math';
+import { assertCategoryInCourse, deleteItemForSource, syncQuizGrades, upsertItemFromQuiz } from '@/server/gradebook/gradebook-sync';
 import { formatInSchoolTz } from '@/lib/dates';
 import { logger } from '@/lib/logger';
 import {
@@ -65,6 +66,7 @@ function toManagerQuiz(q: ManagerQuizRow) {
     oneQuestionPerPage: q.oneQuestionPerPage,
     resultsVisibility: q.resultsVisibility,
     showCorrectAnswers: q.showCorrectAnswers,
+    categoryId: q.categoryId,
     status: q.status,
     resultsReleasedAt: iso(q.resultsReleasedAt),
     createdById: q.createdById,
@@ -253,11 +255,13 @@ function settingsData(s: QuizSettings) {
     oneQuestionPerPage: s.oneQuestionPerPage,
     resultsVisibility: s.resultsVisibility,
     showCorrectAnswers: s.showCorrectAnswers,
+    categoryId: s.categoryId ?? null,
   };
 }
 
 export async function createQuiz(user: AccessUser, courseId: string, input: QuizSettings, request?: Request) {
   await manageCourseOrNotFound(user, courseId, courseNotFound);
+  await assertCategoryInCourse(prisma, courseId, input.categoryId);
   const quiz = await prisma.quiz.create({ data: { ...settingsData(input), courseId, createdById: user.id } });
   await audit({ actorId: user.id, action: 'quiz.create', entityType: 'Quiz', entityId: quiz.id, metadata: { courseId }, request });
   return toManagerQuiz(await loadManagerQuiz(quiz.id));
@@ -300,13 +304,18 @@ export async function updateQuiz(user: AccessUser, quizId: string, patch: QuizPa
   const merged = settingKeys.length ? quizSettingsSchema.parse({ ...toManagerQuiz(existing), ...settings }) : null;
 
   const published = await prisma.$transaction(async (tx) => {
+    if (settings.categoryId !== undefined) await assertCategoryInCourse(tx, existing.courseId, settings.categoryId);
     if (merged) await tx.quiz.update({ where: { id: quizId }, data: settingsData(merged) });
-    if (status === 'PUBLISHED') return (await tx.quiz.updateMany({ where: { id: quizId, status: 'DRAFT' }, data: { status: 'PUBLISHED' } })).count === 1;
+    let didPublish = false;
+    if (status === 'PUBLISHED') didPublish = (await tx.quiz.updateMany({ where: { id: quizId, status: 'DRAFT' }, data: { status: 'PUBLISHED' } })).count === 1;
     if (status === 'CLOSED') await tx.quiz.updateMany({ where: { id: quizId, status: 'PUBLISHED' }, data: { status: 'CLOSED' } });
-    return false;
+    // PRD-11 FR-3/FR-4: publish or edit of a published quiz → item; practice on → item deleted (A15).
+    if (didPublish || existing.status !== 'DRAFT') await upsertItemFromQuiz(tx, quizId, { wasVisible: existing.status !== 'DRAFT' });
+    return didPublish;
   });
   await audit({ actorId: user.id, action: 'quiz.update', entityType: 'Quiz', entityId: quizId, metadata: { fields: settingKeys, status }, request });
   if (published) await notifyPublished(quizId); // A9: exactly once, after commit
+  if (published || existing.status !== 'DRAFT') await syncQuizGrades(quizId);
   return toManagerQuiz(await loadManagerQuiz(quizId));
 }
 
@@ -314,7 +323,10 @@ export async function deleteQuiz(user: AccessUser, quizId: string, request?: Req
   const quiz = await loadManagerQuiz(quizId);
   await manageCourseOrNotFound(user, quiz.courseId);
   if (quiz._count.attempts > 0) throw new AppError('CONFLICT', 'This quiz has attempts and cannot be deleted.');
-  await prisma.quiz.delete({ where: { id: quizId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.quiz.delete({ where: { id: quizId } });
+    await deleteItemForSource(tx, quizId);
+  });
   await audit({ actorId: user.id, action: 'quiz.delete', entityType: 'Quiz', entityId: quizId, metadata: { courseId: quiz.courseId, title: quiz.title }, request });
   return { id: quizId };
 }
@@ -439,6 +451,7 @@ export async function regradeQuiz(user: AccessUser, quizId: string, request?: Re
     { timeout: 60_000 },
   );
   await audit({ actorId: user.id, action: 'quiz.regrade', entityType: 'Quiz', entityId: quiz.id, metadata: result, request });
+  await syncQuizGrades(quizId);
   return result;
 }
 
@@ -467,6 +480,7 @@ export async function releaseResults(user: AccessUser, quizId: string, request?:
   const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: quizId }, select: { resultsVisibility: true, resultsReleasedAt: true } });
   if (quiz.resultsVisibility !== 'MANUAL') throw new AppError('CONFLICT', 'Only quizzes with manual results visibility can be released.');
   if (count === 1) {
+    await syncQuizGrades(quizId, now);
     await notifyResultsReleased(quizId);
     await audit({ actorId: user.id, action: 'quiz.release_results', entityType: 'Quiz', entityId: quizId, request });
   }

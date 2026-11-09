@@ -1,585 +1,864 @@
 {
-  "ticketId": "SH-10",
-  "timestamp": "2026-11-09T13:30:00Z",
-  "phase": "dev-planning",
+  "ticketId": "SH-11",
   "version": "1.0",
+  "timestamp": "2026-11-09T12:14:35Z",
+  "phase": "dev-planning",
   "tasks": [
     {
       "id": "TASK-1",
-      "description": "Prisma schema: enums QuizStatus/QuestionType/ResultsVisibility/AttemptStatus/ScoringPolicy and models Quiz, Question, QuizAttempt, QuizAnswer (@@id[attemptId,questionId]), QuizAccommodation exactly per PRD FR-1, plus relations/indexes from system-design §2 and back-relations on Course/User. Migration via `prisma migrate dev --create-only`, then append raw SQL partial unique index quiz_attempt_one_in_progress_uq (status='IN_PROGRESS') and add a schema comment pointing to it. Never use db push (ADR-2).",
+      "description": "Prisma schema + migration: enums GradeItemSource/ReportCardStatus, models GradingScale, GradeCategory, GradeItem, Grade, TermGradeOverride, ReportCard exactly per PRD FR-1; Course.gradingScaleId, Assignment/Quiz.categoryId (SetNull); back-relations; indexes GradeItem(courseId,termId), TermGradeOverride(termId), ReportCard(termId,status); raw SQL partial unique index grading_scale_one_default. Use prisma migrate, never db push.",
       "files": [
         "prisma/schema.prisma",
-        "prisma/migrations/20261110000000_add_quizzes/migration.sql"
+        "prisma/migrations/20261111000000_add_gradebook/migration.sql"
       ],
       "dependencies": [],
-      "estimateHours": 2,
+      "estimateHours": 3,
       "requirementIds": [
         "FR-1",
-        "FR-19"
+        "FR-2",
+        "NFR-13"
       ]
     },
     {
       "id": "TASK-2",
-      "description": "Zod validators (client-safe): quizSettingsSchema (superRefine availableUntil>availableFrom, timeLimit<=window; timeLimit 1-300|null, maxAttempts 1-10), questionSchema discriminatedUnion on type (points 0.5-100, 2-8 options, >=1 correct for MC, 1-10 accepted), answerResponseSchema (type-agnostic, text<=10000), manualGradeSchema {pointsAwarded step 0.5, feedback?} (field name per api-contracts, NOT `points`), accommodationSchema, reorderSchema. Unit tests.",
+      "description": "Zod validators shared by forms and handlers: bandsSchema (strictly descending, lowest 0, unique letters, gpa stored only), scaleSchema, categoriesPutSchema (weights sum 100, gradingScaleId nullable), manualItemSchema, itemPatchSchema, gradePutSchema, termOverrideSchema (comment <=1000), reportCardPatchSchema, generateSchema, publishSchema, unpublishSchema (reason 1-500). Reuse decimal pattern from validators/assignments.ts.",
       "files": [
-        "src/lib/validators/quiz.ts",
-        "tests/unit/quiz/quiz-validators.test.ts"
+        "src/lib/validators/gradebook.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-16",
+        "FR-17",
+        "FR-22",
+        "FR-23",
+        "FR-39",
+        "FR-40",
+        "NFR-13"
+      ]
+    },
+    {
+      "id": "TASK-3",
+      "description": "Pure Decimal grade calculation (no Prisma client import): counted() predicate, applyDropLowest (never drop all), categoryPercent, course weighted mean with renormalisation + Uncategorised weight 0 + points fallback (A8), roundHalfUp1 once at the end, letterFor, effectiveScale, applyOverride (letter-only, percent-only re-derives letter A12), gradeColour. Reuse Decimal/dec/fixed2 from assignments/grading-math.ts. Unit matrix incl. FR-15 golden 78.0 C+, 89.95 -> 90.0 -> A-, AC-2, AC-5, AC-6.",
+      "files": [
+        "src/server/gradebook/grade-calc.ts",
+        "tests/unit/gradebook/grade-calc.test.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 5,
+      "requirementIds": [
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-15",
+        "NFR-1",
+        "NFR-12"
+      ]
+    },
+    {
+      "id": "TASK-4",
+      "description": "Pure termFor(date, terms, tz, now): containing term by school-local date (schoolToday + getSchoolTimezone), fall back to term containing today, else null (A6). Unit test tz day boundaries, fallback, null.",
+      "files": [
+        "src/server/gradebook/term-placement.ts",
+        "tests/unit/gradebook/term-placement.test.ts"
       ],
       "dependencies": [
         "TASK-1"
       ],
       "estimateHours": 1.5,
       "requirementIds": [
-        "FR-2",
-        "FR-6",
-        "NFR-6"
+        "FR-3",
+        "NFR-10",
+        "NFR-12"
       ]
     },
     {
-      "id": "TASK-3",
-      "description": "Pure core grading.ts (no Prisma client; import dec/fixed2/Decimal from @/server/assignments/grading-math): gradeAnswer, needsReview (A8 derived rule), normalizeShortAnswer, computeDeadline, attemptLimit, resultsVisible, canPublish, applyScoringPolicy (HIGHEST/LATEST/AVERAGE over GRADED), seededShuffle (string hash + mulberry32), ANSWER_GRACE_MS=30000. Unit tests per system-design §6 incl. FR-2 example ({A,B}->0,{A}->2) and ' Photosynthesis '.",
+      "id": "TASK-5",
+      "description": "Gradebook sync module: upsertItemFromAssignment/upsertItemFromQuiz (isVisible only on visibility transition A7, re-place term only when dueAt/availableUntil changes A10, skip+logger.warn when no term), hideItemForSource, deleteItemForSource, syncSubmissionGrade (RETURNED only, excused from GradeExemption, A1), syncQuizGrade/syncQuizGrades (GRADED + resultsVisible + not practice; use existing getStudentQuizScore in quiz/attempt-service.ts, do NOT create a second one; scale to maxPoints). Export pure row builders itemFromAssignment, gradeFromSubmission, gradeFromQuizScore for backfill.",
       "files": [
-        "src/server/quiz/grading.ts",
-        "tests/unit/quiz/grading.test.ts"
+        "src/server/gradebook/gradebook-sync.ts"
       ],
       "dependencies": [
-        "TASK-1"
+        "TASK-1",
+        "TASK-4"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-3",
+        "FR-4",
+        "FR-5",
+        "FR-6",
+        "FR-7",
+        "NFR-5",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-6",
+      "description": "Assignment hooks (one call each): createAssignment/updateAssignment/publishOnce -> upsertItemFromAssignment(tx); deleteOrArchiveAssignment -> hideItemForSource (archive) / deleteItemForSource (hard delete) in same tx; gradeSubmission/bulkReturn/gradeOffline -> syncSubmissionGrade only when RETURNED after write (AC-3); setExemption (both branches) -> syncSubmissionGrade. Add optional nullable categoryId to assignment Zod schemas.",
+      "files": [
+        "src/server/assignments/assignments-service.ts",
+        "src/lib/validators/assignments.ts"
+      ],
+      "dependencies": [
+        "TASK-5"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-2",
+        "FR-3",
+        "FR-4",
+        "FR-5",
+        "FR-6",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-7",
+      "description": "Quiz hooks: updateQuiz (->PUBLISHED or edit of published) -> upsertItemFromQuiz, practice toggle on -> deleteItemForSource; deleteQuiz wrapped in tx -> deleteItemForSource; after submitAttempt/gradeAnswerManually/regradeQuiz commit -> syncQuizGrade(s); releaseResults and maintenance AFTER_CLOSE claim (count===1) -> syncQuizGrades. Add optional nullable categoryId to quiz Zod schemas.",
+      "files": [
+        "src/server/quiz/quiz-service.ts",
+        "src/server/quiz/attempt-service.ts",
+        "src/server/quiz/maintenance.ts",
+        "src/lib/validators/quiz.ts"
+      ],
+      "dependencies": [
+        "TASK-5"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-2",
+        "FR-3",
+        "FR-4",
+        "FR-7",
+        "NFR-5",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-8",
+      "description": "Sync integration tests: return -> Grade, save-without-return -> none (AC-3), exemption on/off, quiz GRADED + IMMEDIATE/AFTER_CLOSE/MANUAL release, practice skipped, archive hides, delete removes, teacher hide survives re-save (A7).",
+      "files": [
+        "tests/integration/gradebook/gradebook-sync.test.ts"
+      ],
+      "dependencies": [
+        "TASK-6",
+        "TASK-7"
       ],
       "estimateHours": 3,
       "requirementIds": [
         "FR-3",
         "FR-4",
         "FR-5",
-        "FR-9",
-        "FR-13",
-        "FR-20",
-        "FR-22",
-        "FR-23",
-        "FR-28",
-        "NFR-7",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-4",
-      "description": "Student serializers toStudentQuiz/toStudentAttempt (incl. serverNow, options shuffled via seededShuffle(attempt.id) when shuffleOptions)/toStudentResult built by explicit allow-list; correct/explanation only when resultsVisible && showCorrectAnswers. Unit test walks output recursively asserting no `correct` key before visibility (AC-7).",
-      "files": [
-        "src/server/quiz/serializers.ts",
-        "tests/unit/quiz/serializers.test.ts"
-      ],
-      "dependencies": [
-        "TASK-3"
-      ],
-      "estimateHours": 1.5,
-      "requirementIds": [
-        "NFR-1",
-        "FR-11",
-        "FR-21"
-      ]
-    },
-    {
-      "id": "TASK-5",
-      "description": "Integrations: add notification types quiz.published (ACADEMIC, STUDENT, defaultEmail false) and quiz.results_released (ACADEMIC, STUDENT+PARENT, defaultEmail true); register('quiz', resolver) file context — course manager, or course viewer when quiz PUBLISHED.",
-      "files": [
-        "src/server/notifications/types.ts",
-        "src/server/files/contexts.ts"
-      ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-29",
-        "FR-30",
-        "FR-39",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-6",
-      "description": "access.ts: assertCanAccessAttempt(user, attempt, {write}) — owner (write), manager via assertCanManageCourse, linked PARENT read-only only when resultsVisible; otherwise NOT_FOUND.",
-      "files": [
-        "src/server/quiz/access.ts"
-      ],
-      "dependencies": [
-        "TASK-3"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-34",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-7",
-      "description": "attempt-service.ts: startOrResumeAttempt (window/limit CONFLICTs, cuid up front, seeded questionOrder, frozen deadlineAt, P2002 -> re-read and resume; 201 vs 200 signal), getAttempt (ensureNotExpired), saveAnswer hot path (1 attempt read + 1 upsert, no Quiz/Question load; deadline+30s -> auto-submit + CONFLICT 'Time is up'), submitAttempt(id,{auto}) idempotent via status claim, ensureNotExpired, gradeAnswerManually (points<=question.points, audit after commit), recomputeAttempt(tx,id), getStudentQuizScore (returns isPractice; no endpoint).",
-      "files": [
-        "src/server/quiz/attempt-service.ts"
-      ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-3",
-        "TASK-4",
-        "TASK-6"
-      ],
-      "estimateHours": 4,
-      "requirementIds": [
-        "FR-12",
-        "FR-13",
-        "FR-15",
-        "FR-16",
-        "FR-17",
-        "FR-18",
-        "FR-19",
-        "FR-22",
-        "FR-23",
-        "FR-24",
-        "FR-25",
-        "FR-32",
-        "FR-33",
-        "FR-38",
-        "NFR-2"
-      ]
-    },
-    {
-      "id": "TASK-8",
-      "description": "quiz-service.ts: listCourseQuizzes (role-shaped teacher/student/parent; A2 'missed'), createQuiz, getQuizForManager (locked/publishProblems/totalPoints), getQuizForStudent, updateQuiz (DRAFT->PUBLISHED conditional updateMany + canPublish VALIDATION_ERROR + notify quiz.published after commit), deleteQuiz (CONFLICT if attempts), add/update/delete/reorderQuestions behind edit lock (FR-10 message), regradeQuiz (one $transaction, skip gradedById!=null, recomputeAttempt, audit), releaseResults (MANUAL claim + notifyStudentAndParents + audit), upsertAccommodation (audit).",
-      "files": [
-        "src/server/quiz/quiz-service.ts"
-      ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-4",
-        "TASK-5",
-        "TASK-7"
-      ],
-      "estimateHours": 4,
-      "requirementIds": [
         "FR-6",
         "FR-7",
-        "FR-8",
-        "FR-9",
-        "FR-10",
-        "FR-11",
-        "FR-20",
-        "FR-28",
-        "FR-29",
-        "FR-30",
-        "FR-31",
-        "FR-38"
+        "NFR-5",
+        "NFR-12"
       ]
     },
     {
       "id": "TASK-9",
-      "description": "analytics.ts: getQuizAnalytics (count/mean/median/max/min/avg time, 10-bucket histogram with 100% in last bucket, per-question %correct, avg points, option distribution with most-chosen wrong option) and analyticsCsv via toCsv (student, attemptNumber, score, one column per question).",
+      "description": "Idempotent backfill: backfillGradebook() batch-loads per course, applies sync row builders with upsert (applyScoringPolicy in memory, no per-student getStudentQuizScore). CLI scripts/gradebook-backfill.ts logs {items, grades} via logger and exits 0. Add package.json script \"gradebook:backfill\": \"tsx scripts/gradebook-backfill.ts\" (no dependency changes). Integration test: run twice -> identical counts.",
       "files": [
-        "src/server/quiz/analytics.ts"
+        "src/server/gradebook/backfill.ts",
+        "scripts/gradebook-backfill.ts",
+        "package.json",
+        "tests/integration/gradebook/backfill.test.ts"
       ],
       "dependencies": [
-        "TASK-1",
-        "TASK-3"
+        "TASK-5"
       ],
-      "estimateHours": 2,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-26",
-        "FR-27"
+        "FR-8",
+        "NFR-3",
+        "NFR-12"
       ]
     },
     {
       "id": "TASK-10",
-      "description": "maintenance.ts: autoSubmitExpiredAttempts(now) (IN_PROGRESS, deadlineAt < now-30s, cap 200, submitAttempt auto) and sendAfterCloseResultsReleased(now) (claim resultsReleasedAt null->now, notify only when count=1). Wire both into internal email dispatch route after sendDueReminders, each in own try/catch + logger.error.",
+      "description": "Shared batched loader loadCourseTermData(courseIds[], termId, studentIds?, {visibleOnly}) -> {items, grades, categories, overrides, scales} via findMany with in-filters, grouped in memory (no N+1).",
       "files": [
-        "src/server/quiz/maintenance.ts",
-        "src/app/api/internal/email/dispatch/route.ts"
+        "src/server/gradebook/load.ts"
       ],
       "dependencies": [
-        "TASK-5",
-        "TASK-7"
+        "TASK-1"
       ],
-      "estimateHours": 1.5,
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-18",
-        "FR-30",
-        "FR-35"
+        "NFR-2",
+        "NFR-3",
+        "FR-42"
       ]
     },
     {
       "id": "TASK-11",
-      "description": "Quiz & question CRUD route handlers (thin: withHandler -> requireUser/requireRole -> Zod -> one service call -> ok/paginated), shapes per api-contracts.json.",
+      "description": "Register notification types grade.posted (STUDENT+PARENT, defaultEmail false) and report_card.published (STUDENT+PARENT, defaultEmail true) in the existing registry.",
       "files": [
-        "src/app/api/courses/[id]/quizzes/route.ts",
-        "src/app/api/quizzes/[id]/route.ts",
-        "src/app/api/quizzes/[id]/questions/route.ts",
-        "src/app/api/quizzes/[id]/questions/reorder/route.ts",
-        "src/app/api/questions/[id]/route.ts"
+        "src/server/notifications/types.ts"
       ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-8"
-      ],
-      "estimateHours": 2,
+      "dependencies": [],
+      "estimateHours": 0.5,
       "requirementIds": [
-        "FR-31",
-        "FR-6",
-        "FR-7",
-        "FR-9",
-        "FR-10",
-        "NFR-5",
-        "NFR-6"
+        "FR-38"
       ]
     },
     {
       "id": "TASK-12",
-      "description": "Teacher action route handlers: regrade, release-results, analytics (?format=csv -> text/csv), accommodations PUT.",
+      "description": "Grading scales service + routes: CRUD, setDefault in tx clearing other defaults, first scale becomes default, isDefault:false on current default -> VALIDATION_ERROR, delete guarded (default or referenced -> CONFLICT, A11), audit gradingScale.*. GET open to requireUser; writes ADMIN.",
       "files": [
-        "src/app/api/quizzes/[id]/regrade/route.ts",
-        "src/app/api/quizzes/[id]/release-results/route.ts",
-        "src/app/api/quizzes/[id]/analytics/route.ts",
-        "src/app/api/quizzes/[id]/accommodations/[studentId]/route.ts"
+        "src/server/gradebook/scales-service.ts",
+        "src/app/api/grading-scales/route.ts",
+        "src/app/api/grading-scales/[id]/route.ts"
       ],
       "dependencies": [
-        "TASK-8",
-        "TASK-9"
+        "TASK-2"
       ],
-      "estimateHours": 1.5,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-10",
-        "FR-20",
-        "FR-26",
-        "FR-27",
-        "FR-28",
-        "FR-38",
-        "NFR-5"
+        "FR-16",
+        "FR-39",
+        "NFR-4",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-13",
-      "description": "Attempt route handlers: POST start/resume (201/200), GET attempt, PUT answer (response has no grading data), POST submit (returns StudentResult), PUT manual grade.",
+      "description": "Categories service + route: getCategories (assertCanViewCourse), replaceCategories in tx (delete removed, upsert rest, dec(sum).eq(100)), setCourseScale (gradingScaleId in PUT body), audit gradeCategories.replace. GET view / PUT manage.",
       "files": [
-        "src/app/api/quizzes/[id]/attempts/route.ts",
-        "src/app/api/attempts/[id]/route.ts",
-        "src/app/api/attempts/[id]/answers/[questionId]/route.ts",
-        "src/app/api/attempts/[id]/submit/route.ts",
-        "src/app/api/attempts/[id]/answers/[questionId]/grade/route.ts"
+        "src/server/gradebook/categories-service.ts",
+        "src/app/api/courses/[id]/grade-categories/route.ts"
       ],
       "dependencies": [
-        "TASK-2",
-        "TASK-7"
+        "TASK-2"
       ],
-      "estimateHours": 2,
+      "estimateHours": 2.5,
       "requirementIds": [
-        "FR-32",
-        "FR-15",
-        "FR-16",
+        "FR-2",
         "FR-17",
-        "FR-24",
-        "FR-25",
-        "NFR-1",
-        "NFR-5",
+        "FR-39",
+        "FR-40",
+        "NFR-4",
         "NFR-6"
       ]
     },
     {
       "id": "TASK-14",
-      "description": "Integration tests (Vitest + test DB): autosave 409 after deadline+30s and attempt auto-submitted; GET auto-submits expired attempt; concurrent start returns one attempt; double submit no-op; regrade changes auto-graded answers but not manual ones; maintenance pass idempotent.",
+      "description": "Gradebook service: getGradebook (assertCanManageCourse, load.ts + Submission{id,isLate}/QuizAttempt{id} lookups, students by last name, grade-calc per student, denormalised payload), createManualItem, updateItem (non-MANUAL: isVisible only), deleteItem (MANUAL only), putGrade (non-MANUAL: comment only FR-9; audit grade.update {old,new}; grade.posted after commit on null->score for MANUAL, A9; returns recomputed StudentTermResult), markAllMissing (now > dueAt, score-null rows only, audit grade.markMissing), putTermOverride (audit termOverride.upsert), exportGradebookCsv via toCsv.",
       "files": [
-        "tests/integration/quiz/attempts.test.ts",
-        "tests/integration/quiz/regrade.test.ts"
+        "src/server/gradebook/gradebook-service.ts"
       ],
       "dependencies": [
-        "TASK-7",
-        "TASK-8",
-        "TASK-10"
+        "TASK-3",
+        "TASK-10",
+        "TASK-11"
       ],
-      "estimateHours": 2.5,
+      "estimateHours": 6,
       "requirementIds": [
-        "NFR-8",
-        "FR-16",
-        "FR-17",
+        "FR-9",
+        "FR-15",
         "FR-18",
         "FR-19",
-        "FR-10",
-        "FR-35"
+        "FR-21",
+        "FR-22",
+        "FR-23",
+        "FR-24",
+        "FR-25",
+        "FR-38",
+        "NFR-2",
+        "NFR-4",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-15",
-      "description": "Course Quizzes tab + list: course-tabs.ts entry (no sidebar entry, A1/FR-37); server page with requirePageRole + course access; CourseQuizzesView (teacher DataTable + New quiz; student Upcoming/Available/Completed/Missed; parent read-only completed results); new/page.tsx creates DRAFT and redirects to edit. mui-mcp lookup first (ADR-7).",
+      "description": "Gradebook API routes (thin withHandler -> Zod -> service -> ok()): GET courses/[id]/gradebook (?format=csv -> text/csv), POST courses/[id]/grade-items, PATCH/DELETE grade-items/[id], POST grade-items/[id]/mark-missing, PUT grade-items/[id]/grades/[studentId], PUT courses/[id]/term-overrides/[studentId].",
       "files": [
-        "src/config/course-tabs.ts",
-        "src/app/(app)/courses/[courseId]/quizzes/page.tsx",
-        "src/app/(app)/courses/[courseId]/quizzes/CourseQuizzesView.tsx",
-        "src/app/(app)/courses/[courseId]/quizzes/new/page.tsx"
+        "src/app/api/courses/[id]/gradebook/route.ts",
+        "src/app/api/courses/[id]/grade-items/route.ts",
+        "src/app/api/grade-items/[id]/route.ts",
+        "src/app/api/grade-items/[id]/mark-missing/route.ts",
+        "src/app/api/grade-items/[id]/grades/[studentId]/route.ts",
+        "src/app/api/courses/[id]/term-overrides/[studentId]/route.ts"
       ],
       "dependencies": [
-        "TASK-8"
+        "TASK-2",
+        "TASK-14"
       ],
       "estimateHours": 2.5,
       "requirementIds": [
-        "FR-11",
-        "FR-33",
-        "FR-6",
-        "NFR-4",
-        "NFR-5"
+        "FR-9",
+        "FR-20",
+        "FR-22",
+        "FR-23",
+        "FR-24",
+        "FR-25",
+        "FR-39",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-16",
-      "description": "Quiz player: take/page.tsx (start screen + ConfirmDialog, ensureNotExpired), QuizPlayer (sticky header, mm:ss timer from deadlineAt+serverNow, red <2min, aria-live at 5:00/1:00, Chip save pill, LinearProgress, Radio/Checkbox/TextField per type, all-on-one-page or paged navigator with client-only flags, submit ConfirmDialog with unanswered count, mode='preview' no-op), useAutosave (800ms debounce, localStorage queue 'quiz-attempt:<id>', 5s retry, 409 -> clear + route to result, merge queue on mount). mui-mcp lookup first.",
+      "description": "Student grades service + route: getStudentGrades(user, studentId, termId, courseId?) with assertCanViewStudent, load.ts visibleOnly filtered in query, grade-calc over visible items only, whitelist serializer (no updatedById, no hidden items).",
       "files": [
-        "src/app/(app)/quizzes/[quizId]/take/page.tsx",
-        "src/app/(app)/quizzes/[quizId]/take/QuizPlayer.tsx",
-        "src/app/(app)/quizzes/[quizId]/take/useAutosave.ts"
+        "src/server/gradebook/student-grades-service.ts",
+        "src/app/api/students/[id]/grades/route.ts"
       ],
       "dependencies": [
-        "TASK-4",
-        "TASK-7",
-        "TASK-13"
+        "TASK-3",
+        "TASK-10"
       ],
-      "estimateHours": 4,
+      "estimateHours": 2.5,
       "requirementIds": [
-        "FR-8",
-        "FR-12",
-        "FR-13",
-        "FR-14",
         "FR-15",
-        "FR-16",
-        "FR-17",
-        "FR-19",
-        "NFR-3",
-        "NFR-4"
+        "FR-26",
+        "FR-27",
+        "FR-28",
+        "FR-42",
+        "NFR-5",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-17",
-      "description": "Builder question list: QuestionList (dnd-kit SortableContext of MUI Cards + Up/Down keyboard fallback, add via type picker defaulting to SINGLE_CHOICE, duplicate, delete, disabled controls + tooltip when locked) and QuestionEditor (per-type editors: options with correct Radio/Checkbox, Enter adds option, accepted-answers list, essay guidance, MarkdownEditor + FileUpload context 'quiz').",
+      "description": "Report card snapshot + access: snapshotSchema (v:1) and pure buildSnapshot(student, courses, computed, attendance, school, scale) per api-contracts ReportCardSnapshotV1; assertCanViewReportCard (ADMIN, student's teachers/homeroom, student/parent only when PUBLISHED, else NOT_FOUND) and canEditHomeroomComment via student-access + Section.homeroomTeacherId.",
       "files": [
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuestionList.tsx",
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuestionEditor.tsx"
+        "src/server/report-cards/snapshot.ts",
+        "src/server/report-cards/access.ts"
       ],
       "dependencies": [
-        "TASK-2",
-        "TASK-11"
+        "TASK-1",
+        "TASK-3"
       ],
-      "estimateHours": 3,
+      "estimateHours": 2.5,
       "requirementIds": [
-        "FR-7",
-        "FR-10",
-        "FR-39",
-        "NFR-3",
-        "NFR-4",
-        "NFR-9"
+        "FR-30",
+        "FR-32",
+        "FR-37",
+        "NFR-5",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-18",
-      "description": "Builder shell: edit/page.tsx (manager-only), QuizBuilder (running points total, Publish with canPublish errors, lock banner + Regrade button, Preview as student via QuizPlayer mode='preview'), QuizSettingsPanel (DateTimePicker window, Switch/Select/TextField settings, accommodations DataTable of enrolled students with note that changes apply to new attempts only, A7).",
+      "description": "Report card service: listReportCards (incl. NOT_GENERATED rows + missing-data warnings), generateDrafts (batched load.ts + one attendance getReport, chunks of 100, createMany skipDuplicates + updateMany where status DRAFT), getReportCard, patchComments (DRAFT only, field-level roles, A13), publish (updateMany DRAFT->PUBLISHED, audit, notify report_card.published after commit), unpublish (ADMIN, reason, -> DRAFT, audit {old,new,reason}), listForStudent (PUBLISHED-only for student/parent). Must not import src/server/gradebook writes into ReportCard from gradebook.",
       "files": [
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/page.tsx",
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizBuilder.tsx",
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizSettingsPanel.tsx"
+        "src/server/report-cards/report-card-service.ts"
       ],
       "dependencies": [
-        "TASK-12",
-        "TASK-16",
+        "TASK-10",
+        "TASK-11",
         "TASK-17"
       ],
-      "estimateHours": 3,
+      "estimateHours": 6,
       "requirementIds": [
-        "FR-6",
-        "FR-8",
-        "FR-9",
-        "FR-10",
-        "FR-28",
+        "FR-29",
+        "FR-30",
+        "FR-31",
+        "FR-32",
+        "FR-33",
+        "FR-34",
+        "FR-36",
+        "FR-37",
+        "NFR-3",
         "NFR-4",
         "NFR-5"
       ]
     },
     {
       "id": "TASK-19",
-      "description": "Result page quizzes/[quizId]/attempts/[attemptId]: assertCanAccessAttempt, toStudentResult (score, %, per-question correctness, response, feedback, correct answers/explanations if allowed) or 'Submitted — results will be available later.' Used by student, parent, teacher.",
+      "description": "Report card API routes: GET /api/report-cards (admin/homeroom list or ?studentId), POST generate, GET/PATCH [id], POST publish, POST unpublish.",
       "files": [
-        "src/app/(app)/quizzes/[quizId]/attempts/[attemptId]/page.tsx"
+        "src/app/api/report-cards/route.ts",
+        "src/app/api/report-cards/generate/route.ts",
+        "src/app/api/report-cards/[id]/route.ts",
+        "src/app/api/report-cards/publish/route.ts",
+        "src/app/api/report-cards/unpublish/route.ts"
       ],
       "dependencies": [
-        "TASK-4",
-        "TASK-6",
-        "TASK-7"
+        "TASK-2",
+        "TASK-18"
       ],
-      "estimateHours": 1.5,
+      "estimateHours": 2.5,
       "requirementIds": [
-        "FR-20",
-        "FR-21",
-        "NFR-1",
-        "NFR-5"
+        "FR-29",
+        "FR-30",
+        "FR-32",
+        "FR-34",
+        "FR-36",
+        "FR-37",
+        "FR-39",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-20",
-      "description": "Manual grading: grade/page.tsx (manager-only, ensureNotExpired on load) + QuizGradingWorkspace (Tabs By student / By question, points TextField step 0.5 max=question points, feedback, override on auto-graded answers).",
+      "description": "Report card integration tests: generate -> publish -> edit grade -> snapshot unchanged (AC-8), regenerate skips PUBLISHED, 7B student gets NOT_FOUND (AC-7), notifications sent, unpublish audited.",
       "files": [
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/grade/page.tsx",
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/grade/QuizGradingWorkspace.tsx"
+        "tests/integration/report-cards/report-cards.test.ts"
       ],
       "dependencies": [
-        "TASK-7",
-        "TASK-13"
+        "TASK-19"
       ],
-      "estimateHours": 2.5,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-24",
-        "FR-25",
+        "FR-31",
+        "FR-34",
+        "FR-37",
         "NFR-4",
-        "NFR-5"
+        "NFR-12"
       ]
     },
     {
       "id": "TASK-21",
-      "description": "Analytics UI: analytics/page.tsx + QuizAnalytics (StatCards, x-charts BarChart 10 buckets — first x-charts use, mui-mcp lookup mandatory, per-question DataTable with most-chosen wrong option highlighted, CSV link to ?format=csv).",
+      "description": "Config: courseTabs gradebook (ADMIN, TEACHER) and grades (STUDENT, PARENT); studentTabs grades and report-cards; navigation entries /grades (STUDENT, PARENT), /report-cards (TEACHER), /admin/grading-scales and /admin/report-cards (ADMIN, group Administration).",
       "files": [
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/analytics/page.tsx",
-        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/analytics/QuizAnalytics.tsx"
+        "src/config/course-tabs.ts",
+        "src/config/student-tabs.ts",
+        "src/config/navigation.ts"
       ],
-      "dependencies": [
-        "TASK-9",
-        "TASK-12"
-      ],
-      "estimateHours": 2,
+      "dependencies": [],
+      "estimateHours": 1,
       "requirementIds": [
+        "FR-16",
+        "FR-18",
         "FR-26",
         "FR-27",
-        "NFR-4",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-22",
-      "description": "Seed: three quizzes per FR-36, idempotent by (courseId, title); attempt scores computed with grading.ts.",
-      "files": [
-        "prisma/seed.ts"
-      ],
-      "dependencies": [
-        "TASK-1",
-        "TASK-3"
-      ],
-      "estimateHours": 1.5,
-      "requirementIds": [
+        "FR-28",
+        "FR-29",
+        "FR-33",
         "FR-36"
       ]
     },
     {
-      "id": "TASK-23",
-      "description": "E2E (Playwright): teacher builds 4-question quiz incl. essay and publishes -> student starts, answers, page.reload(), answers persist, submits -> teacher grades essay -> student sees results; axe check on player.",
+      "id": "TASK-22",
+      "description": "Admin grading scales page: server page (requireRole ADMIN) + client DataTable list + ScaleEditorDialog (band rows add/remove, inline Zod errors, Default Switch). MUI only, look up every component via mui-mcp first; useToast, ConfirmDialog for delete.",
       "files": [
-        "tests/e2e/quizzes.spec.ts"
+        "src/app/(app)/admin/grading-scales/page.tsx",
+        "src/app/(app)/admin/grading-scales/GradingScalesClient.tsx",
+        "src/app/(app)/admin/grading-scales/ScaleEditorDialog.tsx"
+      ],
+      "dependencies": [
+        "TASK-12",
+        "TASK-21"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-16",
+        "NFR-6",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-23",
+      "description": "Course gradebook settings page: category rows (name, weight, drop lowest, order), live sum Chip (error colour != 100, Save disabled), course scale Select ('School default' = null). Server page enforces manage access. MUI via mui-mcp.",
+      "files": [
+        "src/app/(app)/courses/[courseId]/gradebook/settings/page.tsx",
+        "src/app/(app)/courses/[courseId]/gradebook/settings/GradebookSettingsClient.tsx"
+      ],
+      "dependencies": [
+        "TASK-13",
+        "TASK-21"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-17",
+        "NFR-6",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-24",
+      "description": "Category Select in assignment and quiz editors (options from GET /api/courses/[id]/grade-categories, null = none).",
+      "files": [
+        "src/app/(app)/courses/[courseId]/assignments/AssignmentForm.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizSettingsPanel.tsx"
+      ],
+      "dependencies": [
+        "TASK-6",
+        "TASK-7",
+        "TASK-13"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-2",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-25",
+      "description": "Gradebook dialogs: AddManualItemDialog (title, category, max points, DatePicker date, term -> POST grade-items), TermOverrideDialog (percent, letter, comment <=1000 -> PUT term-overrides), ItemStatsDialog (average, median, high, low over counted scores, client-side). MUI via mui-mcp.",
+      "files": [
+        "src/components/gradebook/AddManualItemDialog.tsx",
+        "src/components/gradebook/TermOverrideDialog.tsx",
+        "src/components/gradebook/ItemStatsDialog.tsx"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-15"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-22",
+        "FR-23",
+        "FR-24",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-26",
+      "description": "GradebookGrid (MIT DataGrid only, no pinned columns): term Select, columnGroupingModel by category, renderHeader (title, due, max, source icon), renderCell (score / EX / M red / - / late AccessTime), isCellEditable MANUAL only, renderEditCell + onCellKeyDown (digits, E, M, Delete, Enter/arrows), processRowUpdate -> PUT with optimistic update, onProcessRowUpdateError per-cell error, synced cell click -> submission grading page / quiz attempt, column menu (hide/show, mark missing, stats), row action override, toolbar Add manual item / Export CSV / Settings, virtualisation, hideFooter. Gradebook server page with manage check. Verify every prop via mui-mcp (useMuiDocs -> fetchDocs) first; stop and report if unreachable.",
+      "files": [
+        "src/components/gradebook/GradebookGrid.tsx",
+        "src/app/(app)/courses/[courseId]/gradebook/page.tsx"
       ],
       "dependencies": [
         "TASK-15",
-        "TASK-16",
-        "TASK-18",
-        "TASK-19",
-        "TASK-20",
-        "TASK-22"
+        "TASK-21",
+        "TASK-25"
       ],
-      "estimateHours": 2,
+      "estimateHours": 8,
       "requirementIds": [
-        "NFR-8",
-        "NFR-3",
-        "FR-15"
+        "FR-15",
+        "FR-18",
+        "FR-19",
+        "FR-20",
+        "FR-21",
+        "FR-24",
+        "FR-25",
+        "NFR-2",
+        "NFR-7",
+        "NFR-8"
+      ]
+    },
+    {
+      "id": "TASK-27",
+      "description": "StudentGradesView (course Cards with percent, letter, gradeColour Chip; Accordion with items and category subtotals, missing/excused flags) and its three hosts: student tab students/[id]/grades, /grades (STUDENT self; PARENT child Select from getAccessibleStudentIds via GradesClient), course tab courses/[courseId]/grades. Server-side access checks on each page.",
+      "files": [
+        "src/components/gradebook/StudentGradesView.tsx",
+        "src/app/(app)/students/[id]/grades/page.tsx",
+        "src/app/(app)/grades/page.tsx",
+        "src/app/(app)/grades/GradesClient.tsx",
+        "src/app/(app)/courses/[courseId]/grades/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-16",
+        "TASK-21"
+      ],
+      "estimateHours": 5,
+      "requirementIds": [
+        "FR-15",
+        "FR-26",
+        "FR-27",
+        "FR-28",
+        "NFR-5",
+        "NFR-6",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-28",
+      "description": "Print: ReportCardDocument (letterhead, course table, attendance, scale legend, signature lines; renders snapshot only), PrintButton (window.print()), /report-cards/[id]/print and bulk /report-cards/print (PUBLISHED only) server pages; GlobalStyles @page A4 portrait 12mm, @media print hides app shell/buttons, break-after: page per card, break-inside: avoid rows.",
+      "files": [
+        "src/components/report-cards/ReportCardDocument.tsx",
+        "src/components/report-cards/PrintButton.tsx",
+        "src/app/(app)/report-cards/[id]/print/page.tsx",
+        "src/app/(app)/report-cards/print/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-17",
+        "TASK-18"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-35",
+        "FR-37",
+        "NFR-7",
+        "NFR-11"
+      ]
+    },
+    {
+      "id": "TASK-29",
+      "description": "Admin report cards page: term / grade level / section filters, DataTable with status Chip and warnings, Generate drafts, Publish all, Print all (ConfirmDialog confirmations, useToast).",
+      "files": [
+        "src/app/(app)/admin/report-cards/page.tsx",
+        "src/app/(app)/admin/report-cards/ReportCardsAdminClient.tsx"
+      ],
+      "dependencies": [
+        "TASK-19",
+        "TASK-21"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-29",
+        "FR-30",
+        "FR-34",
+        "FR-35",
+        "NFR-6",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-30",
+      "description": "Report card review + homeroom list: /report-cards (homeroom TEACHER's sections for selected term), /report-cards/[id] review (ReportCardDocument preview, homeroom/principal comment fields disabled per role or when PUBLISHED, ADMIN Publish / Unpublish with reason Dialog).",
+      "files": [
+        "src/app/(app)/report-cards/page.tsx",
+        "src/app/(app)/report-cards/[id]/page.tsx",
+        "src/app/(app)/report-cards/[id]/ReportCardReviewClient.tsx"
+      ],
+      "dependencies": [
+        "TASK-19",
+        "TASK-21",
+        "TASK-28"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-32",
+        "FR-33",
+        "FR-34",
+        "NFR-6",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-31",
+      "description": "Student 'Report cards' tab: list via listForStudent (published only for student/parent, all for admin/teacher), each linking to the print view.",
+      "files": [
+        "src/app/(app)/students/[id]/report-cards/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-18",
+        "TASK-21",
+        "TASK-28"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-36",
+        "NFR-5",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-32",
+      "description": "Seed: 'Standard A-F' default scale with descriptors; Homework 30 (drop 1) / Quizzes 30 / Exams 40 for each 7A course; backfillGradebook(); ENG-7A manual 'Oral presentation' graded for all students; Semester 1 teacherComment overrides for MATH-7A and ENG-7A; generateDrafts(S1, 7A).",
+      "files": [
+        "prisma/seed.ts"
+      ],
+      "dependencies": [
+        "TASK-9",
+        "TASK-13",
+        "TASK-14",
+        "TASK-18"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-8",
+        "FR-41"
+      ]
+    },
+    {
+      "id": "TASK-33",
+      "description": "Playwright: gradebook.spec.ts (teacher keyboard-edits manual grades: digits, E, M, Delete, Enter/arrows; 78.0% C+ visible) and report-cards.spec.ts (admin generates and publishes; parent opens print view with sidebar hidden under print media).",
+      "files": [
+        "tests/e2e/gradebook.spec.ts",
+        "tests/e2e/report-cards.spec.ts"
+      ],
+      "dependencies": [
+        "TASK-26",
+        "TASK-27",
+        "TASK-29",
+        "TASK-30",
+        "TASK-32"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-15",
+        "FR-20",
+        "FR-34",
+        "FR-35",
+        "NFR-11",
+        "NFR-12"
       ]
     }
   ],
   "fileStructure": {
     "./": [
-      "prisma/"
+      "package.json"
     ],
-    "prisma/migrations/": [
-      "20261110000000_add_quizzes/"
+    "prisma/migrations/20261111000000_add_gradebook/": [
+      "migration.sql"
     ],
-    "src/": [
-      "config/"
+    "prisma/": [
+      "schema.prisma",
+      "seed.ts"
     ],
-    "src/app/(app)/courses/[courseId]/": [
-      "quizzes/"
+    "scripts/": [
+      "gradebook-backfill.ts"
     ],
-    "src/app/(app)/courses/[courseId]/quizzes/": [
-      "new/"
+    "src/app/(app)/admin/grading-scales/": [
+      "GradingScalesClient.tsx",
+      "ScaleEditorDialog.tsx",
+      "page.tsx"
     ],
-    "src/app/(app)/courses/[courseId]/quizzes/[quizId]/": [
-      "analytics/",
-      "edit/",
-      "grade/"
+    "src/app/(app)/admin/report-cards/": [
+      "ReportCardsAdminClient.tsx",
+      "page.tsx"
     ],
-    "src/app/(app)/quizzes/[quizId]/": [
-      "take/"
+    "src/app/(app)/courses/[courseId]/assignments/": [
+      "AssignmentForm.tsx"
     ],
-    "src/app/(app)/quizzes/[quizId]/attempts/": [
-      "[attemptId]/"
+    "src/app/(app)/courses/[courseId]/gradebook/": [
+      "page.tsx"
     ],
-    "src/app/api/attempts/": [
-      "[id]/"
+    "src/app/(app)/courses/[courseId]/gradebook/settings/": [
+      "GradebookSettingsClient.tsx",
+      "page.tsx"
     ],
-    "src/app/api/attempts/[id]/": [
-      "submit/"
+    "src/app/(app)/courses/[courseId]/grades/": [
+      "page.tsx"
     ],
-    "src/app/api/attempts/[id]/answers/": [
-      "[questionId]/"
+    "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/": [
+      "QuizSettingsPanel.tsx"
     ],
-    "src/app/api/attempts/[id]/answers/[questionId]/": [
-      "grade/"
+    "src/app/(app)/grades/": [
+      "GradesClient.tsx",
+      "page.tsx"
     ],
-    "src/app/api/courses/[id]/": [
-      "quizzes/"
+    "src/app/(app)/report-cards/[id]/": [
+      "ReportCardReviewClient.tsx",
+      "page.tsx"
     ],
-    "src/app/api/internal/email/": [
-      "dispatch/"
+    "src/app/(app)/report-cards/[id]/print/": [
+      "page.tsx"
     ],
-    "src/app/api/questions/": [
-      "[id]/"
+    "src/app/(app)/report-cards/": [
+      "page.tsx"
     ],
-    "src/app/api/quizzes/": [
-      "[id]/"
+    "src/app/(app)/report-cards/print/": [
+      "page.tsx"
     ],
-    "src/app/api/quizzes/[id]/": [
-      "analytics/",
-      "attempts/",
-      "questions/",
-      "regrade/",
-      "release-results/"
+    "src/app/(app)/students/[id]/grades/": [
+      "page.tsx"
     ],
-    "src/app/api/quizzes/[id]/accommodations/": [
-      "[studentId]/"
+    "src/app/(app)/students/[id]/report-cards/": [
+      "page.tsx"
     ],
-    "src/app/api/quizzes/[id]/questions/": [
-      "reorder/"
+    "src/app/api/courses/[id]/grade-categories/": [
+      "route.ts"
     ],
-    "src/lib/": [
-      "validators/"
+    "src/app/api/courses/[id]/grade-items/": [
+      "route.ts"
     ],
-    "src/server/": [
-      "files/",
-      "notifications/",
-      "quiz/"
+    "src/app/api/courses/[id]/gradebook/": [
+      "route.ts"
     ],
-    "tests/": [
-      "e2e/"
+    "src/app/api/courses/[id]/term-overrides/[studentId]/": [
+      "route.ts"
     ],
-    "tests/integration/": [
-      "quiz/"
+    "src/app/api/grade-items/[id]/grades/[studentId]/": [
+      "route.ts"
     ],
-    "tests/unit/": [
-      "quiz/"
+    "src/app/api/grade-items/[id]/mark-missing/": [
+      "route.ts"
+    ],
+    "src/app/api/grade-items/[id]/": [
+      "route.ts"
+    ],
+    "src/app/api/grading-scales/[id]/": [
+      "route.ts"
+    ],
+    "src/app/api/grading-scales/": [
+      "route.ts"
+    ],
+    "src/app/api/report-cards/[id]/": [
+      "route.ts"
+    ],
+    "src/app/api/report-cards/generate/": [
+      "route.ts"
+    ],
+    "src/app/api/report-cards/publish/": [
+      "route.ts"
+    ],
+    "src/app/api/report-cards/": [
+      "route.ts"
+    ],
+    "src/app/api/report-cards/unpublish/": [
+      "route.ts"
+    ],
+    "src/app/api/students/[id]/grades/": [
+      "route.ts"
+    ],
+    "src/components/gradebook/": [
+      "AddManualItemDialog.tsx",
+      "GradebookGrid.tsx",
+      "ItemStatsDialog.tsx",
+      "StudentGradesView.tsx",
+      "TermOverrideDialog.tsx"
+    ],
+    "src/components/report-cards/": [
+      "PrintButton.tsx",
+      "ReportCardDocument.tsx"
+    ],
+    "src/config/": [
+      "course-tabs.ts",
+      "navigation.ts",
+      "student-tabs.ts"
+    ],
+    "src/lib/validators/": [
+      "assignments.ts",
+      "gradebook.ts",
+      "quiz.ts"
+    ],
+    "src/server/assignments/": [
+      "assignments-service.ts"
+    ],
+    "src/server/gradebook/": [
+      "backfill.ts",
+      "categories-service.ts",
+      "grade-calc.ts",
+      "gradebook-service.ts",
+      "gradebook-sync.ts",
+      "load.ts",
+      "scales-service.ts",
+      "student-grades-service.ts",
+      "term-placement.ts"
+    ],
+    "src/server/notifications/": [
+      "types.ts"
+    ],
+    "src/server/quiz/": [
+      "attempt-service.ts",
+      "maintenance.ts",
+      "quiz-service.ts"
+    ],
+    "src/server/report-cards/": [
+      "access.ts",
+      "report-card-service.ts",
+      "snapshot.ts"
+    ],
+    "tests/e2e/": [
+      "gradebook.spec.ts",
+      "report-cards.spec.ts"
+    ],
+    "tests/integration/gradebook/": [
+      "backfill.test.ts",
+      "gradebook-sync.test.ts"
+    ],
+    "tests/integration/report-cards/": [
+      "report-cards.test.ts"
+    ],
+    "tests/unit/gradebook/": [
+      "grade-calc.test.ts",
+      "term-placement.test.ts"
     ]
   },
-  "totalEstimateHours": 51.5,
+  "totalEstimateHours": 107.5,
   "nxpPatterns": [],
-  "status": "complete",
-  "notes": [
-    "Supersedes stale SH-9 dev-planning artifacts.",
-    "Dev gate (ADR-7/NFR-4): mui-mcp useMuiDocs->fetchDocs before every UI component; unreachable => stop and report.",
-    "Dev gate (ADR-2): use prisma migrate, never db push (partial unique index).",
-    "grading.ts holds deadline/scoring/shuffle per system-design §3.1 (ADR-3 split files not created).",
-    "manualGradeSchema field is pointsAwarded (api-contracts), not points.",
-    "FR-37 produces no code (A1); NFR-10 is a scope fence."
-  ]
+  "status": "complete"
 }

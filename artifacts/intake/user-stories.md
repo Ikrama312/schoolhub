@@ -1,77 +1,63 @@
-# SH-10 — User Stories (PRD-10: Quizzes & Online Exams)
+# SH-11 — User Stories (PRD-11: Gradebook, Grading Scales & Report Cards)
 
-Source PRD stories (verbatim, PRD 'User Stories'):
+Run mode: `--brownfield --tech-stack react`. Each story cites its requirement id(s) in `requirements.json`.
 
-- As a teacher, I want to create questions of different types with points so that I can assess different skills. (FR-1–FR-5, FR-7–FR-10)
-- As a teacher, I want to set when a quiz opens and closes, a time limit and how many attempts are allowed so that I control the conditions. (FR-6, FR-13, FR-23, FR-28)
-- As a teacher, I want to choose when students see correct answers so that results are not leaked while others are still taking it. (FR-20, FR-21, NFR-1)
-- As a student, I want my answers saved as I go and a visible timer so that I can focus without worry. (FR-14–FR-19, NFR-2, NFR-3)
-- As a teacher, I want to grade essay answers quickly and see which questions most students got wrong so that I can reteach. (FR-24–FR-27)
-- As a parent, I want to see my child's quiz results once released so that I can follow progress. (FR-11, FR-30)
+## Data & Sync
 
-## Stories per functional requirement
+- **US-1 (FR-1, FR-2)** — As a developer, I want the gradebook models, a Course grading scale, and a category on assignments and quizzes, so that every grade has a stored home.
+- **US-2 (FR-3, FR-4)** — As a teacher, I want published assignments and graded (non-practice) quizzes to appear in the gradebook automatically, so that I never enter them twice.
+- **US-3 (FR-5, FR-6)** — As a teacher, I want a returned submission's final score (or its exemption) to sync to the gradebook, so that the gradebook stays current. Unreturned scores stay hidden from students.
+- **US-4 (FR-7)** — As a teacher, I want a quiz score to sync once the attempt is graded and its results are visible, so that quiz results count without manual entry.
+- **US-5 (FR-8)** — As an admin, I want an idempotent `npm run gradebook:backfill`, so that data created before this PRD appears in the gradebook.
+- **US-6 (FR-9)** — As a teacher, I want synced grades to be read-only except for the comment, so that the source page remains the single place to edit them.
 
-- **FR-1** [HIGH] As a teacher, I want: Add Prisma enums QuizStatus, QuestionType, ResultsVisibility, AttemptStatus and ScoringPolicy, and add the models Quiz, Question, QuizAttempt, QuizAnswer and QuizAccommodation exactly as listed in FR-1, in a new prisma migrate migration. Add the back-relations on Course and User. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-1 Data model)_
-- **FR-2** [HIGH] As a teacher, I want: Enforce the field limits from FR-1 in Zod validators (src/lib/validators/quiz.ts): availableUntil > availableFrom, timeLimitMinutes 1–300 or null, maxAttempts 1–10, points 0.5–100, extraTimeMinutes 0–300, extraAttempts 0–5, choice questions have 2–8 options, SHORT_ANSWER accepts 1–10 answers, ESSAY responses are at most 10,000 characters. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-1 field comments; FR-2 table; FR-3.1)_
-- **FR-3** [HIGH] As a teacher, I want: Add pure auto-grading in src/server/quiz/grading.ts. SINGLE_CHOICE and TRUE_FALSE score all or nothing. MULTIPLE_CHOICE gives partial credit: points × max(0, (correctSelected − incorrectSelected) / totalCorrect). For the FR-2 example (4 points, correct {A,C}), {A,B} scores 0 and {A} scores 2. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-2 table and example; AC-4)_
-- **FR-4** [HIGH] As a teacher, I want: SHORT_ANSWER grading trims the text and collapses whitespace, then matches it against any accepted answer. Matching ignores case unless caseSensitive is set. A non-match scores 0, is flagged for review, and a teacher can override it. ' Photosynthesis ' matches 'photosynthesis'. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-2 SHORT_ANSWER row; FR-5.6; AC-5)_
-- **FR-5** [HIGH] As a teacher, I want: ESSAY questions are never auto-graded. An optional guidance text is stored in `correct`. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-2 ESSAY row)_
-- **FR-6** [HIGH] As a teacher, I want: Quiz builder page /courses/[courseId]/quizzes/[quizId]/edit. It has a settings panel for every Quiz field, with validation that the time limit is no longer than the availability window. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-3.1)_
-- **FR-7** [HIGH] As a teacher, I want: The builder question list supports add (type picker), inline edit, duplicate, delete and drag reorder (@dnd-kit with MUI items). Each type has its own editor: option rows with a correct radio or checkbox, an accepted-answers list, and essay guidance. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-3.2)_
-- **FR-8** [HIGH] As a teacher, I want: The builder shows a running points total. 'Preview as student' opens the player in a preview mode that records nothing. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-3.3)_
-- **FR-9** [HIGH] As a teacher, I want: Publishing requires at least 1 question, a correct answer on every choice question, and points > 0 on every question. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-3.4)_
-- **FR-10** [HIGH] As a teacher, I want: Once any attempt exists, only question text, explanation and accepted answers can be edited. Adding or removing questions and changing points or type are blocked with an explanation. A Regrade action (POST /api/quizzes/:id/regrade) recomputes auto-graded answers for all attempts. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-3.5; AC-9; API regrade row)_
-- **FR-11** [HIGH] As a teacher, student or parent, I want: Register a 'Quizzes' course tab in src/config/course-tabs.ts. Teachers see a list with status, window, attempt count, average score and 'Needs grading' count. Students see Upcoming, Available now (Start/Resume), Completed (score if visible) and Missed. Parents see completed results, read-only. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-4.1)_
-- **FR-12** [HIGH] As a student, I want: Quiz player start screen at /quizzes/[quizId]/take. It shows instructions, question count, total points, time limit and attempts used/allowed. 'Start attempt' asks for confirmation because the timer starts immediately. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.1)_
-- **FR-13** [HIGH] As a student, I want: Starting an attempt freezes questionOrder (shuffled when enabled) and the option order (deterministic shuffle seeded by attempt id). It sets deadlineAt = min(startedAt + timeLimit + extraTime, availableUntil). — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.2; FR-1 deadlineAt comment; AC-1)_
-- **FR-14** [HIGH] As a student, I want: Player layout uses MUI RadioGroup, FormGroup with Checkboxes or TextField per type, plus a LinearProgress for completion. It shows either all questions on one page or one per page with a navigator grid of MUI Buttons (answered, unanswered, flagged). A sticky header holds the title, an mm:ss timer that turns red under 2 minutes, and Submit. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.3)_
-- **FR-15** [HIGH] As a student, I want: Autosave sends PUT /api/attempts/:id/answers/:questionId, debounced 800 ms. Failed saves are queued in localStorage and retried every 5 s. A status pill shows 'All answers saved', 'Saving…' or 'Offline — answers saved on this device'. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.4; Goal 3; AC-2)_
-- **FR-16** [HIGH] As a student, I want: The timer is display-only. The server rejects answer writes after deadlineAt + 30 s grace with 409 CONFLICT and auto-submits the attempt. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.5; API answers row)_
-- **FR-17** [HIGH] As a student, I want: Submit asks for confirmation and shows the unanswered count. On submit, the attempt is auto-graded. Its status becomes NEEDS_GRADING if it has any ESSAY or any unmatched SHORT_ANSWER flagged for review; otherwise it becomes GRADED. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.6; AC-6)_
-- **FR-18** [HIGH] As a student, I want: An IN_PROGRESS attempt past deadlineAt is auto-submitted with autoSubmitted = true. This happens lazily when the student or teacher loads it, and in autoSubmitExpiredAttempts() during the maintenance run. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.7; AC-3)_
-- **FR-19** [HIGH] As a student, I want: Each student can have only one IN_PROGRESS attempt per quiz. Opening the quiz in a second tab, or reopening it, resumes the same attempt with its saved answers. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-5.8; AC-2)_
-- **FR-20** [HIGH] As a teacher, I want: Results visibility: IMMEDIATELY shows results after submit, AFTER_CLOSE after availableUntil, and MANUAL after 'Release results' (POST /api/quizzes/:id/release-results sets resultsReleasedAt). Until then, students see 'Submitted — results will be available later.' — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-6.1; API release-results row)_
-- **FR-21** [HIGH] As a student, I want: The result page shows the score, percentage, per-question correctness, the student's response and teacher feedback. It shows correct answers and explanations only when showCorrectAnswers is set. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-6.2)_
-- **FR-22** [HIGH] As a teacher, I want: Export getStudentQuizScore(quizId, studentId). It applies the scoring policy (HIGHEST, LATEST or AVERAGE) across GRADED attempts, for use by PRD-11. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-6.3; AC-8)_
-- **FR-23** [HIGH] As a student, I want: The attempt limit is maxAttempts + extraAttempts. Further starts are refused. Example: with maxAttempts=2, a 3rd attempt is refused, but allowed with 1 extra attempt. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-9.1; AC-8)_
-- **FR-24** [HIGH] As a teacher, I want: Manual grading page /courses/[courseId]/quizzes/[quizId]/grade. It has 'By student' and 'By question' modes, with points input (0 to question points, step 0.5) and feedback. Teachers can override auto-graded answers. Saving uses PUT /api/attempts/:id/answers/:questionId/grade. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-7.1; API grade row)_
-- **FR-25** [HIGH] As a teacher, I want: When every answer in an attempt is graded, the attempt becomes GRADED and its score is recomputed. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-7.2; AC-6)_
-- **FR-26** [HIGH] As a teacher, I want: The teacher Analytics tab shows attempts, average, median, highest, lowest, average time taken, and a score histogram (10% buckets, MUI X BarChart). — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-8.1)_
-- **FR-27** [HIGH] As a teacher, I want: The analytics per-question table shows % correct and average points. For choice questions it also shows the option distribution, highlighting the most-chosen wrong option. GET /api/quizzes/:id/analytics?format=csv exports all attempts (student, attempt, score, per-question points). — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-8.2; API analytics row)_
-- **FR-28** [HIGH] As a teacher, I want: Teachers grant extra time and extra attempts per student on the quiz settings page (PUT /api/quizzes/:id/accommodations/:studentId). Both values feed the deadlineAt and attempt-limit checks. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-9.1)_
-- **FR-29** [HIGH] As a student, I want: Register notification types quiz.published and quiz.results_released in src/server/notifications/types.ts. quiz.published goes to enrolled students on publish, with email off by default. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-10.1)_
-- **FR-30** [HIGH] As a student or parent, I want: quiz.results_released goes to the student and their parents when results become visible. For AFTER_CLOSE it is sent once by the maintenance run after close; for MANUAL it is sent on release; for IMMEDIATELY nothing is sent. — so that I can take quizzes without worrying about losing answers or time. _(Source: FR-10.2)_
-- **FR-31** [HIGH] As a teacher, I want: Quiz and question CRUD REST endpoints follow the API table: GET/POST /api/courses/:id/quizzes (role-shaped list), GET/PATCH/DELETE /api/quizzes/:id (delete only without attempts), POST /api/quizzes/:id/questions, PATCH/DELETE /api/questions/:id, POST /api/quizzes/:id/questions/reorder. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: API table)_
-- **FR-32** [HIGH] As a student, I want: Attempt endpoints: POST /api/quizzes/:id/attempts (STUDENT, start or resume), GET /api/attempts/:id (owner or manager), PUT /api/attempts/:id/answers/:questionId (owner), POST /api/attempts/:id/submit (owner). — so that I can take quizzes without worrying about losing answers or time. _(Source: API table)_
-- **FR-33** [MEDIUM] As a teacher, I want: Practice quizzes (isPractice=true) are ungraded and never reach the gradebook. getStudentQuizScore callers (PRD-11) must exclude them, so the service exposes the isPractice flag. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: Summary; FR-1 isPractice comment)_
-- **FR-34** [MEDIUM] As a school administrator, I want: 'manage' and 'view course' roles reuse the existing course-access checks in src/server/auth/course-access.ts: teacher of the course or ADMIN manage; enrolled students view; parents of enrolled students view read-only. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: API table Role column; Platform Context: Roles; existing src/server/auth/course-access.ts)_
-- **FR-35** [MEDIUM] As a teacher, I want: autoSubmitExpiredAttempts() and the AFTER_CLOSE results_released pass hook into the existing maintenance pass in /api/internal/email/dispatch, next to sendDueReminders(), and must be idempotent. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-5.7; FR-10.2; existing src/app/api/internal/email/dispatch/route.ts)_
-- **FR-36** [HIGH] As a teacher, I want: Seed data. MATH-7A: 'Fractions Check' (8 objective questions, IMMEDIATELY, closed, all students attempted) and 'Unit 1 Test' (12 questions incl. 2 essays, AFTER_CLOSE, open for the next 3 days, no attempts). ENG-7A: practice quiz 'Parts of Speech' (5 questions, 3 attempts, HIGHEST). — so that I can assess skills and control quiz conditions with little marking effort. _(Source: Seed Data)_
-- **FR-37** [LOW] As a user, I want: Add a Quizzes entry (or a quiz-aware link) to navigation if needed. The PRD defines only course-tab and direct routes, so no sidebar entry is assumed. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: Platform Context: Code layout (navigation.ts rule); FR-4.1 (course tab only))_
-- **FR-38** [MEDIUM] As a teacher, I want: Teacher actions on another user's records (grading, overriding, regrade, release results, accommodations) write an AuditLog row through audit(). — so that I can assess skills and control quiz conditions with little marking effort. _(Source: Platform Context: Code layout (AuditLog rule); FR-7, FR-3.5, FR-6.1, FR-9)_
-- **FR-39** [MEDIUM] As a teacher, I want: Question prompts are Markdown and may include an uploaded image, using the existing MarkdownEditor/MarkdownView and file upload components. — so that I can assess skills and control quiz conditions with little marking effort. _(Source: FR-1 Question.prompt comment; existing src/components/MarkdownEditor, FileUpload)_
+## Calculation
+
+- **US-7 (FR-10 – FR-15)** — As a teacher, I want term grades calculated the same way across the school (excused and missing items, drop lowest, weight re-normalisation, half-up rounding, then band lookup, then overrides), so that grades are consistent and correct. For example, Homework 40% (18/20, 9/10) and Exams 60% (70/100) give 78.0% C+.
+
+## Setup
+
+- **US-8 (FR-16)** — As an admin, I want to define grading scales with validated bands and exactly one default, so that letter grades are consistent.
+- **US-9 (FR-17, FR-40)** — As a teacher, I want to set weighted categories that must total 100, with a live sum indicator, and choose a grading scale per course, so that grades reflect my syllabus.
+
+## Gradebook Grid
+
+- **US-10 (FR-18, FR-19)** — As a teacher, I want a spreadsheet-like grid of students × items, grouped by category, with averages and the term grade, so that I can see my whole class at a glance.
+- **US-11 (FR-20)** — As a teacher, I want to edit manual-item grades with the keyboard (numbers, Enter or arrows, E, M, Delete), with optimistic saves, so that I can enter grades quickly.
+- **US-12 (FR-21)** — As a teacher, I want clicking a synced cell to open its submission or quiz attempt, so that I edit the grade at its source.
+- **US-13 (FR-22)** — As a teacher, I want to add manual grade items for offline work, so that all assessment is in one place.
+- **US-14 (FR-23)** — As a teacher, I want to override a student's term grade or letter and add a comment, so that I can apply professional judgement on the report card.
+- **US-15 (FR-24)** — As a teacher, I want column actions (hide/show, mark ungraded as missing, statistics), so that I can manage items in bulk.
+- **US-16 (FR-25)** — As a teacher, I want to export the grid as CSV, so that I can share or archive it.
+
+## Student & Parent Views
+
+- **US-17 (FR-26, FR-27, FR-28, FR-42)** — As a student or parent, I want to see current course grades and individual visible scores (on the student tab, on `/grades` and on the course Grades tab), so that we know where the student stands.
+
+## Report Cards
+
+- **US-18 (FR-29)** — As an admin, I want a term-filtered list of students with report card status and missing-data warnings, so that I can fix gaps before generating.
+- **US-19 (FR-30, FR-31)** — As an admin, I want to generate draft report cards as frozen snapshots, so that published results never change afterwards.
+- **US-20 (FR-32, FR-33)** — As a homeroom teacher or admin, I want to review a card and write homeroom and principal comments, so that families get personal feedback.
+- **US-21 (FR-34, FR-37)** — As an admin, I want to publish cards (individually or in bulk) and unpublish with an audited reason, so that families receive official results securely.
+- **US-22 (FR-35, FR-36)** — As an admin, student or parent, I want an A4 print view and a 'Report cards' student tab, so that cards can be printed or saved as PDF.
+
+## Notifications & Seed
+
+- **US-23 (FR-38)** — As a student or parent, I want a `grade.posted` notification for manual grades and a `report_card.published` notification, so that I'm informed promptly.
+- **US-24 (FR-41)** — As a developer or QA, I want seed data (the Standard A–F scale, 7A categories, the Oral presentation item, 7A draft cards), so that the features can be demoed and tested.
 
 ## Non-Functional Requirements
 
-- **NFR-1** [HIGH] Security: correct answers (`correct`, explanation) and scores are never sent to a student's browser before results are visible. A dedicated student serializer enforces this, with a unit test asserting the `correct` key is absent. The GET /api/quizzes/:id student view never includes `correct`. _(Source: NFR-1; API GET /api/quizzes/:id and GET /api/attempts/:id rows; AC-7)_
-- **NFR-2** [HIGH] Reliability/performance: answer autosave handles 300 concurrent students saving every few seconds. Each save is one upsert on QuizAnswer (attemptId, questionId), under 50 ms. _(Source: NFR-2)_
-- **NFR-3** [HIGH] Accessibility: the player is fully keyboard operable. Choice options are native radio/checkbox inputs (MUI Radio/Checkbox). Timer warnings use aria-live='assertive' and are announced at 5 and 1 minutes remaining. _(Source: NFR-3; FR-5.3)_
-- **NFR-4** [HIGH] UI component rule: Material UI only (@mui/material 9.5.0, icons, x-data-grid, x-date-pickers, x-charts). Every component is looked up through the mui-mcp server (useMuiDocs → fetchDocs) before use, and an unreachable MCP is a blocker. No banned libraries (Tailwind, shadcn, Radix, Recharts, notistack, etc.). Styling only via theme, sx and styled(). QA checks banned imports and that MUI imports resolve to documented components. _(Source: Platform Context: UI component rule (items 1–6))_
-- **NFR-5** [HIGH] Server-side access control on every handler and server page via requireUser/requireRole/course access checks. Students can access only their own attempts, parents only their linked children's released results, and teachers only courses they teach. _(Source: Platform Context: Code layout (requireRole) and Roles)_
-- **NFR-6** [HIGH] API conventions: thin Zod-parsed handlers, { data } / list / { error } response shapes, standard error codes (409 after deadline), pagination ?page/?pageSize ≤ 100, cuid ids, UTC storage, and display in SchoolSettings.timezone. _(Source: Platform Context: Code layout and conventions; API table)_
-- **NFR-7** [HIGH] Brownfield constraints: new code goes in src/server/quiz/ (feature subdirectory per the PRD-05 precedent). Reuse existing helpers: grading-math Decimal helpers, DataTable, ConfirmDialog, Toast/useToast, MarkdownView, notify(), audit(), logger, and csv.ts. No re-scaffolding, no renaming, no new dependencies. No console.log. _(Source: Platform Context: intro paragraph and Code layout; existing src/server/assignments/grading-math.ts, src/server/csv.ts, src/components/*)_
-- **NFR-8** [HIGH] Tests: unit tests for every grading rule (partial credit, short-answer normalisation), deadline computation with accommodations, scoring policies, and the student serializer. Integration tests for autosave rejected after the deadline, auto-submit on load, and regrade. One Playwright e2e: teacher builds a 4-question quiz, student takes it with a mid-attempt reload, teacher grades the essay, student sees results. npm run lint && typecheck && test must stay green. _(Source: Test Requirements; Assumptions and constraints)_
-- **NFR-9** [HIGH] Usability goal: a teacher can build a 10-question multiple-choice quiz in under 10 minutes. _(Source: Goals 1)_
-- **NFR-10** [HIGH] Out of scope: lockdown browser, webcam proctoring, shared or random question banks, LaTeX formula input. _(Source: Out of Scope)_
-
-## Acceptance Criteria (PRD, verbatim mapping)
-
-1. Time limit 20 min with availableUntil 10 min away → deadlineAt = now + 10 min. (FR-13)
-2. 5 answers saved, browser closed, reopened within deadline → same attempt resumes with all 5 answers. (FR-15, FR-19)
-3. Deadline passed while offline → on reconnect the attempt is auto-submitted with its saved answers and autoSubmitted = true. (FR-18)
-4. FR-2 MULTIPLE_CHOICE example scores match exactly ({A,B}→0, {A}→2). (FR-3)
-5. SHORT_ANSWER 'photosynthesis' accepts ' Photosynthesis '. (FR-4)
-6. Quiz with one essay → NEEDS_GRADING; the score shows only after the teacher grades it. (FR-17, FR-25)
-7. AFTER_CLOSE, fetched before close → no correct answers or scores in the response. (FR-20, NFR-1)
-8. maxAttempts=2, HIGHEST, attempts of 60%/80% → score 80%, 3rd attempt refused; +1 extra attempt → 3rd allowed. (FR-22, FR-23)
-9. Published quiz with attempts → deleting a question is blocked with an explanation. (FR-10)
+- **NFR-1** — Pure, Decimal-based calculation with an exhaustive unit test matrix.
+- **NFR-2 / NFR-3** — Gradebook for 35 × 80 loads in < 800 ms; report card generation for 600 × 8 finishes in < 30 s.
+- **NFR-4** — Every manual grade change, override and unpublish is audited with old and new values.
+- **NFR-5** — Hidden items, unreturned scores and unpublished cards never reach students or parents.
+- **NFR-6** — Server-side role and entity access checks on every handler and page.
+- **NFR-7** — MUI-only UI, with every component looked up via mui-mcp. No banned libraries; QA checks.
+- **NFR-8** — DataGrid uses MIT-tier features only (no pinned columns).
+- **NFR-9** — Brownfield reuse of existing helpers; no re-scaffolding or renames; no console.log.
+- **NFR-10** — Date rules use the school timezone; storage is UTC.
+- **NFR-11** — Printed cards fit A4 portrait without the sidebar.
+- **NFR-12** — lint, typecheck and test pass, plus the new unit, integration and Playwright tests.
+- **NFR-13** — Out of scope: standards-based grading, GPA/class rank, multi-year transcripts.

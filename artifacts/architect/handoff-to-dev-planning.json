@@ -1,11 +1,11 @@
 {
-  "ticketId": "SH-10",
-  "timestamp": "2026-11-09T13:05:00Z",
+  "ticketId": "SH-11",
+  "timestamp": "2026-11-09T17:45:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "status": "complete",
-  "endpointCount": 19,
+  "endpointCount": 20,
   "artifacts": [
     "artifacts/architect/tech-stack-decisions.md",
     "artifacts/architect/requirements-analysis-notes.md",
@@ -13,18 +13,18 @@
     "artifacts/architect/api-contracts.json"
   ],
   "notes": [
-    "19 endpoint entries. 18 are new route methods in 14 route files (system-design §3.3). 1 is the existing POST /api/internal/email/dispatch, whose contract is unchanged; it gains two maintenance calls (FR-18, FR-30, FR-35).",
-    "Base path is /api (existing convention), not /api/v1. Envelopes, error codes and pagination come from src/server/http.ts. Only GET /api/courses/:id/quizzes is paginated.",
-    "Decimals are fixed2 strings in all responses. Student and parent payloads come only from serializers.ts (toStudentQuiz / toStudentAttempt / toStudentResult); `correct`/explanation appear only in StudentResult when resultsVisible && showCorrectAnswers (NFR-1).",
-    "Contract decision: the manual grade body field is `pointsAwarded` (PRD API table), not `points` as written in system-design §3.2. manualGradeSchema must use pointsAwarded.",
-    "Contract additions inside existing design elements: StudentAttempt.serverNow (timer skew correction, display only); ManagerQuiz.locked/publishProblems/totalPoints; POST /attempts returns 201 on create and 200 on resume; submit is idempotent and returns StudentResult.",
-    "No HTTP endpoint for getStudentQuizScore (TS export for PRD-11), the grading workspace reads, the analytics page reads, or the accommodations list. Server pages call the services directly.",
-    "Stale leftovers from SH-9: artifacts/architect/threat-model-notes.json, artifacts/dev-planning/* and artifacts/dev/* must be regenerated for SH-10, not reused."
+    "20 endpoint entries across 15 route files, matching system-design §2.3 and the PRD API table. POST /api/grade-items/:id/mark-missing is the only route not in the PRD (FR-24 bulk action).",
+    "Base path is /api (existing convention), not /api/v1. Envelopes and error codes come from src/server/http.ts. No endpoint is paginated.",
+    "Decimals: input number|string ≤ 2 dp (validators/assignments.ts `decimal` pattern). Output: points and weights are fixed2 strings; computed percents are 1 dp strings or null.",
+    "Shared shapes live in api-contracts.json `components` (StudentTermResult, ReportCardSnapshotV1, Bands, …). validators/gradebook.ts and snapshot.ts should mirror them.",
+    "Contract decisions beyond system-design: PUT grade and PUT term-override return the recomputed StudentTermResult. PATCH scale isDefault:false on the current default is a VALIDATION_ERROR. The first scale created always becomes the default. mark-missing works on any source but only touches score-null rows. Report-card comments are max 1,000 chars. Unpublish reason is 1–500 chars. GET /api/report-cards mode A includes NOT_GENERATED rows.",
+    "No HTTP surface (by design) for FR-1, FR-3–FR-7, FR-41 (migration, sync hooks, seed), NFR-7/NFR-9/NFR-12 (UI, reuse and test rules). These are covered in system-design §2.1, §2.2, §2.5 and §6. Print pages call services directly (nonHttpContracts).",
+    "Stale leftovers from SH-10: artifacts/architect/threat-model-notes.json, artifacts/dev-planning/*, artifacts/dev/*, artifacts/qa/* and artifacts/ui-verification/* must be regenerated for SH-11, not reused."
   ],
   "blockers": [],
   "devGates": [
-    "NFR-4 / ADR-7: dev must reach mui-mcp (useMuiDocs → fetchDocs) before writing any UI component; if it is unreachable, stop and report. This does not block dev-planning.",
-    "ADR-2: the partial unique index quiz_attempt_one_in_progress_uq is raw SQL in the migration. Dev and CI must use prisma migrate, never db push."
+    "NFR-7: dev must reach mui-mcp (useMuiDocs → fetchDocs) before writing any UI component, especially the DataGrid keyboard editing for FR-20. If it's unreachable, stop and report. This does not block dev-planning.",
+    "FR-1/ADR-3: the partial unique index grading_scale_one_default is raw SQL in the migration. Use prisma migrate, never db push."
   ],
   "nextPhase": "dev-planning"
 }

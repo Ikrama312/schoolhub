@@ -60,6 +60,8 @@ export const quizSettingsFields = z.object({
   oneQuestionPerPage: z.boolean().default(false),
   resultsVisibility: z.enum(RESULTS_VISIBILITIES).default('AFTER_CLOSE'),
   showCorrectAnswers: z.boolean().default(true),
+  /** PRD-11 FR-2: gradebook category; null = Uncategorised. */
+  categoryId: z.string().min(1).nullable().optional(),
 });
 
 type WindowFields = { availableFrom?: Date; availableUntil?: Date; timeLimitMinutes?: number | null };

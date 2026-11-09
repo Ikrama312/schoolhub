@@ -76,6 +76,8 @@ export const assignmentFields = z.object({
   status: z.enum(ASSIGNMENT_STATUSES),
   rubric: z.array(rubricCriterionInput).max(20).nullable().optional(),
   attachmentFileIds: z.array(id).max(10).default([]),
+  /** PRD-11 FR-2: gradebook category; null = Uncategorised. */
+  categoryId: id.nullable().optional(),
 });
 
 type AssignmentShape = z.output<typeof assignmentFields>;

@@ -7,6 +7,9 @@ import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import ClassOutlinedIcon from '@mui/icons-material/ClassOutlined';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
+import GradingOutlinedIcon from '@mui/icons-material/GradingOutlined';
+import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
+import StraightenOutlinedIcon from '@mui/icons-material/StraightenOutlined';
 
 export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
@@ -33,11 +36,15 @@ export const navigation: NavItem[] = [
   { label: 'Notifications', href: '/notifications', icon: NotificationsNoneIcon, roles: ALL_ROLES },
   { label: 'My courses', href: '/my-courses', icon: MenuBookOutlinedIcon, roles: ['TEACHER', 'STUDENT', 'PARENT'] },
   { label: 'Assignments', href: '/assignments', icon: AssignmentOutlinedIcon, roles: ['STUDENT', 'PARENT', 'TEACHER', 'ADMIN'] },
+  { label: 'Grades', href: '/grades', icon: GradingOutlinedIcon, roles: ['STUDENT', 'PARENT'] },
   { label: 'Attendance', href: '/attendance/take', icon: FactCheckOutlinedIcon, roles: ['TEACHER'] },
+  { label: 'Report cards', href: '/report-cards', icon: WorkspacePremiumOutlinedIcon, roles: ['TEACHER'] },
   { label: 'Attendance', href: '/admin/attendance', icon: FactCheckOutlinedIcon, roles: ['ADMIN'] },
   { label: 'Email log', href: '/admin/email-log', icon: MarkEmailUnreadOutlinedIcon, roles: ['ADMIN'] },
   { label: 'Sections', href: '/admin/sections', icon: GroupsOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Courses', href: '/admin/courses', icon: ClassOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
+  { label: 'Grading scales', href: '/admin/grading-scales', icon: StraightenOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
+  { label: 'Report cards', href: '/admin/report-cards', icon: WorkspacePremiumOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
 ];
 
 export function navigationForRole(role: Role): NavItem[] {

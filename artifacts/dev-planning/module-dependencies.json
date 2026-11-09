@@ -1,162 +1,143 @@
 {
-  "ticketId": "SH-10",
-  "timestamp": "2026-11-09T13:30:00Z",
+  "ticketId": "SH-11",
+  "timestamp": "2026-11-09T12:14:35Z",
   "phase": "dev-planning",
   "version": "1.0",
   "modules": [
     {
-      "name": "prisma/schema.prisma",
-      "dependsOn": []
-    },
-    {
-      "name": "src/lib/validators/quiz.ts",
-      "dependsOn": []
-    },
-    {
-      "name": "src/server/quiz/grading.ts",
+      "name": "src/lib/validators/gradebook.ts",
       "dependsOn": [
-        "src/server/assignments/grading-math.ts"
+        "src/lib/validators/assignments.ts"
       ]
     },
     {
-      "name": "src/server/quiz/serializers.ts",
+      "name": "src/server/gradebook",
       "dependsOn": [
-        "src/server/quiz/grading.ts"
-      ]
-    },
-    {
-      "name": "src/server/quiz/access.ts",
-      "dependsOn": [
-        "src/server/auth/course-access.ts",
-        "src/server/quiz/grading.ts",
-        "prisma/schema.prisma"
-      ]
-    },
-    {
-      "name": "src/server/quiz/attempt-service.ts",
-      "dependsOn": [
-        "prisma/schema.prisma",
-        "src/lib/validators/quiz.ts",
-        "src/server/quiz/grading.ts",
-        "src/server/quiz/serializers.ts",
-        "src/server/quiz/access.ts",
-        "src/server/http.ts",
-        "src/server/audit.ts",
-        "src/server/assignments/grading-math.ts"
-      ]
-    },
-    {
-      "name": "src/server/quiz/quiz-service.ts",
-      "dependsOn": [
-        "prisma/schema.prisma",
-        "src/lib/validators/quiz.ts",
-        "src/server/quiz/grading.ts",
-        "src/server/quiz/serializers.ts",
+        "src/server/assignments/grading-math.ts",
+        "src/server/assignments/assignments-service.ts",
         "src/server/quiz/attempt-service.ts",
-        "src/server/auth/course-access.ts",
-        "src/server/http.ts",
-        "src/server/notifications",
-        "src/server/audit.ts"
-      ]
-    },
-    {
-      "name": "src/server/quiz/analytics.ts",
-      "dependsOn": [
-        "prisma/schema.prisma",
         "src/server/quiz/grading.ts",
+        "src/server/attendance/attendance-rules.ts",
+        "src/server/auth/course-access.ts",
+        "src/server/auth/student-access.ts",
         "src/server/csv.ts",
-        "src/server/assignments/grading-math.ts"
+        "src/server/audit.ts",
+        "src/server/notifications",
+        "src/lib/validators/gradebook.ts",
+        "src/server/db.ts"
       ]
     },
     {
-      "name": "src/server/quiz/maintenance.ts",
+      "name": "src/server/report-cards",
       "dependsOn": [
-        "src/server/quiz/attempt-service.ts",
-        "src/server/notifications"
+        "src/server/gradebook",
+        "src/server/attendance/attendance-service.ts",
+        "src/server/auth/student-access.ts",
+        "src/server/notifications",
+        "src/server/audit.ts",
+        "src/server/db.ts"
       ]
     },
     {
-      "name": "src/server/notifications/types.ts",
-      "dependsOn": []
-    },
-    {
-      "name": "src/server/files/contexts.ts",
+      "name": "src/server/assignments/assignments-service.ts",
       "dependsOn": [
-        "prisma/schema.prisma",
-        "src/server/auth/course-access.ts"
+        "src/server/gradebook"
       ]
     },
     {
-      "name": "src/app/api/internal/email/dispatch",
+      "name": "src/server/quiz",
       "dependsOn": [
-        "src/server/quiz/maintenance.ts",
-        "src/server/assignments/reminders.ts"
+        "src/server/gradebook"
       ]
     },
     {
-      "name": "src/app/api/(quiz routes)",
+      "name": "src/app/api/grading-scales",
       "dependsOn": [
-        "src/server/http.ts",
-        "src/lib/validators/quiz.ts",
-        "src/server/quiz/quiz-service.ts",
-        "src/server/quiz/attempt-service.ts",
-        "src/server/quiz/analytics.ts"
+        "src/server/gradebook",
+        "src/lib/validators/gradebook.ts",
+        "src/server/http.ts"
       ]
     },
     {
-      "name": "src/app/(app)/quizzes/[quizId]/take",
+      "name": "src/app/api/courses/[id]/(gradebook|grade-categories|grade-items|term-overrides)",
       "dependsOn": [
-        "src/server/quiz/attempt-service.ts",
-        "src/server/quiz/serializers.ts",
-        "src/lib/validators/quiz.ts",
-        "src/components"
+        "src/server/gradebook",
+        "src/lib/validators/gradebook.ts",
+        "src/server/http.ts"
       ]
     },
     {
-      "name": "src/app/(app)/quizzes/[quizId]/attempts/[attemptId]",
+      "name": "src/app/api/grade-items",
       "dependsOn": [
-        "src/server/quiz/attempt-service.ts",
-        "src/server/quiz/access.ts",
-        "src/server/quiz/serializers.ts"
+        "src/server/gradebook",
+        "src/lib/validators/gradebook.ts",
+        "src/server/http.ts"
       ]
     },
     {
-      "name": "src/app/(app)/courses/[courseId]/quizzes",
+      "name": "src/app/api/students/[id]/grades",
       "dependsOn": [
-        "src/config/course-tabs.ts",
-        "src/server/quiz/quiz-service.ts",
-        "src/components"
+        "src/server/gradebook",
+        "src/server/http.ts"
       ]
     },
     {
-      "name": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit",
+      "name": "src/app/api/report-cards",
       "dependsOn": [
-        "src/server/quiz/quiz-service.ts",
-        "src/lib/validators/quiz.ts",
-        "src/app/(app)/quizzes/[quizId]/take",
-        "src/components"
+        "src/server/report-cards",
+        "src/lib/validators/gradebook.ts",
+        "src/server/http.ts"
       ]
     },
     {
-      "name": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/grade",
+      "name": "src/components/gradebook",
       "dependsOn": [
-        "src/server/quiz/attempt-service.ts",
-        "src/components"
+        "src/lib/validators/gradebook.ts",
+        "src/components/Toast",
+        "src/components/DateDisplay",
+        "@mui/x-data-grid",
+        "@mui/material"
       ]
     },
     {
-      "name": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/analytics",
+      "name": "src/components/report-cards",
       "dependsOn": [
-        "src/server/quiz/analytics.ts",
-        "src/components"
+        "src/server/report-cards/snapshot.ts",
+        "@mui/material"
+      ]
+    },
+    {
+      "name": "src/app/(app)/(gradebook, grades, report-cards, admin pages)",
+      "dependsOn": [
+        "src/components/gradebook",
+        "src/components/report-cards",
+        "src/components/DataTable",
+        "src/components/ConfirmDialog",
+        "src/server/gradebook",
+        "src/server/report-cards",
+        "src/server/auth/requireRole.ts",
+        "src/config"
+      ]
+    },
+    {
+      "name": "scripts/gradebook-backfill.ts",
+      "dependsOn": [
+        "src/server/gradebook/backfill.ts"
       ]
     },
     {
       "name": "prisma/seed.ts",
       "dependsOn": [
-        "prisma/schema.prisma",
-        "src/server/quiz/grading.ts"
+        "src/server/gradebook",
+        "src/server/report-cards"
       ]
+    },
+    {
+      "name": "src/server/gradebook/grade-calc.ts",
+      "dependsOn": [
+        "src/server/assignments/grading-math.ts"
+      ],
+      "note": "pure: no Prisma client import, types only"
     }
   ]
 }

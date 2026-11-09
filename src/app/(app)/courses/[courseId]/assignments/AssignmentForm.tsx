@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import NextLink from 'next/link';
 import { Controller, useForm } from 'react-hook-form';
@@ -46,6 +46,8 @@ interface FormValues {
   maxLatePenaltyPercent: string;
   maxFileCount: string;
   allowExtraCredit: boolean;
+  /** PRD-11 FR-2: gradebook category id, '' = none. */
+  categoryId: string;
 }
 
 const TYPE_LABELS: Record<FormValues['submissionType'], string> = {
@@ -86,8 +88,16 @@ export function AssignmentForm({ courseId, timezone, defaultDueAt, initial, subm
       maxLatePenaltyPercent: initial ? String(Number(initial.maxLatePenaltyPercent)) : '50',
       maxFileCount: String(initial?.maxFileCount ?? 3),
       allowExtraCredit: initial?.allowExtraCredit ?? false,
+      categoryId: initial?.categoryId ?? '',
     },
   });
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch(`/api/courses/${courseId}/grade-categories`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setCategories(b?.data?.categories ?? []))
+      .catch(() => setCategories([]));
+  }, [courseId]);
   const [attachments, setAttachments] = useState<FileRef[]>(initial?.attachments ?? []);
   const [useRubric, setUseRubric] = useState(!!initial?.rubric?.length);
   const [rubric, setRubric] = useState<CriterionDraft[]>(
@@ -131,6 +141,7 @@ export function AssignmentForm({ courseId, timezone, defaultDueAt, initial, subm
       status,
       rubric: useRubric && rubric.length ? rubric.map(({ key: _key, ...c }) => c) : null,
       attachmentFileIds: attachments.map((f) => f.id),
+      categoryId: values.categoryId || null,
     };
     const parsed = assignmentInput.safeParse(payload);
     if (!parsed.success) {
@@ -268,6 +279,20 @@ export function AssignmentForm({ courseId, timezone, defaultDueAt, initial, subm
                 control={control}
                 render={({ field }) => (
                   <TextField {...field} label="Max points" required fullWidth error={!!err('maxPoints')} helperText={err('maxPoints')} slotProps={{ htmlInput: { inputMode: 'decimal' } }} />
+                )}
+              />
+              <Controller
+                name="categoryId"
+                control={control}
+                render={({ field }) => (
+                  <TextField {...field} select label="Gradebook category" fullWidth error={!!err('categoryId')} helperText={err('categoryId')}>
+                    <MenuItem value="">None</MenuItem>
+                    {categories.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        {c.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 )}
               />
               {(submissionType === 'FILE_UPLOAD' || submissionType === 'TEXT_AND_FILE') && (

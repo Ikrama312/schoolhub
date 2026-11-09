@@ -1,283 +1,303 @@
-# System Design: SH-10 · PRD-10 Quizzes & Online Exams (SCH-010)
+# System Design: PRD-11 Gradebook, Grading Scales & Report Cards
 
-Ticket: SH-10 · Phase: architect (arch-design-system) · Timestamp: 2026-11-09T12:45:00Z · Status: complete
-Inputs: `artifacts/intake/requirements.json` (39 FR + 10 NFR, 96%), `handoff-to-architect.json` (no blockers),
-`tech-stack-decisions.md` (ADR-1..ADR-8), `requirements-analysis-notes.md` (B1–B15, D1–D5), PRD `10-quizzes.md` FR-1 schema.
-Run mode: `--brownfield --tech-stack react`.
+Ticket: **SH-11** · Phase: architect (`arch-design-system`) · Timestamp: 2026-11-09T17:30:00Z · Status: **complete**
+
+Inputs: `artifacts/intake/requirements.json` (42 FR + 13 NFR), `artifacts/intake/handoff-to-architect.json`, `artifacts/architect/tech-stack-decisions.md` (ADR-1 to ADR-10), `artifacts/architect/requirements-analysis-notes.md` (B1–B19, R1–R7), and the source PRD `11-gradebook.md`.
 
 ---
 
 ## 1. Overview
 
-PRD-10 adds teacher-built quizzes to courses: students take timed, autosaved attempts, the server grades them automatically where it can, teachers grade essays and flagged short answers by hand, and results are released according to a per-quiz visibility rule. The feature is a new vertical slice in the existing Next.js 14 App Router + Prisma/Postgres app. It follows the PRD-09 assignments layout exactly:
+PRD-11 adds a gradebook to SchoolHub, a brownfield Next.js 14 App Router + Prisma/PostgreSQL + MUI 9.5.0 app. It has four parts:
 
-- `src/server/quiz/` holds the domain logic
-- `src/app/api/...` holds thin route handlers
-- `src/app/(app)/...` holds server pages with MUI client components
+1. **Sync.** Published assignments and quizzes become `GradeItem`s. Returned submissions and released quiz results become `Grade`s.
+2. **Calculation.** A pure Decimal function turns items, grades, categories, a scale and an override into a term percent and letter.
+3. **Views.** A teacher grid (MIT DataGrid), student/parent grade views, and admin pages for scales and categories.
+4. **Report cards.** Frozen JSON snapshots per student and term, with a draft → published workflow, notifications and an A4 print view.
 
-There is no new infrastructure and no new dependency (ADR-1). All background work goes through the existing maintenance dispatcher (ADR-6).
-
-**Design principles**
-1. **The server owns time and truth.** `deadlineAt` is frozen at start and checked only on the server. The client timer is display-only (FR-13, FR-16, ADR-4).
-2. **One path per state transition.** Manual submit, the deadline rejection, lazy load and the maintenance pass all call a single `submitAttempt()`. The `status = IN_PROGRESS` guard makes it idempotent (FR-17, FR-18, FR-35).
-3. **One visibility predicate.** `resultsVisible()` gates scores, correct answers and parent access (FR-20, FR-21, NFR-1).
-4. **Allow-listed student output.** Students only ever receive output from `serializers.ts` (NFR-1, ADR-5).
-5. **Pure core, thin I/O shell.** Grading, deadline, scoring, shuffle and publish checks are pure and unit-tested (NFR-8, ADR-3).
+The design adds **no dependencies** (ADR-1). New server code lives only in `src/server/gradebook/` and `src/server/report-cards/` (NFR-9). Existing services gain one-line calls into the sync module.
 
 ### 1.1 Intake blockers
-`handoff-to-architect.json` reports **`blockers: []`**. Nothing blocks design or dev.
 
-### 1.2 Assumptions carried forward (flagged by intake, resolved here)
-| # | Req | Assumption / decision |
-|---|---|---|
-| A1 | FR-37 (LOW) | **No sidebar entry.** Quizzes are reached through the course "Quizzes" tab and direct routes. FR-37 produces no code. |
-| A2 | FR-11 | "Missed" means the quiz is past `availableUntil` and the student has zero attempts. |
-| A3 | FR-10 | Regrade runs only through the explicit `POST /regrade`. Editing accepted answers does not trigger an automatic regrade. |
-| A4 | FR-33 | Practice quizzes count toward attempts, analytics and the teacher list. They are excluded only from the gradebook: `getStudentQuizScore` returns `isPractice` and PRD-11 filters on it. |
-| A5 | FR-29, FR-30 | `quiz.published` has defaultEmail = false (PRD). `quiz.results_released` has defaultEmail = true, matching `assignment.graded`; the PRD doesn't say. |
-| A6 | FR-30 | **No new column.** The "sent once" marker for AFTER_CLOSE results is the existing `Quiz.resultsReleasedAt`, which the maintenance pass claims atomically for AFTER_CLOSE quizzes (§4.5). This keeps FR-1's model list exact. The research notes' `resultsNotifiedAt` and claim-table options are therefore not needed. |
-| A7 | FR-28 | Accommodation changes apply only to attempts started after the change, because `deadlineAt` is frozen at start. The settings UI says so. |
-| A8 | FR-17, FR-25 | FR-1 has no `flagged` or `manuallyGraded` column. Both are **derived**: an answer is *manually graded* when `gradedById != null`, and it *needs review* when it is an ESSAY with `gradedById = null`, or a SHORT_ANSWER with `isCorrect = false` and `gradedById = null`. A pure `needsReview()` implements this rule. |
-| A9 | FR-29 | Status transitions are **DRAFT → PUBLISHED → CLOSED** only. There is no unpublish, so `quiz.published` fires exactly once, on the conditional DRAFT→PUBLISHED update. |
-| A10 | FR-8 | Preview mode reuses the player with `mode="preview"`. Saves and submit are no-ops, nothing is graded, and nothing is sent to attempt endpoints. |
+`handoff-to-architect.json` reports **`blockers: []`** at 95% confidence. There is nothing to escalate. The flagged assumptions are resolved in §1.2.
 
-### 1.3 Scope fence (NFR-10)
-Out of scope: lockdown browser, webcam proctoring, question banks, random pools and LaTeX. Nothing in this design anticipates them.
+### 1.2 Assumptions and design decisions (need product sign-off, none block dev)
 
----
-
-## 2. Data Model (FR-1, FR-2)
-
-The model is one migration, `prisma/migrations/20261110000000_add_quizzes/`, created with `prisma migrate dev --create-only` and hand-edited (ADR-2). The fields are **exactly as in PRD FR-1**. This design adds only relations and indexes, never new columns:
-
-| Model | Additions beyond the PRD listing | Why |
-|---|---|---|
-| Quiz | `createdBy User @relation("QuizCreatedBy")`; `@@index([courseId, status])` | FK integrity; course tab list (FR-11) |
-| Question | `answers QuizAnswer[]`; `@@index([quizId, order])` | ordered load (FR-7, FR-31) |
-| QuizAttempt | `@@index([quizId, status])`, `@@index([status, deadlineAt])` | teacher list/needs-grading count (FR-11); maintenance sweep (FR-18) |
-| QuizAnswer | `question Question @relation(onDelete: Cascade)`, `gradedBy User? @relation("QuizAnswerGradedBy")` | FK integrity; grading audit (FR-24) |
-| QuizAccommodation | `quiz Quiz @relation(onDelete: Cascade)`, `student User @relation(...)`, plus `accommodations QuizAccommodation[]` on Quiz | FK integrity (FR-28) |
-| Course | `quizzes Quiz[]` | FR-1 back-relation |
-| User | `quizzesCreated`, `quizAttempts`, `quizAccommodations`, `quizAnswersGraded` | FR-1 back-relations |
-
-**Raw SQL appended to the migration (FR-19, ADR-2):**
-```sql
-CREATE UNIQUE INDEX "quiz_attempt_one_in_progress_uq"
-  ON "QuizAttempt"("quizId","studentId") WHERE "status" = 'IN_PROGRESS';
-```
-A `schema.prisma` comment on QuizAttempt points to it, following the attendance-migration precedent. `prisma db push` would drop it, so dev and CI must use `migrate`.
-
-**JSON shapes** follow the PRD FR-2 table and are typed by the Zod discriminated union in `src/lib/validators/quiz.ts`:
-- `options`: `[{id,text}]`. Option ids are short cuids generated client-side and stable across edits.
-- `correct` (per type): `{optionId}`, `{optionIds}`, `{value}`, `{accepted}` or `{guidance?}`.
-- `response` (per type): `{optionId}`, `{optionIds}`, `{value}` or `{text}`.
-
----
-
-## 3. Component Breakdown
-
-### 3.1 Server domain: `src/server/quiz/` (NFR-7)
-
-| File | Kind | Exports | Reqs |
+| # | Topic | Decision | Req |
 |---|---|---|---|
-| `grading.ts` | **pure**, isomorphic, no Prisma client | `gradeAnswer(question, response) → {pointsAwarded: Decimal\|null, isCorrect: boolean\|null}`, `needsReview(question, answer)`, `normalizeShortAnswer(s)`, `computeDeadline(startedAt, timeLimitMinutes, extraTimeMinutes, availableUntil)`, `attemptLimit(maxAttempts, extraAttempts)`, `resultsVisible(quiz, attempt, now)`, `canPublish(questions) → string[]`, `applyScoringPolicy(policy, gradedAttempts)`, `seededShuffle(items, seed)` (string hash + mulberry32), `ANSWER_GRACE_MS = 30_000` | FR-3, FR-4, FR-5, FR-9, FR-13, FR-20, FR-22, FR-23, FR-28 |
-| `serializers.ts` | pure | `toStudentQuiz`, `toStudentAttempt`, `toStudentResult`. They are built by explicit allow-list, never spread-then-delete. | NFR-1, FR-21, FR-11 |
-| `access.ts` | I/O | `assertCanAccessAttempt(user, attempt, {write})`: the owner (write allowed), a manager via `assertCanManageCourse`, or a linked PARENT (read-only, and only when `resultsVisible`). Otherwise it throws NOT_FOUND. | FR-34, NFR-5 |
-| `quiz-service.ts` | I/O | `listCourseQuizzes(user, courseId, page)` (role-shaped), `createQuiz`, `getQuizForManager`, `getQuizForStudent`, `updateQuiz` (settings + status transition + publish check + FR-29 notify), `deleteQuiz` (CONFLICT if any attempt exists), `addQuestion`, `updateQuestion`, `deleteQuestion`, `reorderQuestions` (all through the **edit lock**), `regradeQuiz`, `releaseResults`, `upsertAccommodation` | FR-6..FR-11, FR-20, FR-28, FR-29, FR-31, FR-38 |
-| `attempt-service.ts` | I/O | `startOrResumeAttempt`, `getAttempt` (calls `ensureNotExpired`), `saveAnswer` (hot path), `submitAttempt(attemptId, {auto})`, `ensureNotExpired(attempt)`, `gradeAnswerManually`, `recomputeAttempt(tx, attemptId)`, `getStudentQuizScore(quizId, studentId)` | FR-12..FR-19, FR-22..FR-25, FR-32, FR-33, FR-38 |
-| `analytics.ts` | I/O + pure aggregation | `getQuizAnalytics(quizId)` returns summary stats, a 10-bucket histogram and per-question stats. `analyticsCsv(quizId)` uses `toCsv` from `src/server/csv.ts`. | FR-26, FR-27 |
-| `maintenance.ts` | I/O | `autoSubmitExpiredAttempts(now)`, `sendAfterCloseResultsReleased(now)` | FR-18, FR-30, FR-35 |
+| A1 | Exemption removal | Unexempt sets `excused = false` and re-derives `score` from the source: `finalScore` if the submission is RETURNED, otherwise `null`. | FR-6 |
+| A2 | Quiz score source | **Intake's correction:** `getStudentQuizScore(quizId, studentId)` **already exists** in `src/server/quiz/attempt-service.ts` (L359, labelled "PRD-11 export"). Call it as is. It does **not** check visibility, so the sync gates on `resultsVisible()` first. This replaces ADR-6's "add a helper to grading.ts". Don't create a second one. | FR-7, NFR-9 |
+| A3 | 89.95 rounding | 89.95 → 90.0 → **A−** under the seed scale (A is 93). The unit test asserts 90.0 and the 90-band letter. | FR-13 |
+| A4 | Nav entries | Add `/grades` (STUDENT, PARENT), `/report-cards` (TEACHER), and `/admin/grading-scales` and `/admin/report-cards` (ADMIN, group `Administration`). | FR-16, FR-27, FR-29, FR-33 |
+| A5 | Past due | `now > dueAt` as a UTC instant. Term containment compares school-local dates (`SchoolSettings.timezone`). | NFR-10 |
+| A6 | No term | If no term of the course's academic year contains the date and no term contains today, skip the item and `logger.warn`. | FR-3 |
+| A7 | Teacher hide vs source visibility (R2) | **No extra column** (FR-1 says "exactly as specified"). Source sync writes `isVisible` only on source visibility **transitions**: publish / publishOnce → `true`, archive → `false`. Plain edits to an already-published source never touch `isVisible`, so a teacher's hide survives re-saves. | FR-4, FR-24 |
+| A8 | Uncategorised weight (R3) | If the course has categories, the implicit "Uncategorised" bucket is **shown with its subtotal but has weight 0**, so it's excluded from the weighted mean. If no category has a counted item, fall back to the points total over **all** counted items. If the course has no categories, use the points total. | FR-12 |
+| A9 | `grade.posted` dedupe (R4) | No marker column. Notify only when a MANUAL grade's `score` goes from `null` to a value. That gives one notification per student per item. Later edits are audited but not notified. | FR-38 |
+| A10 | Term drift (R5) | Re-derive `GradeItem.termId` only when `dueAt`/`availableUntil` changes. | FR-3 |
+| A11 | Scale delete (R6) | Return `CONFLICT` if the scale is the default or any `Course.gradingScaleId` references it. Published snapshots embed their own legend, so they're unaffected. | FR-16 |
+| A12 | Percent-only override | Re-derive the letter from the effective scale using the override percent. | FR-14 |
+| A13 | Report card edits | Comments are editable only while `DRAFT`. Unpublish returns the card to `DRAFT` and clears `publishedAt`/`publishedById`. | FR-32, FR-34 |
+| A14 | `Grade.updatedById` on system writes | Sync uses the acting user (grader/teacher) when there is one. Otherwise (auto-graded quiz, maintenance release, backfill) it uses `quiz.createdById`, `assignment.createdById` or, for backfill, `course.teacherId`. The column has no FK, as specified. | FR-1, FR-5, FR-7, FR-8 |
+| A15 | Quiz CLOSED | A CLOSED quiz is **not** unpublished. Its item stays visible. Quizzes have no archive. `deleteQuiz` deletes the item. A practice toggle after publish deletes the item. | FR-3, FR-4 |
 
-Reused as-is: `dec`/`fixed2`/`Decimal` from `@/server/assignments/grading-math` (imported, not copied); `withHandler`/`ok`/`paginated`/`AppError` (`src/server/http.ts`); `assertCanViewCourse`/`assertCanManageCourse` (`src/server/auth/course-access.ts`); `notify`/`notifyStudentAndParents`; `audit`; `logger`; `toCsv`; `getSchoolTimezone` (NFR-7).
+---
 
-**Edit lock (FR-10).** `quiz-service` checks `_count.attempts > 0` before every question mutation. When attempts exist:
-- `updateQuestion` accepts only `prompt`, `explanation`, and (for SHORT_ANSWER) `correct.accepted` / `caseSensitive`.
-- `addQuestion`, `deleteQuestion`, `reorderQuestions`, and changes to `type`/`points`/options/choice `correct` throw `AppError('CONFLICT', 'Quiz has attempts — only text, explanation and accepted answers can change. Use Regrade after editing accepted answers.')`.
-- The same check sits behind the builder's disabled controls and their tooltip.
+## 2. Component Breakdown
 
-**Regrade (FR-10, FR-38).** One `$transaction`:
-1. For every submitted attempt, re-run `gradeAnswer` on answers with `gradedById = null` (a manual grade always wins, per A8).
-2. `recomputeAttempt` each attempt.
-3. Write `audit('quiz.regrade', {attemptCount})`.
+### 2.1 Data model (one migration: `prisma/migrations/<ts>_gradebook/`)
 
-`recomputeAttempt` (FR-25): sets `score = Σ pointsAwarded` (fixed2) and sets status to `NEEDS_GRADING` if any `needsReview`, otherwise `GRADED`. Only submitted attempts are touched.
+The models and enums are **exactly the PRD FR-1 block** (FR-1). On top of that:
 
-### 3.2 Validators: `src/lib/validators/quiz.ts` (FR-2, NFR-6)
-These are client-safe Zod schemas shared by the builder forms and the route handlers:
-- `quizSettingsSchema` uses `.superRefine`: `availableUntil > availableFrom`, and `timeLimitMinutes ≤ window minutes` (FR-6). Limits: timeLimit 1–300 or null, maxAttempts 1–10.
-- `questionSchema` is a `z.discriminatedUnion('type', …)`: points 0.5–100, 2–8 options, ≥1 correct option for MULTIPLE_CHOICE, 1–10 accepted answers, prompt as non-empty Markdown.
-- `answerResponseSchema` is a type-agnostic union, so the hot path doesn't load the Question (NFR-2). ESSAY/SHORT text is ≤ 10,000 characters.
-- `manualGradeSchema` is `{points: 0..∞ step 0.5, feedback?}`. The upper bound (question points) is checked in the service.
-- `accommodationSchema`: extraTime 0–300, extraAttempts 0–5.
-- `reorderSchema`: `{questionIds: string[]}`.
+- **Additive columns (FR-2):** `Course.gradingScaleId String?` → `GradingScale` (`onDelete: SetNull`). `Assignment.categoryId String?` and `Quiz.categoryId String?` → `GradeCategory` (`onDelete: SetNull`), so deleting a category never deletes sources.
+- **Relation fields:** add only the back-relations Prisma requires (`Course.gradeItems`, `Course.gradeCategories`, `Term.gradeItems`, `GradeCategory.items/assignments/quizzes`). There are no new scalar columns beyond the spec.
+- **Keys already in the spec make sync race-safe (B19):** `GradeItem.sourceId @unique`, `Grade @@id([gradeItemId, studentId])`, `TermGradeOverride @@id([courseId, termId, studentId])`, `ReportCard @@unique([studentId, termId])`.
+- **Indexes added:**
+  - `GradeItem @@index([courseId, termId])` (NFR-2, NFR-3)
+  - `TermGradeOverride @@index([termId])` (NFR-3)
+  - `ReportCard @@index([termId, status])` (FR-29)
+- **Raw SQL in the migration:** a partial unique index `CREATE UNIQUE INDEX grading_scale_one_default ON "GradingScale" ("isDefault") WHERE "isDefault";` as the backstop for "exactly one default" (FR-16, ADR-3).
+- **Types:** `bands Json` holds `{ letter, minPercent, gpa?, descriptor? }[]`, sorted descending and validated by Zod (`bandsSchema`). `gpa` is stored and never computed (NFR-13).
 
-### 3.3 API route handlers (FR-31, FR-32, NFR-5, NFR-6)
-Every handler is `withHandler` → `requireUser`/`requireRole` → Zod parse → one service call → `ok`/`paginated`. There is no logic in the handlers. `api-contracts.json` (the next sub-task) owns the exact shapes.
+### 2.2 Server modules
 
-| Route file | Methods | Access | Reqs |
+| Module | Responsibility | Reuses | Req |
 |---|---|---|---|
-| `api/courses/[id]/quizzes/route.ts` | GET (role-shaped, paginated), POST | view / manage | FR-11, FR-31 |
-| `api/quizzes/[id]/route.ts` | GET (manager: full; student/parent: `toStudentQuiz`), PATCH, DELETE | view / manage | FR-6, FR-9, FR-29, FR-31, NFR-1 |
-| `api/quizzes/[id]/questions/route.ts` | POST | manage | FR-7, FR-10, FR-31 |
-| `api/quizzes/[id]/questions/reorder/route.ts` | POST | manage | FR-7, FR-31 |
-| `api/questions/[id]/route.ts` | PATCH, DELETE | manage | FR-7, FR-10, FR-31 |
-| `api/quizzes/[id]/attempts/route.ts` | POST (start/resume) | STUDENT + view | FR-13, FR-19, FR-23, FR-32 |
-| `api/attempts/[id]/route.ts` | GET | owner / linked parent / manager | FR-18, FR-21, FR-32, NFR-1 |
-| `api/attempts/[id]/answers/[questionId]/route.ts` | PUT | owner | FR-15, FR-16, NFR-2 |
-| `api/attempts/[id]/submit/route.ts` | POST | owner | FR-17 |
-| `api/attempts/[id]/answers/[questionId]/grade/route.ts` | PUT | manage | FR-24, FR-25, FR-38 |
-| `api/quizzes/[id]/regrade/route.ts` | POST | manage | FR-10, FR-38 |
-| `api/quizzes/[id]/release-results/route.ts` | POST | manage | FR-20, FR-30, FR-38 |
-| `api/quizzes/[id]/analytics/route.ts` | GET (`?format=csv` → `text/csv`) | manage | FR-26, FR-27 |
-| `api/quizzes/[id]/accommodations/[studentId]/route.ts` | PUT | manage | FR-28, FR-38 |
+| `src/server/gradebook/grade-calc.ts` | **Pure** functions with no Prisma client import (types only): `computeStudentTerm(input)`, `categoryPercent`, `applyDropLowest`, `roundHalfUp1`, `letterFor(percent, bands)`, `applyOverride`, `effectiveScale(course, default)`, `gradeColour(percent)`. Everything is `Decimal`, and rounding happens once at the end. | `Decimal`, `dec`, `fixed2` from `assignments/grading-math.ts` | FR-10–FR-15, FR-26, NFR-1 |
+| `src/server/gradebook/term-placement.ts` | Pure `termFor(date, terms, tz, now)`: picks the containing term in school-local dates, falls back to the term containing today, else returns `null`. | `schoolToday` (attendance-rules), `getSchoolTimezone` | FR-3, NFR-10, A6 |
+| `src/server/gradebook/gradebook-sync.ts` (file name from the PRD) | Idempotent upserts. `upsertItemFromAssignment(tx, id)`, `upsertItemFromQuiz(tx, id)`, `hideItemForSource(tx, sourceId)`, `deleteItemForSource(tx, sourceId)`, `syncSubmissionGrade(tx, assignmentId, studentId, actorId?)`, `syncQuizGrade(quizId, studentId)`, `syncQuizGrades(quizId)`. It also exports **pure row builders** (`itemFromAssignment`, `gradeFromSubmission`, `gradeFromQuizScore`) that the backfill shares. | `isAssignmentVisible`, `getStudentQuizScore`, `resultsVisible`, `applyScoringPolicy`, `logger` | FR-3–FR-7, NFR-5 |
+| `src/server/gradebook/backfill.ts` | `backfillGradebook()`. Batch-loads per course and runs the same row builders with `upsert`. Idempotent through the unique keys. | `applyScoringPolicy` in memory (no per-student `getStudentQuizScore`) | FR-8, NFR-3 |
+| `src/server/gradebook/gradebook-service.ts` | `getGradebook(user, courseId, termId)`, `createManualItem`, `updateItem`, `deleteItem`, `putGrade`, `markAllMissing`, `putTermOverride`, `exportGradebookCsv`. Loads the data, calls grade-calc, enforces FR-9 and writes audit entries. | `assertCanManageCourse`, `audit`, `notifyStudentAndParents`, `toCsv` | FR-9, FR-18–FR-25, FR-38, NFR-2, NFR-4 |
+| `src/server/gradebook/categories-service.ts` | `getCategories`, `replaceCategories` (in a transaction: delete removed ids, upsert the rest, `dec(sum).eq(100)`), and `setCourseScale`. | `assertCanViewCourse`/`assertCanManageCourse` | FR-17, FR-40 |
+| `src/server/gradebook/scales-service.ts` | CRUD. `setDefault` runs in a transaction that clears the other defaults. Delete is guarded (A11). | `requireRole('ADMIN')`, `audit` | FR-16 |
+| `src/server/gradebook/student-grades-service.ts` | `getStudentGrades(user, studentId, termId, courseId?)`. Uses the visible-only serializer. Reuses grade-calc and passes **visible items only** into it, so the computed totals match what the student sees. | `assertCanViewStudent`, `getAccessibleStudentIds` | FR-26–FR-28, FR-42, NFR-5 |
+| `src/server/gradebook/load.ts` | Shared batched loader: `loadCourseTermData(courseIds[], termId, studentIds?)` returns `{items, grades, categories, overrides, scales}` in 5 `findMany` calls with `in` filters, grouped in memory. Used by the gradebook, student grades and report-card generation. | Prisma | NFR-2, NFR-3 |
+| `src/server/report-cards/snapshot.ts` | Zod `snapshotSchema` (`v: 1`) and the pure `buildSnapshot(student, courses, computed, attendance, school, scale)`. | grade-calc | FR-30 |
+| `src/server/report-cards/report-card-service.ts` | `listReportCards` (with warnings), `generateDrafts`, `getReportCard`, `patchComments`, `publish`, `unpublish`, `listForStudent`. | `load.ts`, attendance `getReport`, `notifyStudentAndParents`, `audit` | FR-29–FR-34, FR-36, NFR-3, NFR-4 |
+| `src/server/report-cards/access.ts` | `assertCanViewReportCard(user, card)`, `canEditHomeroomComment`. | `student-access`, `Section.homeroomTeacherId`, `Enrollment` | FR-32, FR-37, NFR-5, NFR-6 |
+| `src/lib/validators/gradebook.ts` | Zod: `bandsSchema`, `scaleSchema`, `categoriesPutSchema`, `manualItemSchema`, `itemPatchSchema`, `gradePutSchema`, `termOverrideSchema` (comment ≤ 1000), `reportCardPatchSchema`, `generateSchema`, `publishSchema`, `unpublishSchema` (reason required). These are shared by client forms and handlers. | Zod | FR-16, FR-17, FR-22, FR-23, FR-39, FR-40 |
+| `src/server/notifications/types.ts` (edit) | Register `grade.posted` (STUDENT+PARENT, `defaultEmail: false`) and `report_card.published` (STUDENT+PARENT, `defaultEmail: true`). | existing registry | FR-38 |
 
-Error mapping: CONFLICT (409) covers writing after the deadline, the edit lock, deleting with attempts, the attempt limit, and a quiz that isn't open. VALIDATION_ERROR (400) is for Zod failures. NOT_FOUND hides resources the user can't access (NFR-5, NFR-6).
+**Hook edits to existing services** (each is one call; behaviour is otherwise unchanged, per NFR-9):
 
-### 3.4 Pages and UI: `src/app/(app)/...` (NFR-4: MUI only, mui-mcp lookup before each component)
+| Existing site | Added call | Req |
+|---|---|---|
+| `assignments-service` `createAssignment` / `updateAssignment` / `publishOnce` | `upsertItemFromAssignment(tx, id)`. This sets `isVisible` only on a visibility transition (A7). It re-places the term only if `dueAt` changed (A10). | FR-3, FR-4 |
+| `deleteOrArchiveAssignment` | archive → `hideItemForSource`; hard delete → `deleteItemForSource` in the same transaction (B9) | FR-4 |
+| `gradeSubmission`, `bulkReturn`, `gradeOffline` | `syncSubmissionGrade` when the submission **is** RETURNED after the write. This covers re-grades of returned work. Nothing happens otherwise (AC-3). | FR-5, NFR-5 |
+| `setExemption` (both branches) | `syncSubmissionGrade` (A1) | FR-6 |
+| `quiz-service` `updateQuiz` (→PUBLISHED, or edits to a published quiz) / `deleteQuiz` | `upsertItemFromQuiz` / `deleteItemForSource`. Practice quizzes are skipped; turning practice on deletes the item. Wrap `deleteQuiz` in a transaction. | FR-3, FR-4 |
+| After callers of `recomputeAttempt` commit (`submitAttempt`, `gradeAnswerManually`, `regradeQuiz`) | `syncQuizGrade(quizId, studentId)`: no-op unless GRADED, `resultsVisible` and not practice | FR-7 |
+| `releaseResults` (MANUAL) and `quiz/maintenance.ts` AFTER_CLOSE claim (`count === 1`) | `syncQuizGrades(quizId)` (bulk). Without this, delayed-visibility quizzes never sync (R1). | FR-7, NFR-5 |
+| Assignment and quiz Zod validators and editors | Optional nullable `categoryId` plus one MUI `Select` of the course's categories | FR-2 |
 
-| Route / file | Server/client | Contents | Reqs |
+### 2.3 API layer (`src/app/api/**/route.ts`, thin: `withHandler` → Zod → service → `ok()`)
+
+These match the PRD API table exactly. `api-contracts.json` (next sub-task) owns the shapes.
+
+| Route | Role check | Service | Req |
 |---|---|---|---|
-| `src/config/course-tabs.ts` | config | One entry, `{key:'quizzes', label:'Quizzes', href: id => /courses/${id}/quizzes, roles: ALL_ROLES}` | FR-11 |
-| `courses/[courseId]/quizzes/page.tsx` + `CourseQuizzesView.tsx` | server + client | Teacher: DataTable (status, window, attempts, avg, Needs grading) + "New quiz". Student: four sections (Upcoming / Available now (Start/Resume) / Completed (score if visible) / Missed). Parent: completed results, read-only, per linked child. | FR-11, FR-33 |
-| `courses/[courseId]/quizzes/new/page.tsx` | server | Creates a DRAFT quiz with defaults and redirects to edit (no separate form) | FR-6 |
-| `courses/[courseId]/quizzes/[quizId]/edit/page.tsx` + `QuizBuilder.tsx`, `QuizSettingsPanel.tsx`, `QuestionList.tsx`, `QuestionEditor.tsx` | server + client | Settings (DateTimePicker, Switch, Select, TextField). The question list is a dnd-kit `SortableContext` of MUI Cards, with Up/Down buttons as the keyboard fallback. Each type has its own editor (options with a correct Radio/Checkbox, an accepted-answers list, guidance). A running points total. Publish button with `canPublish` errors. Lock banner + disabled controls when attempts exist, plus a Regrade button. Accommodations section (DataTable of enrolled students). The prompt uses MarkdownEditor + FileUpload with context `'quiz'`. | FR-6..FR-10, FR-28, FR-39, NFR-9 |
-| `quizzes/[quizId]/take/page.tsx` + `QuizPlayer.tsx`, `useAutosave.ts` | server + client | Start screen (instructions, counts, points, limit, attempts used/allowed, ConfirmDialog on Start). The player has a sticky header (title, mm:ss timer from `deadlineAt`, red under 2 min, `aria-live="assertive"` announcing at 5:00 and 1:00), a Chip status pill, LinearProgress, and RadioGroup/FormGroup+Checkbox/TextField per type. Layout is all-on-one-page, or one question per page with a navigator Button grid (answered / unanswered / flagged; flags stored client-side only). Submit uses ConfirmDialog showing the unanswered count. `mode="preview"` is used by the builder. | FR-8, FR-12..FR-17, FR-19, NFR-3 |
-| `quizzes/[quizId]/attempts/[attemptId]/page.tsx` | server | Result view built from `toStudentResult`: score, %, per-question correctness, response and feedback, plus correct answers/explanations if allowed. Otherwise it shows "Submitted — results will be available later." Also used by parents and teachers. | FR-20, FR-21 |
-| `courses/[courseId]/quizzes/[quizId]/grade/page.tsx` + `QuizGradingWorkspace.tsx` | server + client | Tabs: By student / By question. Points TextField (step 0.5, max = question points) + feedback, with override allowed on auto-graded answers. | FR-24, FR-25 |
-| `courses/[courseId]/quizzes/[quizId]/analytics/page.tsx` + `QuizAnalytics.tsx` | server + client | StatCards (attempts, avg, median, high, low, avg time), x-charts `BarChart` with 10 buckets, a per-question DataTable with option distribution (most-chosen wrong option highlighted), and a CSV link | FR-26, FR-27 |
+| `GET/POST /api/grading-scales`, `PATCH/DELETE /api/grading-scales/[id]` | GET: `requireUser`; writes: ADMIN | scales-service | FR-16, FR-39 |
+| `GET/PUT /api/courses/[id]/grade-categories` | view / manage | categories-service (PUT body also carries `gradingScaleId`) | FR-17, FR-40 |
+| `GET /api/courses/[id]/gradebook?termId=` (`&format=csv` → `text/csv`) | manage | gradebook-service | FR-18–FR-21, FR-24, FR-25, NFR-2 |
+| `POST /api/courses/[id]/grade-items` | manage | createManualItem | FR-22 |
+| `PATCH/DELETE /api/grade-items/[id]` | manage (via the item's course) | updateItem / deleteItem. Non-MANUAL items accept only `isVisible`, and DELETE is MANUAL only. | FR-9, FR-24 |
+| `POST /api/grade-items/[id]/mark-missing` | manage | markAllMissing (`now > dueAt`, ungraded rows only) | FR-24 |
+| `PUT /api/grade-items/[id]/grades/[studentId]` | manage + enrolled student | putGrade. Non-MANUAL items accept only `comment` (FR-9). | FR-9, FR-20, FR-38, NFR-4 |
+| `PUT /api/courses/[id]/term-overrides/[studentId]` | manage | putTermOverride | FR-14, FR-23, NFR-4 |
+| `GET /api/students/[id]/grades?termId=&courseId=` | `assertCanViewStudent` | student-grades-service | FR-26–FR-28, FR-42 |
+| `GET /api/report-cards?termId=&gradeLevelId=&sectionId=&studentId=` | ADMIN; homeroom TEACHER (own sections); with `studentId`, view-student rules plus PUBLISHED-only for student/parent | listReportCards / listForStudent | FR-29, FR-33, FR-36 |
+| `POST /api/report-cards/generate` | ADMIN | generateDrafts | FR-30, FR-31, NFR-3 |
+| `GET /api/report-cards/[id]` | `assertCanViewReportCard` | getReportCard | FR-37 |
+| `PATCH /api/report-cards/[id]` | field-level (§4) | patchComments | FR-32 |
+| `POST /api/report-cards/publish`, `POST /api/report-cards/unpublish` | ADMIN | publish / unpublish | FR-34 |
 
-Server pages call `requirePageRole` and the course/attempt access helpers before fetching (NFR-5). They pass only serializer output to client components (NFR-1).
+`mark-missing` is the only route not in the PRD table. It implements the FR-24 column action server-side, because a client loop of N PUTs would write N audit rows and be slow. The `?format=csv` and `courseId`/`studentId` query parameters extend existing PRD routes rather than adding new ones.
 
-**`useAutosave(attemptId, mode)` (FR-15, ADR-4).**
-- Each question gets an 800 ms `setTimeout` debounce, then `PUT /answers/:questionId`.
-- On network failure or 5xx, the latest response per question is written to the `localStorage['quiz-attempt:<id>']` map, and a 5 s `setInterval` drains it.
-- A 409 stops the queue, clears storage and routes to the result page. A 2xx removes that key.
-- The status pill reads `Saving…`, `All answers saved`, or `Offline — answers saved on this device` (shown when the queue is non-empty).
-- On mount, any queued answers are merged over server answers before rendering, so a reload loses nothing (FR-19, AC-2).
+### 2.4 UI (`src/app/(app)/…`, MUI only, every component looked up via mui-mcp first, per NFR-7)
 
-### 3.5 Integrations into existing modules
-
-| Existing file | Change | Reqs |
+| Page / component | Notes | Req |
 |---|---|---|
-| `src/server/notifications/types.ts` | Add `quiz.published` (ACADEMIC, STUDENT, defaultEmail false) and `quiz.results_released` (ACADEMIC, STUDENT + PARENT, defaultEmail true, A5) | FR-29, FR-30 |
-| `src/server/files/contexts.ts` | `register('quiz', quizResolver)`. The resolver allows a course manager, or a course viewer when the quiz is PUBLISHED (images sit only in prompts, which students already see) | FR-39, NFR-5 |
-| `src/app/api/internal/email/dispatch/route.ts` | After `sendDueReminders(now)`, add `autoSubmitExpiredAttempts(now)` and `sendAfterCloseResultsReleased(now)`, each in its own try/catch + `logger.error`, on every call | FR-18, FR-30, FR-35 |
-| `prisma/seed.ts` | Three seed quizzes, idempotent by (courseId, title). Scores are computed with `grading.ts` | FR-36 |
-| `prisma/schema.prisma` + migration | §2 | FR-1, FR-19 |
+| `admin/grading-scales/page.tsx` + `ScaleEditorDialog` | `DataTable` list. The dialog uses a band editor (TextField rows, add/remove) with Zod errors inline and a "Default" `Switch`. | FR-16 |
+| `courses/[courseId]/gradebook/settings/page.tsx` | Category rows (name, weight, drop lowest, order), a live `Σ weights / 100` `Chip` (error colour ≠ 100, Save disabled), and a scale `Select` ("School default" = null). | FR-17 |
+| `courses/[courseId]/gradebook/page.tsx` + `src/components/gradebook/GradebookGrid.tsx` | The single client component that owns the DataGrid (ADR-4, R7). Term `Select`, `columnGroupingModel` by category, custom `renderHeader` (title, due date, max, source icon), `renderCell` (score / EX / M red / — / late `AccessTime` icon), and `isCellEditable` = MANUAL only. Editing runs through `renderEditCell` + `onCellKeyDown` (digits, E, M, Delete, Enter/arrows), then `processRowUpdate` → PUT, `onProcessRowUpdateError` → per-cell error, and `hideFooter`. There are **no pinned columns**. Toolbar: "Add manual item", "Export CSV", "Settings". | FR-18–FR-25, NFR-8 |
+| `AddManualItemDialog`, `TermOverrideDialog`, `ItemStatsDialog` | Dialogs. Stats (average, median, high, low) are computed client-side from the payload over counted scores. | FR-22, FR-23, FR-24 |
+| `src/components/gradebook/StudentGradesView.tsx` | Course `Card`s with percent, letter and `gradeColour` `Chip`. `Accordion` expands to items and category subtotals. One component serves three hosts: | FR-26–FR-28 |
+| ↳ `students/[id]/grades/page.tsx` | student tab | FR-26 |
+| ↳ `grades/page.tsx` | STUDENT: self. PARENT: child `Select` from `getAccessibleStudentIds`. | FR-27 |
+| ↳ `courses/[courseId]/grades/page.tsx` | filtered to one course | FR-28 |
+| `admin/report-cards/page.tsx` | Term / grade level / section filters, `DataTable` with status `Chip` and warnings, and "Generate drafts", "Publish all", "Print all" actions. Confirmations use `ConfirmDialog`. | FR-29, FR-30, FR-34, FR-35 |
+| `report-cards/page.tsx` | Homeroom TEACHER: their sections' cards for the selected term | FR-33 |
+| `report-cards/[id]/page.tsx` | Review page: `ReportCardDocument` preview plus homeroom/principal comment fields (disabled per role or when PUBLISHED), and Publish / Unpublish (reason dialog) for ADMIN | FR-32, FR-34 |
+| `report-cards/[id]/print/page.tsx`, `report-cards/print/page.tsx?termId=&…` | Server components rendering `ReportCardDocument` from the **snapshot only**. `GlobalStyles`: `@page { size: A4 portrait; margin: 12mm }`, `@media print` hides the app shell and buttons, each card gets `break-after: page`, and rows get `break-inside: avoid`. A `PrintButton` calls `window.print()`. Bulk print shows filtered PUBLISHED cards only. | FR-35, NFR-11 |
+| `students/[id]/report-cards/page.tsx` | List of cards, each linking to the print view | FR-36 |
+| Config | `courseTabs`: `gradebook` (ADMIN, TEACHER) and `grades` (STUDENT, PARENT). `studentTabs`: `grades` and `report-cards`. `navigation`: the four entries from A4. | FR-18, FR-26–FR-28, FR-33, FR-36 |
+
+Every page server-checks the role with `requireUser`/`requireRole` plus the same entity assert as its API (NFR-6). It never relies on hidden links.
+
+### 2.5 Scripts and seed
+
+- `package.json`: `"gradebook:backfill": "tsx scripts/gradebook-backfill.ts"`. The script calls `backfillGradebook()` and exits (FR-8, ADR-7).
+- `prisma/seed.ts`:
+  1. scale "Standard A–F" (default)
+  2. Homework 30 (drop 1) / Quizzes 30 / Exams 40 for each 7A course
+  3. `backfillGradebook()`
+  4. ENG-7A manual item "Oral presentation" graded for all enrolled students
+  5. Semester 1 `TermGradeOverride.teacherComment` for MATH-7A and ENG-7A
+  6. `generateDrafts(S1, 7A students)`
+
+  Categories go in before the backfill so seeded assignments and quizzes can be attached to them (FR-41).
 
 ---
 
-## 4. Data Flow
+## 3. Data Flow
 
-### 4.1 Build and publish (FR-6..FR-9, FR-29)
-1. Teacher opens New. The server creates a DRAFT quiz and redirects to `/edit`.
-2. Settings and question edits go through PATCH/POST. Each is Zod-validated on both client and server, and question mutations pass the edit-lock check.
-3. On Publish, the client sends `PATCH {status:'PUBLISHED'}`. The service runs `canPublish(questions)` and throws VALIDATION_ERROR with the list of problems if any. Otherwise it runs `updateMany({where:{id, status:'DRAFT'}, data:{status:'PUBLISHED'}})`.
-4. If that update changed a row (count = 1), the service calls `notify('quiz.published')` for ACTIVE enrollees after commit (A9).
+### 3.1 Source → gradebook sync (write path)
 
-### 4.2 Start or resume (FR-12, FR-13, FR-19, FR-23, FR-28)
 ```
-POST /api/quizzes/:id/attempts  (STUDENT)
-  assertCanViewCourse → quiz PUBLISHED && availableFrom ≤ now < availableUntil, else CONFLICT
-  existing IN_PROGRESS? → ensureNotExpired → still IN_PROGRESS ? return it (resume)
-  count(attempts) ≥ attemptLimit(maxAttempts, accommodation.extraAttempts) → CONFLICT
-  $transaction:
-    id = cuid()                         // generated up front so the shuffle seed is known
-    order = shuffleQuestions ? seededShuffle(questionIds, id) : questionIds by `order`
-    deadlineAt = computeDeadline(now, timeLimitMinutes, accommodation.extraTimeMinutes, availableUntil)
-    create {id, attemptNumber: count+1, questionOrder: order, deadlineAt, maxScore: Σ points}
-  on P2002 (partial index or attemptNumber unique) → re-read IN_PROGRESS attempt and return it
-→ toStudentAttempt(attempt, questions with seededShuffle(options, attempt.id) if shuffleOptions)
+Teacher publishes assignment ─► assignments-service (tx) ─► upsertItemFromAssignment(tx)
+                                                              ├─ termFor(dueAt, courseYearTerms, tz)  → null ⇒ warn+skip
+                                                              └─ GradeItem upsert by sourceId (isVisible only on transition)
+Teacher returns submission  ─► gradeSubmission/bulkReturn/gradeOffline (tx)
+                                  └─ status==RETURNED ? syncSubmissionGrade(tx): Grade upsert {score: finalScore,
+                                                                                  excused: exemption exists}
+Quiz attempt graded         ─► recomputeAttempt → commit → syncQuizGrade(quiz, student)
+                                  └─ GRADED ∧ resultsVisible ∧ ¬isPractice ? getStudentQuizScore → scale to maxPoints → upsert
+Results released / closed   ─► releaseResults | maintenance claim ─► syncQuizGrades(quiz)  (bulk, batched)
 ```
-Option order isn't stored. It is recomputed from the `attempt.id` seed on every load, which makes it deterministic (FR-13). Two tabs get the same attempt id (FR-19).
 
-### 4.3 Autosave hot path (FR-15, FR-16, NFR-2)
+Because unreleased scores are **never written** into `Grade`, privacy holds at the storage layer as well as in serializers (NFR-5, layer 1 of 3).
+
+Quiz scaling: `score = result.score / result.maxScore × GradeItem.maxPoints`, where `maxPoints = quiz maxScore`, in Decimal with `fixed2` at write.
+
+### 3.2 Calculation (pure, `grade-calc.ts`)
+
 ```
-PUT /api/attempts/:id/answers/:questionId   body {response}
-  1 query : attempt {studentId, status, deadlineAt, questionOrder}     (no Quiz/Question load)
-  studentId ≠ user → NOT_FOUND;  questionId ∉ questionOrder → NOT_FOUND
-  status ≠ IN_PROGRESS → CONFLICT
-  now > deadlineAt + 30s → submitAttempt(id,{auto:true}); throw CONFLICT('Time is up')
-  1 query : quizAnswer.upsert({attemptId_questionId}, {response})
-→ { data: { questionId, savedAt } }      // no grading data (NFR-1)
+input: { items[], grades by itemId, categories[], bands, override?, now }
+counted(item) = item.isVisible ∧ ¬grade.excused ∧ (grade.score ≠ null ∨ (grade.missing ∧ item.dueAt ∧ now > item.dueAt))
+earned = score ?? 0
+per category: sort counted by pct asc (tie: dueAt, id) → drop min(dropLowest, n−1) → Σearned/Σmax×100
+course: categories present with ≥1 counted ⇒ Σ(w·pct)/Σw   (Uncategorised w = 0, A8)
+        no categories / none counted       ⇒ Σearned/Σmax×100 over all counted
+        nothing counted                    ⇒ percent = null, letter = null ("—")
+percent = round half-up to 1 dp (only here) → letter = first band with percent ≥ minPercent
+override: percent? → replaces percent (letter re-derived unless letter set, A12); letter? → replaces letter only
 ```
-The path is two indexed statements, well under the 50 ms budget at 300 concurrent students. It is idempotent, so localStorage replays are safe.
 
-### 4.4 Submit, auto-submit and grading (FR-17, FR-18, FR-24, FR-25)
+The output per student is `{ categories: [{id, name, weight, percent, earned, possible, droppedItemIds}], percent, letter, descriptor, computedPercent, computedLetter, overridden }`. The gradebook, the student views and report-card generation all call this **one** function, which guarantees FR-15 / AC-1 (78.0% C+ in both places).
+
+### 3.3 Gradebook read (NFR-2: 35×80 < 800 ms)
+
+`GET gradebook` → `assertCanManageCourse` → `load.ts`:
+
+1. active enrollments + students, sorted by last name
+2. items `(courseId, termId)`
+3. grades for those item ids
+4. categories
+5. override rows + course scale or default
+
+Then two lookup queries for click-through and late flags: `Submission {id, isLate}` by `assignmentId in` and `QuizAttempt {id}` by `quizId in`. That's seven indexed queries in total. The pure calc runs for each student in memory, and the response is one denormalised payload. The client builds the columns, and the grid virtualises rows and columns.
+
+### 3.4 Manual grade edit
+
 ```
-submitAttempt(attemptId, {auto}):   $transaction
-  claimed = updateMany({id, status:'IN_PROGRESS'} → {status:'SUBMITTED', submittedAt: now, autoSubmitted: auto})
-  claimed.count = 0 → return current attempt (already submitted: idempotent, race-safe)
-  load questions + answers; for every questionId in questionOrder:
-     answer missing → create {response:null}
-     {pointsAwarded,isCorrect} = gradeAnswer(question, response)     // ESSAY → null,null; unanswered → 0,false
-  recomputeAttempt(tx, attemptId)   → score = Σ, status = NEEDS_GRADING | GRADED
+cell edit ─► processRowUpdate ─► PUT /api/grade-items/:id/grades/:studentId
+   service (tx): load old grade → reject non-comment fields if item.source ≠ MANUAL (FR-9)
+                 → upsert → audit('grade.update', {old, new})
+   after commit: old.score == null ∧ new.score ≠ null ∧ MANUAL ⇒ notifyStudentAndParents('grade.posted')  (A9)
+   response: updated grade + recomputed student row (so the term % cell refreshes)
 ```
-Callers:
-- the submit POST (`auto:false`)
-- the deadline branch of saveAnswer
-- `ensureNotExpired` on GET attempt, start/resume, the player page and the teacher grade/list loads (FR-18, lazy)
-- `autoSubmitExpiredAttempts` (FR-18, batch)
 
-An unanswered ESSAY gets `pointsAwarded = 0` and still needs review: the A8 predicate keys on `gradedById`, so the teacher confirms it.
+On error the client rolls back the optimistic value and flags the cell.
 
-Manual grading:
-1. `PUT …/grade` validates `points ≤ question.points` and `points % 0.5 = 0`, then sets `pointsAwarded`, `isCorrect = points == question.points`, `feedback` and `gradedById`.
-2. It runs `recomputeAttempt`, which sets GRADED when nothing still needs review (FR-25), and writes `audit('quizAnswer.grade')` after commit (FR-38).
-3. If the attempt became GRADED and the quiz is IMMEDIATELY, nothing is sent (FR-30).
+### 3.5 Report card lifecycle
 
-### 4.5 Results visibility and notification (FR-20, FR-21, FR-30)
-`resultsVisible(quiz, attempt, now)`:
-- the attempt must be submitted
-- **IMMEDIATELY**: true
-- **AFTER_CLOSE**: `now ≥ availableUntil`
-- **MANUAL**: `resultsReleasedAt != null`
+```
+generate {termId, studentIds} (ADMIN)
+  ├─ load once: students (+section, homeroom, gradeLevel), school settings, term+year, default scale,
+  │             enrollments for those students in courses of the term's year,
+  │             load.ts for all those courseIds (in-filters), attendance getReport(term range) ×1
+  ├─ compute in memory: grade-calc per (student, course) → buildSnapshot(v:1)
+  └─ write (chunks of 100, tx): createMany(skipDuplicates) for new;
+                                updateMany({ where:{ id, status:'DRAFT' }, data:{ snapshot, generatedAt } }) for existing
+     PUBLISHED rows are filtered out by the WHERE clause, which enforces immutability (FR-31 / AC-8)
+publish {ids}   ─► updateMany({ id in ids, status:'DRAFT' } → PUBLISHED, publishedAt, publishedById)
+                   → audit('reportCard.publish') → after commit notify report_card.published per card
+unpublish {ids, reason} ─► PUBLISHED → DRAFT, clear publishedAt/ById, audit('reportCard.unpublish', {old, new, reason})
+print            ─► reads snapshot only; never recomputes
+```
 
-Scores also need status GRADED to display a final score. A NEEDS_GRADING attempt shows "awaiting grading" for the pending questions.
+Nothing in `src/server/gradebook/` imports `src/server/report-cards/` or writes `ReportCard`. Grade edits therefore cannot touch snapshots.
 
-- **MANUAL release:** `POST /release-results` runs `updateMany({id, resultsVisibility:'MANUAL', resultsReleasedAt:null} → now)`. If count = 1, it calls `notifyStudentAndParents` for students with a submitted attempt, then `audit('quiz.release_results')`. A repeat call is a no-op.
-- **AFTER_CLOSE (maintenance):** `sendAfterCloseResultsReleased(now)` finds quizzes where `resultsVisibility = AFTER_CLOSE AND availableUntil ≤ now AND resultsReleasedAt IS NULL`. For each one it claims with `updateMany(... resultsReleasedAt: null → now)`, and only when count = 1 does it notify. That makes it idempotent across concurrent cron calls (A6, FR-35).
-- **IMMEDIATELY:** no notification.
+**Snapshot v1 shape**, owned by `snapshotSchema`:
 
-### 4.6 Maintenance (FR-18, FR-35)
-`autoSubmitExpiredAttempts(now)` finds attempts with `status = IN_PROGRESS AND deadlineAt < now − 30s`, takes up to 200 per call, and runs `submitAttempt(id, {auto:true})` on each. The per-call cap keeps a cron tick bounded; the next tick and the lazy path cover any remainder.
+```
+{ v: 1,
+  school:     { name, logoUrl },
+  student:    { name, admissionNumber, gradeLevel, section, homeroomTeacher },
+  term:       { name, startDate, endDate, academicYear },
+  courses:    [{ subject, code, teacher, percent, letter, descriptor, teacherComment }],
+  attendance: { rate, absences, lates, ...counts },
+  scale:      { name, bands } }
+```
 
-### 4.7 Score export to PRD-11 (FR-22, FR-33)
-`getStudentQuizScore(quizId, studentId)` returns `{score, maxScore, percent, isPractice, attemptsCounted} | null`, computed by `applyScoringPolicy` over GRADED attempts only. HIGHEST takes the max percent, LATEST takes the latest `submittedAt`, AVERAGE takes the Decimal mean, all with fixed2. It returns null when there are no GRADED attempts. There is no endpoint; PRD-11 imports it.
+`attendance.rate` uses the same formula the existing attendance report consumers use; dev must not invent a new one (B13). Each course's letter uses that course's effective scale. The legend shows the default scale and also lists any course-specific scale used.
 
-### 4.8 Analytics (FR-26, FR-27)
-- **Input:** submitted attempts with their answers, aggregated in memory (class sizes are small).
-- **Summary stats:** count, mean, median, max, min, and mean of `submittedAt − startedAt`.
-- **Histogram:** 10 buckets by percent, with 100% placed in the last bucket.
-- **Per question:** % with `isCorrect = true`, average `pointsAwarded`, and for choice types an option-id count, with the most-chosen wrong option marked.
-- **CSV:** `toCsv` rows of student, attemptNumber, score, then one points column per question in quiz order.
+**Missing-data warnings (FR-29)** are computed in the same batched pass:
+
+- a count of courses with eligible-but-ungraded items (visible, past due, no score, not missing, not excused)
+- courses with no `teacherComment` override for the student
+
+### 3.6 Student/parent read (privacy, NFR-5 layers 2 and 3)
+
+`GET /api/students/:id/grades`: `assertCanViewStudent` → `load.ts` with `isVisible = true` filtered **in the query** → calc → serializer emits only whitelisted fields (no `updatedById`, no hidden items).
+
+Report-card endpoints apply `assertCanViewReportCard`. STUDENT and PARENT pass only if `card.status === 'PUBLISHED'` and they're the student or a linked parent. Anyone else unauthorised gets **NOT_FOUND**, so a 7B student can't tell that Sam's card exists (AC-7).
 
 ---
 
-## 5. Security and access (NFR-1, NFR-5)
+## 4. Access Control Matrix (NFR-6)
 
-| Actor | Can |
-|---|---|
-| ADMIN / course teacher | All manage routes for their courses, any attempt in those courses |
-| STUDENT (ACTIVE enrolled) | List and take PUBLISHED quizzes; read and write **own** attempts; results only via `toStudentResult` |
-| PARENT (linked to an enrolled student) | Read-only: completed results of linked children, only when `resultsVisible` |
-
-- Student-path Prisma queries never `select` `correct` or `explanation`. The serializers add those fields back only when `resultsVisible && showCorrectAnswers` (defence in depth).
-- The answer-PUT response carries no grading data.
-- Inaccessible ids return NOT_FOUND, not FORBIDDEN, so their existence isn't revealed.
-- Test: a serializer unit test walks the output recursively and asserts no `correct` key exists before visibility (AC-7).
+| Action | ADMIN | TEACHER | STUDENT | PARENT |
+|---|---|---|---|---|
+| Read scales | ✓ | ✓ | ✓ | ✓ |
+| Write scales | ✓ | — | — | — |
+| Categories GET | ✓ | view course | view course | view course |
+| Categories PUT | ✓ | teaches course | — | — |
+| Gradebook / items / grades / overrides | ✓ | teaches course (`assertCanManageCourse`) | — | — |
+| Student grades | ✓ | teaches student or is homeroom (existing student-access) | self | linked child |
+| Report cards list / generate | list + generate | list: own homeroom sections | own published (via `studentId`) | child's published |
+| Report card GET | ✓ | teaches any course of the student, or is homeroom | self, PUBLISHED only | linked, PUBLISHED only |
+| `homeroomComment` PATCH | ✓ | homeroom teacher of the student's section, DRAFT only | — | — |
+| `principalComment` PATCH | ✓ (DRAFT only) | — | — | — |
+| Publish / unpublish | ✓ | — | — | — |
 
 ---
 
-## 6. Testing map (NFR-8, ADR-8)
+## 5. Cross-cutting
 
-| Level | Target | Reqs |
+- **Audit (NFR-4):**
+  - required: `grade.update` (manual, and comment edits on synced grades), `grade.markMissing`, `termOverride.upsert`, `reportCard.unpublish` (with reason), each carrying `{old, new}`
+  - extra: `reportCard.publish`, `gradingScale.create/update/delete`, `gradeCategories.replace`
+- **Notifications (FR-38):** sent after commit, using `notify()`, which never throws, so a notification failure can't roll back a grade.
+- **Errors:** `AppError` codes `VALIDATION_ERROR` (weights ≠ 100, bad bands, non-MANUAL field edit, mark-missing before due), `CONFLICT` (scale in use, editing a PUBLISHED card), `NOT_FOUND`, `FORBIDDEN`.
+- **Logging:** `logger` only, never `console.log` (NFR-9).
+- **Timezone (NFR-10):** all date rules go through `getSchoolTimezone()` + `schoolToday`. UI dates use `DateDisplay`.
+- **Out of scope (NFR-13):** no GPA computation, class rank, transcripts or standards-based grading.
+
+---
+
+## 6. Test Plan Mapping (NFR-12)
+
+| Layer | File | Covers |
 |---|---|---|
-| Unit (Vitest, no DB) | `gradeAnswer` per type, incl. the FR-2 example ({A,B} → 0, {A} → 2) and `' Photosynthesis '`; `needsReview`; `computeDeadline` (timed, untimed, extra time, capped by availableUntil); `attemptLimit`; `applyScoringPolicy` ×3; `seededShuffle` determinism; `resultsVisible` ×3; `canPublish`; serializers (no `correct` key) | FR-3, FR-4, FR-13, FR-20, FR-22, FR-23, FR-9, NFR-1 |
-| Integration (Vitest + test DB) | Autosave returns 409 after deadline + 30 s and the attempt is auto-submitted; GET auto-submits an expired attempt; regrade changes auto-graded answers but not manual ones; concurrent start returns one attempt; double submit is a no-op | FR-16, FR-18, FR-10, FR-19, FR-17 |
-| E2E (Playwright, 1 spec) | Teacher builds a 4-question quiz (incl. an essay) and publishes it → student starts, answers, `page.reload()`, answers persist, submits → teacher grades the essay → student sees results. Includes an axe check on the player | NFR-8, NFR-3, FR-15 |
-
-`npm run lint && npm run typecheck && npm test` must stay green. QA's banned-import scan covers NFR-4.
+| Unit | `src/server/gradebook/grade-calc.test.ts` | no categories, empty categories, Uncategorised (A8), drop lowest (AC-2) and never-drop-all, missing vs ungraded vs excused (AC-5), past-due boundary, overrides (letter-only AC-6, percent-only A12), rounding 89.95 → 90.0 → A−, 77.0 → C+, the FR-15 golden 78.0 C+ |
+| Unit | `term-placement.test.ts` | containment at tz day boundaries, current-term fallback, null |
+| Integration | `gradebook-sync.test.ts` | return → Grade, save-without-return → none (AC-3), exemption on/off, quiz GRADED + IMMEDIATE / AFTER_CLOSE / MANUAL release, practice skipped, archive hides, delete removes, teacher hide survives re-save (A7) |
+| Integration | `backfill.test.ts` | run twice → identical counts |
+| Integration | `report-cards.test.ts` | generate → publish → edit grade → snapshot unchanged (AC-8), regenerate skips PUBLISHED, 7B student gets NOT_FOUND (AC-7), notifications sent |
+| Integration | `perf` (optional, CI-skippable) | 35×80 gradebook < 800 ms, 600×8 generation < 30 s |
+| Playwright | `gradebook.spec.ts`, `report-cards.spec.ts` | keyboard edits (digits, E, M, Delete, Enter/arrows), admin generate + publish, parent opens print view with sidebar hidden under print media |
 
 ---
 
@@ -285,52 +305,58 @@ Scores also need status GRADED to display a final score. A NEEDS_GRADING attempt
 
 | Req | Design element(s) |
 |---|---|
-| FR-1 | §2 migration `add_quizzes`; schema models/enums exactly per PRD; relations and indexes only |
-| FR-2 | §3.2 `src/lib/validators/quiz.ts` |
-| FR-3 | `grading.ts` `gradeAnswer` (choice rules, partial credit) |
-| FR-4 | `grading.ts` `normalizeShortAnswer` + `needsReview`; manual override §4.4 |
-| FR-5 | `gradeAnswer` ESSAY → null; `correct.guidance` server-only |
-| FR-6 | `/edit` page, `QuizSettingsPanel`, `quizSettingsSchema` superRefine |
-| FR-7 | `QuestionList` (dnd-kit + MUI), `QuestionEditor`, questions/reorder routes |
-| FR-8 | Builder points total; `QuizPlayer mode="preview"` (A10) |
-| FR-9 | `canPublish`; DRAFT→PUBLISHED conditional update §4.1 |
-| FR-10 | Edit lock in `quiz-service`; `regradeQuiz`; `/regrade` route |
-| FR-11 | `course-tabs.ts` entry; `listCourseQuizzes` role-shaped; `CourseQuizzesView`; A2 |
-| FR-12 | `/quizzes/[quizId]/take` start screen + ConfirmDialog |
-| FR-13 | `startOrResumeAttempt`, `seededShuffle`, `computeDeadline` §4.2 |
-| FR-14 | `QuizPlayer` layout, navigator, sticky timer |
-| FR-15 | `useAutosave` hook; answer PUT §4.3 |
-| FR-16 | `saveAnswer` deadline + 30 s → auto-submit + CONFLICT |
-| FR-17 | `submitAttempt` §4.4; submit route |
-| FR-18 | `ensureNotExpired` (lazy) + `autoSubmitExpiredAttempts` §4.6 |
-| FR-19 | Partial unique index §2; P2002 resume §4.2; localStorage merge on mount |
-| FR-20 | `resultsVisible`; `releaseResults`; result page placeholder text |
-| FR-21 | `toStudentResult`; result page |
-| FR-22 | `getStudentQuizScore` + `applyScoringPolicy` §4.7 |
-| FR-23 | `attemptLimit`; start CONFLICT §4.2 |
-| FR-24 | `/grade` page, `QuizGradingWorkspace`, grade route |
-| FR-25 | `recomputeAttempt` |
-| FR-26 | `analytics.ts`; `/analytics` page; x-charts BarChart |
-| FR-27 | Per-question stats; `analyticsCsv` via `toCsv` |
-| FR-28 | `upsertAccommodation`; accommodations route; feeds `computeDeadline`/`attemptLimit`; A7 |
-| FR-29 | `types.ts` `quiz.published`; notify on DRAFT→PUBLISHED (A9) |
-| FR-30 | `types.ts` `quiz.results_released`; release + maintenance claim §4.5 (A6) |
-| FR-31 | Quiz/question route files §3.3 |
-| FR-32 | Attempt route files §3.3 |
-| FR-33 | `isPractice` in `getStudentQuizScore`; A4 |
-| FR-34 | Reuse `course-access.ts`; `access.ts` `assertCanAccessAttempt` |
-| FR-35 | Two calls in `internal/email/dispatch/route.ts`; idempotent via status guard and claim |
-| FR-36 | `prisma/seed.ts` three quizzes |
-| FR-37 | No work: no sidebar entry (A1) |
-| FR-38 | `audit()` in grade, regrade, release, accommodation service functions |
-| FR-39 | MarkdownEditor/MarkdownView + FileUpload; `'quiz'` file context |
-| NFR-1 | `serializers.ts`, student-path selects, serializer unit test §5 |
-| NFR-2 | Composite PK upsert; 2-query hot path §4.3 |
-| NFR-3 | Native MUI Radio/Checkbox; aria-live at 5/1 min; keyboard reorder fallback; axe in e2e |
-| NFR-4 | MUI-only component list §3.4; mui-mcp lookup is a dev gate (ADR-7) |
-| NFR-5 | requireUser/requirePageRole + course/attempt checks on every handler/page §5 |
-| NFR-6 | `withHandler`/Zod/`ok`/`paginated`; error mapping §3.3; UTC + school tz display |
-| NFR-7 | `src/server/quiz/` layout; reuse list §3.1; zero new deps |
-| NFR-8 | Testing map §6 |
-| NFR-9 | Builder defaults (SINGLE_CHOICE), Enter adds option, Duplicate, inline editing |
-| NFR-10 | Scope fence §1.3 |
+| FR-1 | §2.1 migration: PRD FR-1 models verbatim, plus indexes and the partial unique default index |
+| FR-2 | §2.1 `Course.gradingScaleId`, `Assignment/Quiz.categoryId` (SetNull). §2.2 validator and editor `Select` hooks. |
+| FR-3 | `gradebook-sync.upsertItemFromAssignment/Quiz`, `term-placement.termFor` (A6, A10). Hooks in §2.2. |
+| FR-4 | `hideItemForSource`, `deleteItemForSource` (same transaction). A7, A15. |
+| FR-5 | `syncSubmissionGrade` from `gradeSubmission` / `bulkReturn` / `gradeOffline`, only when RETURNED (§3.1) |
+| FR-6 | `setExemption` → `syncSubmissionGrade` (A1) |
+| FR-7 | `syncQuizGrade` after `recomputeAttempt` callers, `syncQuizGrades` on release and close, existing `getStudentQuizScore` + `resultsVisible` (A2) |
+| FR-8 | `gradebook/backfill.ts`, `scripts/gradebook-backfill.ts`, npm script, seed call (§2.5) |
+| FR-9 | `putGrade` / `updateItem` reject non-comment and non-`isVisible` fields on synced items. Grid `isCellEditable`. |
+| FR-10 | `grade-calc.ts` `counted()` predicate (§3.2) |
+| FR-11 | `applyDropLowest`, `categoryPercent` |
+| FR-12 | course aggregation with renormalised weights, Uncategorised bucket, points fallback (A8) |
+| FR-13 | `roundHalfUp1` + `letterFor`, `effectiveScale` (A3) |
+| FR-14 | `applyOverride` (A12), `putTermOverride` |
+| FR-15 | single shared calc for the gradebook and student views. Golden unit test. |
+| FR-16 | `scales-service`, `/admin/grading-scales`, `bandsSchema`, partial unique index (A11) |
+| FR-17 | `categories-service`, gradebook settings page with live sum, scale select |
+| FR-18 | `GradebookGrid` (MIT DataGrid, column groups, virtualisation, sticky header), `getGradebook`, `courseTabs.gradebook` |
+| FR-19 | `GradebookGrid` `renderCell`. The payload carries `isLate`. |
+| FR-20 | `renderEditCell` + `onCellKeyDown` + `processRowUpdate`, PUT grade, optimistic update with per-cell error (§3.4) |
+| FR-21 | payload `submissionId` / `attemptId` → links to the existing grading and attempt pages |
+| FR-22 | `AddManualItemDialog`, `POST /api/courses/[id]/grade-items`, `createManualItem` |
+| FR-23 | `TermOverrideDialog`, `PUT term-overrides`, `termOverrideSchema` (≤ 1000) |
+| FR-24 | column menu: `PATCH isVisible`, `POST mark-missing`, `ItemStatsDialog` |
+| FR-25 | `exportGradebookCsv` via `toCsv`, `?format=csv` |
+| FR-26 | `StudentGradesView`, `studentTabs.grades`, `gradeColour` |
+| FR-27 | `/grades` page with parent child select, nav entry (A4) |
+| FR-28 | `courses/[courseId]/grades`, `courseTabs.grades` |
+| FR-29 | `/admin/report-cards`, `listReportCards` with warnings (§3.5) |
+| FR-30 | `generateDrafts`, `buildSnapshot` v1, attendance `getReport` |
+| FR-31 | DRAFT-only `updateMany`. Gradebook never writes ReportCard (§3.5). |
+| FR-32 | `report-cards/[id]` review page, `patchComments`, field-level access (§4, A13) |
+| FR-33 | `/report-cards` homeroom list, TEACHER nav entry |
+| FR-34 | `publish` / `unpublish`, notify after commit, audit with reason (A13) |
+| FR-35 | print pages, `ReportCardDocument`, `@page` A4 + `@media print` GlobalStyles, `PrintButton` |
+| FR-36 | `studentTabs['report-cards']`, `listForStudent` (PUBLISHED-only for student/parent) |
+| FR-37 | `report-cards/access.assertCanViewReportCard` (NOT_FOUND for others) |
+| FR-38 | `types.ts` registrations, `grade.posted` on first score (A9), `report_card.published` |
+| FR-39 | §2.3 route table: `withHandler` → `validators/gradebook.ts` → services, existing course-access |
+| FR-40 | `categories-service.replaceCategories` (transaction, `dec(sum).eq(100)`) |
+| FR-41 | `prisma/seed.ts` sequence (§2.5) |
+| FR-42 | `student-grades-service` (visible-only query + whitelist serializer) |
+| NFR-1 | `grade-calc.ts` pure Decimal, single final rounding, unit matrix (§6) |
+| NFR-2 | `load.ts` 7 indexed queries, in-memory calc, DataGrid virtualisation, `GradeItem(courseId, termId)` index |
+| NFR-3 | batched `load.ts` with `in` filters, one attendance groupBy, chunked writes (§3.5) |
+| NFR-4 | `audit()` calls listed in §5 with `{old, new}` |
+| NFR-5 | three layers: sync gating (§3.1), visible-only serializer (§3.6), PUBLISHED-only card guard |
+| NFR-6 | §4 matrix. Every route and server page calls `requireUser`/`requireRole` plus the entity asserts. |
+| NFR-7 | §2.4 MUI-only components looked up via mui-mcp, `useToast`, `ConfirmDialog`/`Dialog`, `Autocomplete` |
+| NFR-8 | `GradebookGrid` MIT props only, no pinned columns |
+| NFR-9 | new code only in `src/server/gradebook/` and `src/server/report-cards/`, one-line hooks, reuse table (§2.2), `logger` |
+| NFR-10 | `term-placement` (tz dates), instant past-due (A5), `DateDisplay` |
+| NFR-11 | A4 `@page`, print media rules, `break-after` / `break-inside` |
+| NFR-12 | §6 test plan |
+| NFR-13 | `gpa` stored only. No rank or transcript components. |

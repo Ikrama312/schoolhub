@@ -13,4 +13,7 @@ export const studentTabs: StudentTab[] = [
   { key: 'attendance', label: 'Attendance', href: (id) => `/students/${id}/attendance`, roles: ALL_ROLES },
   // PRD-09 FR-41. No tab bar renders studentTabs yet, so the page is reachable by URL only.
   { key: 'assignments', label: 'Assignments', href: (id) => `/students/${id}/assignments`, roles: ALL_ROLES },
+  // PRD-11 FR-26 / FR-36
+  { key: 'grades', label: 'Grades', href: (id) => `/students/${id}/grades`, roles: ALL_ROLES },
+  { key: 'report-cards', label: 'Report cards', href: (id) => `/students/${id}/report-cards`, roles: ALL_ROLES },
 ];

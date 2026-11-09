@@ -1,314 +1,484 @@
 {
- "today": "2026-11-09T08:06:05.259Z",
+ "today": "2026-11-09T15:06:30.325Z",
  "results": {
-  "teacher-course-quizzes-tab": {
+  "teacher-gradebook-no-terms": {
    "ok": true,
    "status": 200,
-   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes",
-   "quizzesTab": 1,
-   "headers": [
-    "Title",
-    "Status",
-    "Window",
-    "Attempts",
-    "Average",
-    "Needs grading",
-    ""
+   "finalUrl": "/courses/cmw9e9bz2000dgsa1qgujzpe4/gradebook",
+   "text": "UIV Maths\n\nuiv-sh11\n\nTeachers: Hal Homeroom\n\nSection uiv-sh11\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nGRADEBOOK\nThis course’s academic year has no terms yet. An administrator needs to add terms before grades can be recorded."
+  },
+  "teacher-gradebook-grid": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw9e9bz2000dgsa1qgujzpe4/gradebook",
+   "tabs": [
+    "OVERVIEW",
+    "ROSTER",
+    "ASSIGNMENTS",
+    "QUIZZES",
+    "ATTENDANCE",
+    "GRADEBOOK"
    ],
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\nNEW QUIZ\n​\n​\nTitle\nStatus\nWindow\nAttempts\nAverage\nNeeds grading\nUIV Unit 1 test\nPUBLISHED\n11 Nov 2026, 03:06 – 12 Nov 2026, 03:06\n0\n—\n0\nUIV Draft quiz\nDRAFT\n10 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n0\n—\n0\nUIV Fractions check\nPUBLISHED\n8 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n1\n58.3%\n0\nAnalytics\nUIV Manual-release quiz\nPUBLISHED\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n1\n100%\n0\nAnalytics\nUIV Practice sprint\nPUBLISHED\nPractice\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n0\n—\n0\nUIV Decimals quick check\nCLOSED\n4 Nov 2026, 03:06 – 8 Nov 2026, 03:06\n1\n28.6%\n0\nAnalytics\n\nRows per page:\n\n20\n\n1–6 of 6",
+   "groupHeaders": [
+    "",
+    "Homework (40%)",
+    "Exams (60%)",
+    "Averages"
+   ],
+   "headers": [
+    "",
+    "Homework (40%)",
+    "Exams (60%)",
+    "Averages",
+    "Student",
+    "UIV Essay 5 Nov · /10",
+    "HW one 6 Nov · /20",
+    "HW two 7 Nov · /10",
+    "Exam 8 Nov · /100",
+    "UIV Hidden check 8 Nov · /100",
+    "Homework %",
+    "Exams %",
+    "Term"
+   ],
+   "rowNames": [
+    "Aardvark, Sam",
+    "Zebra, Zed"
+   ],
+   "cells": {
+    "s1hw1": "—",
+    "s1essay": "—",
+    "s2essay": "8",
+    "s1hidden": "10"
+   },
+   "lateIcon": 1,
+   "sourceIcons": {
+    "assignment": 1,
+    "manual": 4,
+    "hidden": 1
+   },
+   "pinnedEls": 0,
+   "termS1": "—",
+   "termS2": "80.0% B-",
    "axe": [
     "empty-table-header (minor) x1"
    ]
   },
-  "teacher-new-quiz": {
+  "teacher-gradebook-keyboard-edit": {
    "ok": true,
-   "status": 200,
-   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8rdw00037g3ud3zelbum/edit",
-   "redirectedTo": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8rdw00037g3ud3zelbum/edit",
-   "createdStatus": "DRAFT",
-   "createdTitle": "Untitled quiz"
-  },
-  "teacher-builder-add-questions": {
-   "ok": true,
-   "emptyHasChecklist": true,
-   "previewDisabledWhenEmpty": null,
-   "counts": [
-    "Multiple choice: 2",
-    "True / false: 3",
-    "Short answer: 4",
-    "Essay: 5"
+   "termS1": "78.0% C+",
+   "catsS1": [
+    "90.0",
+    "70.0"
    ],
-   "header": "5 questions · 5 points total",
-   "problems": [],
-   "publishDisabled": false,
-   "perQuestion": {
-    "drag": 5,
-    "duplicate": 5,
-    "delete": 5,
-    "move": 10
+   "afterEM": {
+    "hw1": "EX",
+    "hw2": "M",
+    "hw2Color": "rgb(185, 28, 28)"
+   },
+   "afterDel": "—",
+   "termS2": "80.0% B-",
+   "dbS1Exam": "70",
+   "dbS2Hw1": {
+    "studentId": "cmw9e9byq0003gsa13d1nfy7x",
+    "gradeItemId": "cmw9e9eea000rgsa19f96opjc",
+    "score": null,
+    "excused": true,
+    "missing": false
+   },
+   "auditGradeUpdates": 6
+  },
+  "teacher-gradebook-invalid-score": {
+   "ok": true,
+   "cellText": "—",
+   "outline": "solid",
+   "alert": [
+    "Score must be between 0 and 10.",
+    ""
+   ],
+   "dbScore": null
+  },
+  "teacher-gradebook-synced-readonly": {
+   "ok": true,
+   "apiStatus": 400,
+   "body": "{\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Only the comment can be changed here. Edit this item at its source.\"}}"
+  },
+  "teacher-gradebook-column-menu": {
+   "ok": true,
+   "menu": [
+    "Hide from students",
+    "Set ungraded to missing",
+    "Item statistics",
+    "Filter",
+    "Hide column",
+    "Manage columns"
+   ],
+   "stats": "Statistics — HW one\nCounted scores\t1\nAverage\t18 / 20\nMedian\t18 / 20\nHigh\t18 / 20\nLow\t18 / 20\nCLOSE",
+   "missingEnabled": true,
+   "s2examAfterMarkMissing": "M",
+   "termS2": "32.0% F"
+  },
+  "teacher-gradebook-hide-show": {
+   "ok": true,
+   "hiddenIconAfterHide": 1,
+   "dbAfterHide": false,
+   "dbAfterShow": true
+  },
+  "teacher-gradebook-add-manual-item": {
+   "ok": true,
+   "fields": [
+    "Title *",
+    "Max points *",
+    "Date"
+   ],
+   "emptyErrors": 4,
+   "created": true,
+   "source": "MANUAL",
+   "termOk": true
+  },
+  "teacher-gradebook-term-override": {
+   "ok": true,
+   "fields": [
+    "Percent",
+    "Teacher comment (appears on the report card)"
+   ],
+   "termAfter": "78.0% B *",
+   "db": {
+    "percent": null,
+    "letter": "B",
+    "comment": "Steady progress this term."
    }
   },
-  "teacher-builder-duplicate-delete": {
+  "teacher-gradebook-csv": {
    "ok": true,
-   "before": "5 questions · 5 points total",
-   "afterDuplicate": "6 questions",
-   "deleteDialog": "Delete question 2?\nCANCEL\nDELETE",
-   "afterDelete": "5 questions"
-  },
-  "teacher-builder-editor": {
-   "ok": true,
-   "editorsFound": 0,
-   "radios": 6,
-   "checkboxes": 1,
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\n\nUntitled quiz\n\nUntitled quiz\nDRAFT\n\n5 questions · 5 points total\n\nPREVIEW AS STUDENT\nPUBLISH\nDELETE\nQUESTIONS\nSETTINGS\nQuestion 1\nSingle choice\n1 pts\nWRITE\nPREVIEW\nQuestion 1 text\nQuestion 1 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nOptions — mark the correct one\n\nOption 1\nOption 1\nOption 2\nOption 2\nADD OPTION\nExplanation (shown with correct answers)\nExplanation (shown with correct answers)\nSAVE QUESTION\nDISCARD CHANGES\nQuestion 2\nTrue / false\n1 pts\nWRITE\nPREVIEW\nQuestion 2 text\nQuestion 2 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nTrue is correct\nFalse is correct\nExplanation (shown with correct answers)\nExplanation (shown with correct answers)\nSAVE QUESTION\nDISCARD CHANGES\nQuestion 3\nShort answer\n1 pts\nWRITE\nPREVIEW\nQuestion 3 text\nQuestion 3 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nAccepted answers (spaces are trimmed; teacher can override)\n\nAccepted answer 1\nAccepted answer 1\nADD ACCEPTED ANSWER\nCase sensitive\nExplanation (shown with correct answers)\nExplanation (shown with correct answers)\nSAVE QUESTION\nDISCARD CHANGES\nQuestion 4\nEssay\n1 pts\nWRITE\nPREVIEW\nQuestion 4 text\nQuestion 4 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nGrading guidance (teachers only)\nGrading guidance"
-  },
-  "teacher-builder-settings": {
-   "ok": true,
-   "labels": {
-    "Title": 1,
-    "Instructions": 2,
-    "Opens": 2,
-    "Closes": 2,
-    "Time limit (minutes)": 1,
-    "Attempts allowed": 1,
-    "Scoring policy": 1,
-    "Results visible": 1,
-    "Practice quiz (not in gradebook)": 1,
-    "Shuffle questions": 1,
-    "Shuffle options": 1,
-    "One question per page": 1,
-    "Show correct answers with results": 1
-   },
-   "accommodationsTable": 1,
-   "accomText": "Student\tExtra minutes (0–300)\tExtra attempts (0–5)\t\nAlex Aardvark\t\n​\n\t\n​\n\tSAVE\nBlake Bell\t\n​\n\t\n​\n\tSAVE\nMorgan Missing\t\n​\n\t\n​\n\tSAVE",
-   "timeLimitErrors": [
-    "Extra time and attempts apply to attempts started after you save — an attempt already in progress keeps its deadline.",
-    "Question duplicated"
+   "href": "/api/courses/cmw9e9bz2000dgsa1qgujzpe4/gradebook?termId=cmw9e9edv000lgsa1e5e6lm2e&format=csv",
+   "status": 200,
+   "contentType": "text/csv; charset=utf-8",
+   "disposition": "attachment; filename=\"uiv-sh11-uiv-sh11_term-gradebook.csv\"",
+   "head": [
+    "Last name,First name,UIV Essay (/10),HW one (/20),HW two (/10),Exam (/100),UIV Hidden check (/100),UIV Oral presentation (/10),Homework %,Exams %,Uncategorised %,Term %,Letter\r",
+    "Aardvark,Sam,,18.00,9.00,70.00,10.00,,90.0,70.0,,78.0,B\r",
+    "Zebra,Zed,8.00,EX,,M,,,80.0,0.0,,32.0,F"
    ]
   },
-  "teacher-builder-preview": {
+  "teacher-gradebook-synced-click": {
    "ok": true,
-   "lockedAlert": [
-    "1 attempt exist. You can still edit question text, explanations and accepted answers; adding, removing, reordering or re-scoring questions is blocked. Use Regrade after editing accepted answers.\nREGRADE"
-   ],
-   "addDisabled": true,
-   "links": {
-    "grade": 1,
-    "analytics": 1
+   "url": "/courses/cmw9e9bz2000dgsa1qgujzpe4/assignments/cmw9e9eei000zgsa1prvnyg7g/grade?studentId=cmw9e9byq0003gsa13d1nfy7x"
+  },
+  "teacher-gradebook-narrow-375": {
+   "ok": true,
+   "scroller": {
+    "sw": 1410,
+    "cw": 325
    },
-   "attemptsBefore": 1,
-   "attemptsAfterPreview": 1,
-   "previewHasNotRecorded": true,
-   "previewText": "Preview as student — nothing is recorded\nUIV Fractions check\nPreview\n\n20:00\n\nNot recorded\nSUBMIT\nQuestion 1 (2 points)\n\nWhich fraction is largest?\n\n1/2\n2/3\n3/4\n2/4\nFLAG FOR REVIEW\nQuestion 2 (4 points)\n\nSelect every fraction equal to one half.\n\n1/2\n2/3\n3/4\n2/4\nFLAG FOR REVIEW\nQuestion 3 (1 point)\n\n5/5 equals 1.\n\nTrue\nFalse\nFLAG FOR REVIEW\nQuestion 4 (1 point)\n\nName the bottom number of a fraction.\n\n​\nFLAG FOR REVIEW\nQuestion 5 (4 points)\n\nExplain how you compare two fractions.\n\n​\n\n0 / 10000\n\nFLAG FOR REVIEW"
+   "pageOverflow": false
   },
-  "teacher-draft-publish-checklist": {
-   "ok": true,
-   "problems": [
-    "Before you can publish\nQuestion 1 needs a correct answer."
-   ],
-   "publishDisabled": true
-  },
-  "student-course-quizzes-list": {
+  "teacher-gradebook-settings": {
    "ok": true,
    "status": 200,
-   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes",
-   "groups": [
-    "Available now",
-    "Upcoming",
-    "Missed"
-   ],
-   "draftHidden": true,
-   "startButtons": 3,
-   "overflowX": false,
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nQuizzes\nAvailable now\nUIV Fractions check\n\nCloses 11 Nov 2026, 03:06 · 5 questions · 12 points · 20 min · attempts 0/2\n\nSTART\nUIV Manual-release quiz\n\nCloses 10 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1\n\nSTART\nUIV Practice sprint\nPractice\n\nCloses 10 Nov 2026, 03:06 · 4 questions · 8 points · 1 min · attempts 0/3\n\nSTART\nUpcoming\nUIV Unit 1 test\n\nOpens 11 Nov 2026, 03:06 · 3 questions · 7 points · 45 min · attempts 0/1\n\nMissed\nUIV Decimals quick check\n\nCloses 8 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1"
-  },
-  "student-start-screen": {
-   "ok": true,
-   "status": 200,
-   "finalUrl": "/quizzes/cmw8z8o64000dhusdoqmgih6t/take",
-   "text": "Quizzes\n/\n\nUIV Fractions check\n\nUIV Fractions check\n\nAnswer all questions. Calculators allowed.\n\nQuestions\n5\nTotal points\n12\nTime limit\n20 minutes\nAttempts\n0 used of 2\nCloses\nWed 11 Nov 2026, 03:06\nSTART ATTEMPT",
-   "dialog": "Start this attempt?\n\nThe 20-minute timer starts as soon as you start and keeps running if you leave the page.\n\nCANCEL\nSTART",
-   "overflowX": false
-  },
-  "student-player-answer-autosave": {
-   "ok": true,
-   "timer": "Time remaining 19:59",
-   "pillDuring": [
-    "Saving…"
-   ],
-   "progress": "4 of 5 answered",
-   "radios": 6,
-   "checkboxes": 4,
-   "savedAnswersInDb": 4,
-   "axe": [],
-   "overflowX": false
-  },
-  "student-player-offline-pill": {
-   "ok": true,
-   "localStorageKeys": [
-    "quiz-attempt:cmw8zahflcff8caf75e8a0be0"
-   ],
-   "recoveredPill": "All answers saved",
-   "answersInDbAfterReconnect": 5
-  },
-  "student-player-reload-resume": {
-   "ok": true,
-   "singleChoiceStillChecked": true,
-   "multiChoiceStillChecked": true,
-   "essayValue": "Offline draft of my essay.",
-   "inProgressAttempts": 1
-  },
-  "student-submit": {
-   "ok": true,
-   "confirmDialog": "Submit your answers?\n\nYou have 1 unanswered question. You can't change answers after submitting.\n\nCANCEL\nSUBMIT",
-   "landedOn": "/quizzes/cmw8z8o64000dhusdoqmgih6t/attempts/cmw8zahflcff8caf75e8a0be0",
-   "dbStatus": "NEEDS_GRADING",
-   "dbScore": "8",
-   "text": "UIV Fractions check — attempt 1\n\nSubmitted Mon 9 Nov 2026, 03:07\n\nSome answers are awaiting grading by your teacher. Your final score will appear here.\nQuestion 1\nCorrect\n\n2 / 2\n\nWhich fraction is largest?\n\nYour answer: 3/4\n\nCorrect answer: 3/4\n\nExplanation\n\n3/4 = 0.75.\n\nQuestion 2\nCorrect\n\n4 / 4\n\nSelect every fraction equal to one half.\n\nYour answer: 1/2, 2/4\n\nCorrect answer: 1/2, 2/4\n\nExplanation\n\n2/4 simplifies to 1/2.\n\nQuestion 3\nCorrect\n\n1 / 1\n\n5/5 equals 1.\n\nYour answer: True\n\nCorrect answer: True\n\nQuestion 4\nCorrect\n\n1 / 1\n\nName the bottom number of a fraction.\n\nYour answer: Denominator\n\nCorrect answer: denominator\n\nQuestion 5\nAwaiting grading\n\n— / 4\n\nExplain how you compare two fractions.\n\nYour answer: Find a common denominator, then compare the numerators.\n\nCorrect answer: Common denominator or decimals.\n\nBACK TO QUIZ"
-  },
-  "teacher-grade-by-student": {
-   "ok": true,
-   "status": 200,
-   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8o64000dhusdoqmgih6t/grade",
-   "modes": 2,
-   "needsGradingCards": 1,
-   "saved": "Grade saved",
-   "dbStatusAfter": "GRADED",
-   "dbScoreAfter": "11.5",
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\nUIV Fractions check\n/\n\nGrade\n\nGrade: UIV Fractions check\n1 attempt need grading.\nBY STUDENT\nBY QUESTION\nAttempt\nAlex Aardvark — attempt 1 • needs grading\nAttempt\nNEEDS_GRADING\n\nScore: 8 / 12\n\nWhich fraction is largest?\n\nQuestion 1 · Single choice\nAuto-graded\n\n2 / 2\n\nAnswer: 3/4\n\nPoints\nPoints\n\n0 – 2, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\nSelect every fraction equal to one half.\n\nQuestion 2 · Multiple choice\nAuto-graded\n\n4 / 4\n\nAnswer: 1/2, 2/4\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\n5/5 equals 1.\n\nQuestion 3 · True / false\nAuto-graded\n\n1 / 1\n\nAnswer: True\n\nPoints\nPoints\n\n0 – 1, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\nName the bottom number of a fraction.\n\nQuestion 4 · Short answer\nAuto-graded\n\n1 / 1\n\nAnswer: Denominator\n\nPoints\nPoints\n\n0 – 1, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\nExplain how you compare two fractions.\n\nQuestion 5 · Essay\nNeeds grading\n\n— / 4\n\nAnswer: Find a common denominator, then compare the numerators.\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE"
-  },
-  "teacher-grade-invalid-points": {
-   "ok": true,
-   "helper": "At most 2",
-   "saveDisabled": true,
-   "helperStep": "Points must be a multiple of 0.5"
-  },
-  "teacher-grade-by-question": {
-   "ok": true,
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\nUIV Fractions check\n/\n\nGrade\n\nGrade: UIV Fractions check\nEverything is graded.\nBY STUDENT\nBY QUESTION\nQuestion\nQuestion 5 · Essay\nQuestion\n\nExplain how you compare two fractions.\n\nGuidance: Common denominator or decimals.\nAlex Aardvark — attempt 1\nGraded by teacher\n\n3.50 / 4\n\nAnswer: Find a common denominator, then compare the numerators.\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE\nBlake Bell — attempt 1\nGraded by teacher\n\n3 / 4\n\nAnswer: I turn them into decimals.\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE"
-  },
-  "teacher-analytics": {
-   "ok": true,
-   "status": 200,
-   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8o64000dhusdoqmgih6t/analytics",
-   "svgBars": 12,
-   "perQuestionTable": 1,
-   "csvControl": 1,
-   "csvStatus": 200,
-   "csvHead": [
-    "Student,Attempt,Score,Q1 (2.00),Q2 (4.00),Q3 (1.00),Q4 (1.00),Q5 (4.00)\r",
-    "Alex Aardvark,1,11.50,2.00,4.00,1.00,1.00,3.50\r",
-    "Blake Bell,1,7.00,0.00,2.00,1.00,1.00,3.00"
-   ],
+   "finalUrl": "/courses/cmw9e9bz2000dgsa1qgujzpe4/gradebook/settings",
+   "sum0": "Weights total 100 / 100",
+   "saveEnabled0": true,
+   "scale": "​",
+   "sum1": "Weights total 90 / 100",
+   "saveEnabled1": false,
+   "apiStatusSum90": 400,
    "axe": [
-    "heading-order (moderate) x1",
-    "role-img-alt (serious) x2"
-   ],
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\nUIV Fractions check\n/\n\nAnalytics\n\nAnalytics: UIV Fractions check\nEXPORT CSV\n\nAttempts\n\n2\n\nAverage\n\n9.25\n\nMedian\n\n9.25\n\nHighest\n\n11.50\n\nLowest\n\n7\n\nAvg. time\n\n6m 06s\nScore distribution\nAttempts\n0–10%\n10–20%\n20–30%\n30–40%\n40–50%\n50–60%\n60–70%\n70–80%\n80–90%\n90–100%\nScore (%)\n0\n1\nAttempts\nQuestions\n#\tQuestion\tType\t% correct\tAvg points\tSelected options\n1\tWhich fraction is largest?\tSingle choice\t50%\t1 / 2\t\n1/2: 0\n2/3: 1\n3/4: 1\n2/4: 0\n\n2\tSelect every fraction equal to one half.\tMultiple choice\t50%\t3 / 4\t\n1/2: 2\n2/3: 0\n3/4: 0\n2/4: 1\n\n3\t5/5 equals 1.\tTrue / false\t100%\t1 / 1\t—\n4\tName the bottom number of a fraction.\tShort answer\t100%\t1 / 1\t—\n5\tExplain how you compare two fractions.\tEssay\t0%\t3.25 / 4\t—\nGreen = correct option · red = most chosen wrong option."
+    "color-contrast (serious) x2"
+   ]
   },
-  "teacher-list-after": {
-   "ok": true,
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\nNEW QUIZ\n​\n​\nTitle\nStatus\nWindow\nAttempts\nAverage\nNeeds grading\nUIV Unit 1 test\nPUBLISHED\n11 Nov 2026, 03:06 – 12 Nov 2026, 03:06\n0\n—\n0\nUntitled quiz\nDRAFT\n10 Nov 2026, 04:00 – 17 Nov 2026, 04:00\n0\n—\n0\nUIV Draft quiz\nDRAFT\n10 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n0\n—\n0\nUIV Fractions check\nPUBLISHED\n8 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n2\n77.1%\n0\nAnalytics\nUIV Manual-release quiz\nPUBLISHED\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n1\n100%\n0\nAnalytics\nUIV Practice sprint\nPUBLISHED\nPractice\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n0\n—\n0\nUIV Decimals quick check\nCLOSED\n4 Nov 2026, 03:06 – 8 Nov 2026, 03:06\n1\n28.6%\n0\nAnalytics\n\nRows per page:\n\n20\n\n1–7 of 7"
-  },
-  "teacher-release-manual": {
-   "ok": true,
-   "releaseButton": 1
-  },
-  "student-result-graded": {
+  "teacher-assignment-editor-category": {
    "ok": true,
    "status": 200,
-   "finalUrl": "/quizzes/cmw8z8o64000dhusdoqmgih6t/attempts/cmw8zahflcff8caf75e8a0be0",
-   "hasCorrectAnswer": true,
-   "hasFeedback": true,
+   "finalUrl": "/courses/cmw9e9bz2000dgsa1qgujzpe4/assignments/cmw9e9eei000zgsa1prvnyg7g/edit",
+   "value": "Homework",
+   "opts": [
+    "None",
+    "Homework",
+    "Exams"
+   ]
+  },
+  "teacher-quiz-editor-category": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw9e9bz2000dgsa1qgujzpe4/quizzes/cmw9e9uij0017gsa110zeao8v/edit",
+   "label": ":ri:-label",
+   "opts": [
+    "None",
+    "Homework",
+    "Exams"
+   ]
+  },
+  "admin-grading-scales": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/admin/grading-scales",
+   "rows": [
+    "Name\nDefault\nBands",
+    "Standard A–F\nDefault\nA ≥ 93 · A- ≥ 90 · B+ ≥ 87 · B ≥ 83 · B- ≥ 80 · C+ ≥ 77 · C ≥ 73 · C- ≥ 70 · D+ ≥ 67 · D ≥ 63 · D- ≥ 60 · F ≥ 0"
+   ],
+   "navHasEntries": {
+    "scales": true,
+    "reportCards": true
+   },
+   "bandCount": 12,
+   "axe": [
+    "empty-table-header (minor) x1"
+   ]
+  },
+  "admin-grading-scale-validation": {
+   "ok": true,
+   "initialBands": 2,
+   "errors": [
+    "Letter",
+    "Letter",
+    "Letters must be unique",
+    "Min %",
+    "Min %",
+    "Must be lower than the band above"
+   ],
+   "created": true,
+   "bands": [
+    {
+     "letter": "Pass",
+     "minPercent": 50
+    },
+    {
+     "letter": "Fail",
+     "minPercent": 0
+    }
+   ],
+   "deleted": true,
+   "defaultDeleteDisabled": true
+  },
+  "admin-report-cards-roster": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/admin/report-cards",
+   "rows": [
+    "Student\nAdmission no.\nSection\nStatus\nWarnings",
+    "Aardvark, Sam\nuiv-sh11\nNot generated\n\n1 course has ungraded items; No teacher comment for uiv-sh11-eng",
+    "Zebra, Zed\nuiv-sh11\nNot generated\n\n1 course has ungraded items; No teacher comment for uiv-sh11; No teacher comment for uiv-sh11-eng"
+   ],
+   "buttons": [
+    "GENERATE DRAFTS (2)",
+    "PUBLISH ALL (0)"
+   ],
+   "axe": []
+  },
+  "student-blocked-before-publish": {
+   "ok": true,
+   "rowsAfterGenerate": [
+    "Student\nAdmission no.\nSection\nStatus\nWarnings",
+    "Aardvark, Sam\nuiv-sh11\nDraft\n\n1 course has ungraded items; No teacher comment for uiv-sh11-eng",
+    "Zebra, Zed\nuiv-sh11\nDraft\n\n1 course has ungraded items; No teacher comment for uiv-sh11; No teacher comment for uiv-sh11-eng"
+   ],
+   "snapshotKeys": [
+    "v",
+    "term",
+    "scale",
+    "school",
+    "courses",
+    "student",
+    "attendance",
+    "extraScales"
+   ],
+   "snapshot": "{\"v\":1,\"term\":{\"name\":\"uiv-sh11 term\",\"endDate\":\"2027-01-08\",\"startDate\":\"2026-09-10\",\"academicYear\":\"2026-2027\"},\"scale\":{\"name\":\"Standard A–F\",\"bands\":[{\"gpa\":4,\"letter\":\"A\",\"descriptor\":\"Excellent\",\"minPercent\":93},{\"gpa\":3.7,\"letter\":\"A-\",\"descriptor\":\"Excellent\",\"minPercent\":90},{\"gpa\":3.3,\"letter\":\"B+\",\"descriptor\":\"Very good\",\"minPercent\":87},{\"gpa\":3,\"letter\":\"B\",\"descriptor\":\"Good\",\"minPercent\":83},{\"gpa\":2.7,\"letter\":\"B-\",\"descriptor\":\"Good\",\"minPercent\":80},{\"gpa\":2.3,\"letter\":\"C+\",\"descriptor\":\"Satisfactory\",\"minPercent\":77},{\"gpa\":2,\"letter\":\"C\",\"descriptor\":\"Satisfactory\",\"minPercent\":73},{\"gpa\":1.7,\"letter\":\"C-\",\"descriptor\":\"Satisfactory\",\"minPercent\":70},{\"gpa\":1.3,\"letter\":\"D+\",\"descriptor\":\"Needs improvement\",\"minPercent\":67},{\"gpa\":1,\"letter\":\"D\",\"descriptor\":\"Needs improvement\",\"minPercent\":63},{\"gpa\":0.7,\"letter\":\"D-\",\"descriptor\":\"Needs improvement\",\"minPercent\":60},{\"gpa\":0,\"letter\":\"F\",\"descriptor\":\"Failing\",\"minPercent\":0}]},\"school\":{\"name\":\"SchoolHub Academy\",\"logoUrl\":null},\"courses\":[{\"code\":\"uiv-sh11-eng\",\"letter\":\"F\",\"percent\":\"50.0\",\"subject\":\"Mathematics\",\"teacher\":\"Hal Homeroom\",\"scaleName\":\"Standard A–F\",\"descriptor\":\"Failing\",\"teacherComment\":null},{\"code\":\"uiv-sh11\",\"letter\":\"B\",\"percent\":\"78.0\",\"subject\":\"Mathematics\",\"teacher\":\"Hal Homeroom\",\"scaleName\":\"Standard A–F\",\"descriptor\":\"Good\",\"teacherComment\":\"Steady progress this term.\"}],\"student\":{\"name\":\"Sam Aardvark\",\"section\":\"uiv-sh11\",\"gradeLevel\":\"Grade 6\",\"admissionNumber\":null,\"ho"
+  },
+  "teacher-report-cards-homeroom": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/report-cards",
+   "listText": "Report cards\n\nYour homeroom students. Open a draft to write the homeroom comment.\n\nuiv-sh11 term\nAardvark, Sam\n\nuiv-sh11 · 1 course has ungraded items · No teacher comment for uiv-sh11-eng\n\nDraft\nZebra, Zed\n\nuiv-sh11 · 1 course has ungraded items · No teacher comment for uiv-sh11 · No teacher comment for uiv-sh11-eng\n\nDraft",
+   "navReportCards": true,
+   "homeroomEnabled": true,
+   "principalEnabled": false,
+   "savedHomeroom": "Sam has been a kind and focused member of the class.",
+   "publishButtons": 0
+  },
+  "student-draft-forbidden": {
+   "ok": true,
+   "printStatus": 404,
+   "printUrl": "/report-cards/cmw9ebsqp001b6n7dv2tpcee1/print",
+   "text": "Report cards\n\nSam Aardvark\n\nNo report cards yet\n\nReport cards appear here once the school publishes them.",
+   "apiStatus": 404,
+   "listText": "Report cards\n\nSam Aardvark\n\nNo report cards yet\n\nReport cards appear here once the school publishes them."
+  },
+  "admin-report-card-review-publish": {
+   "ok": true,
+   "homeroomEnabled": true,
+   "principalEnabled": true,
+   "principalSaved": "Well done, Sam.",
+   "previewHas": {
+    "comment": true,
+    "letter": true,
+    "homeroom": true
+   },
+   "preview": "SchoolHub Academy\nReport card — uiv-sh11 term, 2026-2027 (DRAFT)\nStudent\n\nSam Aardvark\n\nAdmission number\n\n—\n\nGrade level\n\nGrade 6\n\nSection\n\nuiv-sh11\n\nHomeroom teacher\n\nHal Homeroom\n\nTerm dates\n\n2026-09-10 – 2027-01-08\n\nCourses\nSubject\tTeacher\t%\tGrade\tComment\nMathematics\nuiv-sh11-eng\n\tHal Homeroom\t50.0\tF\nFailing\n\t\nMathematics\nuiv-sh11\n\tHal Homeroom\t78.0\tB\nGood\n\tSteady progress this term.\nAttendance\nAttendance rate\t—\nAbsences\t0\nLates\t0\nGrading scale\nStandard A–F\n\nA ≥ 93% (Excellent) · A- ≥ 90% (Excellent) · B+ ≥ 87% (Very good) · B ≥ 83% (Good) · B- ≥ 80% (Good) · C+ ≥ 77% (Satisfactory) · C ≥ 73% (Satisfactory) · C- ≥ 70% (Satisfactory) · D+ ≥ 67% (Needs improvement) · D ≥ 63% (Needs improvement) · D- ≥ 60% (Needs improvement) · F ≥ 0% (Failing)\n\nHomeroom teacher’s comment\n\nSam has been a kind and focused member of the class.\n\nPrincipal’s comment\n\nWell done, Sam.\n\nPrincipal — signature and date\nHomeroom teacher — signature and date",
+   "confirmDisabledEmpty": true,
+   "statusAfterUnpublish": "DRAFT",
+   "unpublishAudit": true
+  },
+  "admin-publish-all-and-print-all": {
+   "ok": true,
+   "rows": [
+    "Student\nAdmission no.\nSection\nStatus\nWarnings",
+    "Aardvark, Sam\nuiv-sh11\nPublished\n\n1 course has ungraded items; No teacher comment for uiv-sh11-eng",
+    "Zebra, Zed\nuiv-sh11\nPublished\n\n1 course has ungraded items; No teacher comment for uiv-sh11; No teacher comment for uiv-sh11-eng"
+   ],
+   "notifications": 6,
+   "printAllUrl": "/report-cards/print?termId=cmw9e9edv000lgsa1e5e6lm2e&sectionId=cmw9e9byy0009gsa1oxwr15hi",
+   "articles": 2,
+   "breaks": [
+    "auto/auto",
+    "auto/auto"
+   ],
+   "breaksPrint": [
+    "page/auto",
+    "auto/auto"
+   ],
+   "pdfPages": 2
+  },
+  "student-grades-page": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/grades",
+   "cards": [
+    "UIV English\n\nuiv-sh11-eng · Hal Homeroom\n\n50.0% F\n\nFailing\n\n1 item",
+    "UIV Maths\n\nuiv-sh11 · Hal Homeroom\n\n78.0% B\n\nGood\n\n5 items"
+   ],
+   "chips": [
+    {
+     "label": "Term grade 50.0 percent, F",
+     "cls": "MuiChip-colorError"
+    },
+    {
+     "label": "Term grade 78.0 percent, B",
+     "cls": "MuiChip-colorWarning"
+    }
+   ],
+   "detail": "UIV Maths\n\nuiv-sh11 · Hal Homeroom\n\n78.0% B\n\nGood\n\n5 items\n\nHomework (40%): 90.0%\nExams (60%): 70.0%\nUncategorised: —\nItem\tCategory\tScore\t%\tComment\n\nUIV Essay\n\tHomework\t— / 10\t—\t\n\nHW one\n\tHomework\t18 / 20\t90.0\t\n\nHW two\n\tHomework\t9 / 10\t90.0\t\n\nExam\n\tExams\t70 / 100\t70.0\t\n\nUIV Oral presentation\n\tUncategorised\t— / 10\t—\t",
+   "hiddenLeakUI": false,
+   "hiddenLeakAPI": false,
    "overflowX": false,
-   "text": "UIV Fractions check — attempt 1\n\nSubmitted Mon 9 Nov 2026, 03:07\n\n11.50 / 12\n\n95.8%\n\nQuestion 1\nCorrect\n\n2 / 2\n\nWhich fraction is largest?\n\nYour answer: 3/4\n\nCorrect answer: 3/4\n\nExplanation\n\n3/4 = 0.75.\n\nQuestion 2\nCorrect\n\n4 / 4\n\nSelect every fraction equal to one half.\n\nYour answer: 1/2, 2/4\n\nCorrect answer: 1/2, 2/4\n\nExplanation\n\n2/4 simplifies to 1/2.\n\nQuestion 3\nCorrect\n\n1 / 1\n\n5/5 equals 1.\n\nYour answer: True\n\nCorrect answer: True\n\nQuestion 4\nCorrect\n\n1 / 1\n\nName the bottom number of a fraction.\n\nYour answer: Denominator\n\nCorrect answer: denominator\n\nQuestion 5\nPartly correct\n\n3.50 / 4\n\nExplain how you compare two fractions.\n\nYour answer: Find a common denominator, then compare the numerators.\n\nCorrect answer: Common denominator or decimals.\n\nClear method.\nBACK TO QUIZ"
+   "navHasGrades": false,
+   "axe": [
+    "scrollable-region-focusable (serious) x1"
+   ]
   },
-  "student-list-after": {
-   "ok": true,
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nQuizzes\nAvailable now\nUIV Fractions check\n\nCloses 11 Nov 2026, 03:06 · 5 questions · 12 points · 20 min · attempts 1/2\n\nScore: 11.50 / 12.00 (95.8%)\n\nSTART\nVIEW RESULT\nUIV Manual-release quiz\n\nCloses 10 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1\n\nSTART\nUIV Practice sprint\nPractice\n\nCloses 10 Nov 2026, 03:06 · 4 questions · 8 points · 1 min · attempts 0/3\n\nSTART\nUpcoming\nUIV Unit 1 test\n\nOpens 11 Nov 2026, 03:06 · 3 questions · 7 points · 45 min · attempts 0/1\n\nMissed\nUIV Decimals quick check\n\nCloses 8 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1"
-  },
-  "student-s3-list": {
-   "ok": true,
-   "hasMissed": true,
-   "pendingText": true,
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nQuizzes\nAvailable now\nUIV Fractions check\n\nCloses 11 Nov 2026, 03:06 · 5 questions · 12 points · 20 min · attempts 0/2\n\nSTART\nUIV Practice sprint\nPractice\n\nCloses 10 Nov 2026, 03:06 · 4 questions · 8 points · 1 min · attempts 0/3\n\nSTART\nUpcoming\nUIV Unit 1 test\n\nOpens 11 Nov 2026, 03:06 · 3 questions · 7 points · 45 min · attempts 0/1\n\nCompleted\nUIV Manual-release quiz\n\nCloses 10 Nov 2026, 03:06 · 3 questions · 7 points · attempts 1/1\n\nSubmitted — results will be available later.\n\nVIEW RESULT\nMissed\nUIV Decimals quick check\n\nCloses 8 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1"
-  },
-  "student-manual-pending-result": {
+  "student-course-grades-tab": {
    "ok": true,
    "status": 200,
-   "finalUrl": "/quizzes/cmw8z8o6y001dhusdx0beiciu/attempts/cmw8z8o70001lhusdxzx2yw25",
-   "pending": true,
-   "leaksScore": false,
-   "text": "UIV Manual-release quiz — attempt 1\n\nSubmitted Sat 7 Nov 2026, 03:18\n\nSubmitted — results will be available later.\nBACK TO QUIZ"
-  },
-  "student-pending-api-no-correct": {
-   "ok": true,
-   "attemptStatus": 200,
-   "attemptHasCorrect": false,
-   "quizStatus": 200,
-   "quizHasCorrect": false,
-   "quizHasExplanation": false
-  },
-  "student-one-per-page-timer": {
-   "ok": true,
-   "dialog": "Start this attempt?\n\nThe 1-minute timer starts as soon as you start and keeps running if you leave the page.\n\nCANCEL\nSTART",
-   "timer": "Time remaining 00:59",
-   "timerColor": "rgb(185, 28, 28)",
-   "navLabels": [
-    "Question 1, answered, flagged",
-    "Question 2, unanswered",
-    "Question 3, unanswered",
-    "Question 4, unanswered"
+   "finalUrl": "/courses/cmw9e9bz2000dgsa1qgujzpe4/grades",
+   "tabs": [
+    "OVERVIEW",
+    "ROSTER",
+    "ASSIGNMENTS",
+    "QUIZZES",
+    "GRADES"
    ],
-   "visibleQuestions": 1,
-   "page2": "Question 2 (4 points)\n\nSelect every fraction equal to one half.\n\n1/2\n2/3\n3/4\n2/4",
-   "overflowX": false
+   "cards": 1,
+   "text": "UIV Maths\n\nuiv-sh11\n\nTeachers: Hal Homeroom\n\nSection uiv-sh11\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nGRADES\nUIV Maths\n\nuiv-sh11 · Hal Homeroom\n\n78.0% B\n\nGood\n\n5 items"
   },
-  "parent-course-quizzes": {
+  "student-grades-tab-and-report-cards-tab": {
+   "ok": true,
+   "r1": {
+    "status": 200,
+    "finalUrl": "/students/cmw9e9byp0002gsa1b98pz86p/grades"
+   },
+   "r2": {
+    "status": 200,
+    "finalUrl": "/students/cmw9e9byp0002gsa1b98pz86p/report-cards"
+   },
+   "listText": "Report cards\n\nSam Aardvark\n\nuiv-sh11 term — 2026-2027\n\nPublished 2026-11-09\n\nPublished",
+   "printHas": {
+    "school": true,
+    "name": true,
+    "maths": false,
+    "english": false,
+    "legend": true,
+    "signature": true,
+    "attendance": true
+   },
+   "apiStatus": 200,
+   "overflowX": true
+  },
+  "parent-grades-and-report-card": {
    "ok": true,
    "status": 200,
-   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes",
-   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nASSIGNMENTS\nQUIZZES\nQuizzes\nUIV Fractions check — Blake Bell\n\nAttempt 1: 7.00 / 12.00 (58.3%)\n\nUIV Decimals quick check — Blake Bell\n\nAttempt 1: 2.00 / 7.00 (28.6%)",
-   "startResumeLinks": 0,
-   "overflowX": false
+   "finalUrl": "/grades",
+   "childSel": 1,
+   "zedCards": [
+    "UIV English\n\nuiv-sh11-eng · Hal Homeroom\n\n65.0% D\n\nNeeds improvement\n\n1 item",
+    "UIV Maths\n\nuiv-sh11 · Hal Homeroom\n\n32.0% F\n\nFailing\n\n5 items"
+   ],
+   "navHasGrades": false,
+   "hiddenUnderPrint": {
+    "drawer": true,
+    "appbar": true,
+    "printBtn": true,
+    "docVisible": true
+   },
+   "pdfMediaBox": "/MediaBox [0 0 594.95996 841.91998]",
+   "pdfPages": 1
   },
-  "parent-result-view": {
+  "outsider-student-forbidden": {
    "ok": true,
-   "status": 200,
-   "finalUrl": "/quizzes/cmw8z8o6n000zhusd4njhu5q2/attempts/cmw8z8o6r0017husdxh0ap7r3",
-   "inputs": 0,
-   "hidesCorrectAnswers": true,
-   "text": "UIV Decimals quick check — attempt 1\n\nSubmitted Sat 7 Nov 2026, 03:18\n\n2 / 7\n\n28.6%\n\nQuestion 1\nCorrect\n\n2 / 2\n\nWhich fraction is largest?\n\nYour answer: 3/4\n\nQuestion 2\nIncorrect\n\n0 / 4\n\nSelect every fraction equal to one half.\n\nYour answer: 1/2, 2/3\n\nQuestion 3\nIncorrect\n\n0 / 1\n\n5/5 equals 1.\n\nYour answer: False\n\nBACK TO QUIZ"
-  },
-  "student-result-graded-1280": {
-   "ok": true
+   "printStatus": 404,
+   "printUrl": "/report-cards/cmw9ebsqp001b6n7dv2tpcee1/print",
+   "text": "404\nPage not found.\nGO HOME",
+   "apiStatus": 404,
+   "gradesApi": 404,
+   "studentGradesPage": {
+    "status": 404,
+    "finalUrl": "/students/cmw9e9byp0002gsa1b98pz86p/grades"
+   }
   }
  },
  "consoleErrors": {
   "teacher": [],
+  "admin": [],
   "s1": [
-   "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+   "Failed to load resource: the server responded with a status of 404 (Not Found)"
   ],
-  "s3": [],
-  "parent": []
+  "parent": [],
+  "s3": [
+   "Failed to load resource: the server responded with a status of 404 (Not Found)",
+   "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
  },
  "fixtures": {
-  "t": "cmw8z8o5n0000husdyk7z4dav",
-  "s1": "cmw8z8o5q0001husdf6elbal7",
-  "s2": "cmw8z8o5r0002husd1busbqwj",
-  "s3": "cmw8z8o5s0003husdz7bffs77",
-  "p": "cmw8z8o5t0004husdah6fl9gn",
-  "c1": "cmw8z8o5w0008husdxehg7shf",
-  "qA": "cmw8z8o64000dhusdoqmgih6t",
-  "qB": "cmw8z8o6j000rhusdbtm56fkv",
-  "qC": "cmw8z8o6n000zhusd4njhu5q2",
-  "qD": "cmw8z8o6u0019husdx2ruv1e4",
-  "qE": "cmw8z8o6y001dhusdx0beiciu",
-  "qF": "cmw8z8o73001nhusd1vs1ur7z",
-  "cAtt": "cmw8z8o6r0017husdxh0ap7r3",
-  "eAtt": "cmw8z8o70001lhusdxzx2yw25",
-  "qNew": "cmw8z8rdw00037g3ud3zelbum",
-  "s1Att": "cmw8zahflcff8caf75e8a0be0"
+  "year": "cmvqwnx0e0000ejrj6syoh4hq",
+  "admin": "cmw9e9byh0000gsa1tthfjttj",
+  "t": "cmw9e9byo0001gsa1n5zyzfa7",
+  "s1": "cmw9e9byp0002gsa1b98pz86p",
+  "s2": "cmw9e9byq0003gsa13d1nfy7x",
+  "s3": "cmw9e9byq0004gsa1oiwo5ept",
+  "p": "cmw9e9byr0005gsa1fvuzl3aw",
+  "section": "cmw9e9byy0009gsa1oxwr15hi",
+  "c1": "cmw9e9bz2000dgsa1qgujzpe4",
+  "c2": "cmw9e9bz5000fgsa11y4zfy64",
+  "term": "cmw9e9edv000lgsa1e5e6lm2e",
+  "hwCat": "cmw9e9ee4000ngsa17nwtp82r",
+  "hw1": "cmw9e9eea000rgsa19f96opjc",
+  "hw2": "cmw9e9eed000tgsa1pecwj1d3",
+  "exam": "cmw9e9eee000vgsa1bidff4bb",
+  "hidden": "cmw9e9eef000xgsa1ktalzuom",
+  "assignment": "cmw9e9eei000zgsa1prvnyg7g",
+  "essay": "cmw9e9eeq0013gsa18b6itdqk",
+  "engItem": "cmw9e9ees0015gsa1zgw7ortq",
+  "quiz": "cmw9e9uij0017gsa110zeao8v",
+  "card1": "cmw9ebsqp001b6n7dv2tpcee1",
+  "card2": "cmw9ebsqp001c6n7duc81ecw6"
+ },
+ "_s": {
+  "ctx": {
+   "_type": "BrowserContext",
+   "_guid": "browser-context@3fd5675f7d0b5a3c8a2d0036a2fdf02d"
+  },
+  "page": {
+   "_type": "Page",
+   "_guid": "page@354f857db3f929fca1a59a138d99523d"
+  }
  },
  "cleanedUp": true
 }

@@ -149,6 +149,23 @@ export const NOTIFICATION_TYPES = {
     mandatoryInApp: false,
     roles: ['STUDENT', 'PARENT'],
   },
+  // PRD-11 gradebook (FR-38). grade.posted fires once per student per manual item (A9).
+  'grade.posted': {
+    label: 'Grade posted',
+    description: 'A teacher entered a grade for an in-class or offline item.',
+    category: 'ACADEMIC',
+    defaultEmail: false,
+    mandatoryInApp: false,
+    roles: ['STUDENT', 'PARENT'],
+  },
+  'report_card.published': {
+    label: 'Report card published',
+    description: 'A term report card is available to view and print.',
+    category: 'ACADEMIC',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['STUDENT', 'PARENT'],
+  },
 } as const satisfies Record<string, NotificationTypeDef>;
 
 export type NotificationType = keyof typeof NOTIFICATION_TYPES;

@@ -1,25 +1,29 @@
 {
-  "ticketId": "SH-10",
+  "ticketId": "SH-11",
   "timestamp": "2026-11-09T12:00:00Z",
   "phase": "intake",
   "version": "1.0",
   "status": "complete",
-  "requirementsCount": 49,
-  "functionalCount": 39,
-  "nonFunctionalCount": 10,
-  "overallConfidencePct": 96,
+  "requirementsCount": 55,
+  "functionalCount": 42,
+  "nonFunctionalCount": 13,
+  "overallConfidencePct": 95,
   "techStack": "react",
   "figmaPresent": false,
   "blockers": [],
   "assumptionsFlagged": [
-    "FR-37 (LOW): no sidebar nav entry; quizzes are reached through the course 'Quizzes' tab and direct routes.",
-    "FR-33/34/35/38/39 (MEDIUM): practice quizzes are excluded from the gradebook only; course-access.ts is reused for manage/view; maintenance hooks into /api/internal/email/dispatch; teacher actions write AuditLog rows; Markdown prompts reuse the existing editor and viewer."
+    "FR-6 (MEDIUM): removing a GradeExemption clears excused and re-syncs the score.",
+    "FR-7: getStudentQuizScore does not exist. Build it on src/server/quiz/grading.ts applyScoringPolicy + resultsVisible.",
+    "FR-13: in the seed scale 89.95 → 90.0 lands in A− (90), not A (93). The test should assert 90.0 and the 90-band letter.",
+    "FR-27/FR-33 (MEDIUM): add nav entries for /grades (STUDENT, PARENT) and /report-cards (TEACHER).",
+    "NFR-10 (MEDIUM): 'past due' = now > dueAt. Items with no term to place them in are skipped and a warning is logged."
   ],
   "keyRisks": [
-    "NFR-1: the student serializer must strip `correct`, explanation and scores until results are visible. This covers GET /api/quizzes/:id, GET /api/attempts/:id and the course list.",
-    "NFR-2: autosave is a single QuizAnswer upsert on the (attemptId, questionId) PK under 50 ms. Check the deadline from the attempt row only.",
-    "FR-19: one IN_PROGRESS attempt per student per quiz needs race-safe creation (unique attemptNumber plus a transaction or partial unique index).",
-    "FR-5.2 deadlineAt = min(startedAt + limit + extraTime, availableUntil). An untimed quiz uses availableUntil."
+    "NFR-5 privacy: student and parent serializers must exclude hidden items, unreturned submissions and not-yet-visible quiz results. Sync only on return or visibility, so Grade rows never hold unreleased scores.",
+    "FR-31 snapshot immutability: regeneration must filter status = DRAFT, and grade edits must never touch ReportCard.",
+    "NFR-3: 600×8 generation must batch-load items, grades, overrides and attendance per course or term, then run the pure calc in memory.",
+    "FR-20: keyboard editing (E/M/Delete) within MIT DataGrid processRowUpdate and custom edit cells must be checked against the mui-mcp docs for v9.5.0.",
+    "FR-2: adding categoryId to the Assignment and Quiz editors touches PRD-09/10 code. Only add the field; don't change existing behaviour."
   ],
   "nextPhase": "architect"
 }

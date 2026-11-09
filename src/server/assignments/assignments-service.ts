@@ -7,6 +7,13 @@ import { assertCanViewStudent, type AccessUser } from '@/server/auth/student-acc
 import { canSeeDrafts, isVisible } from '@/server/content/visibility';
 import { notify, notifyStudentAndParents } from '@/server/notifications/notify';
 import { attachFiles, detachFiles } from '@/server/files/files-service';
+import {
+  assertCategoryInCourse,
+  deleteItemForSource,
+  hideItemForSource,
+  syncSubmissionGrade,
+  upsertItemFromAssignment,
+} from '@/server/gradebook/gradebook-sync';
 import { extOf } from '@/server/files/validate';
 import { readFile, saveFile } from '@/server/storage';
 import { formatInSchoolTz } from '@/lib/dates';
@@ -130,6 +137,7 @@ function toSummary(a: AssignmentRow) {
     status: a.status,
     archivedAt: iso(a.archivedAt),
     hasRubric: a.rubricId !== null,
+    categoryId: a.categoryId,
   };
 }
 export type AssignmentSummary = ReturnType<typeof toSummary>;
@@ -297,6 +305,8 @@ export async function publishOnce(id: string, now = new Date()): Promise<void> {
   if (!a || a.notifiedAt || !isAssignmentVisible(a, now)) return;
   const { count } = await prisma.assignment.updateMany({ where: { id, notifiedAt: null }, data: { notifiedAt: now } });
   if (count !== 1) return;
+  // PRD-11 FR-3: first visible moment (incl. SCHEDULED → visible on the read path); claimer only.
+  await upsertItemFromAssignment(prisma, id, { wasVisible: false, now });
   const [students, tz] = await Promise.all([
     prisma.enrollment.findMany({ where: { courseId: a.courseId, status: 'ACTIVE' }, select: { studentId: true } }),
     getSchoolTimezone(),
@@ -346,6 +356,7 @@ function scalarFields(input: AssignmentInput) {
     maxFileCount: input.maxFileCount,
     allowExtraCredit: input.allowExtraCredit,
     status: input.status,
+    categoryId: input.categoryId ?? null,
   };
 }
 
@@ -414,9 +425,11 @@ export async function createAssignment(user: AccessUser, courseId: string, input
   await assertCanManageCourse(user, courseId);
   assertSchedule(input, new Date());
   const id = await prisma.$transaction(async (tx) => {
+    await assertCategoryInCourse(tx, courseId, input.categoryId);
     const rubricId = input.rubric?.length ? await writeRubric(tx, null, input.rubric) : null;
     const a = await tx.assignment.create({ data: { ...scalarFields(input), courseId, rubricId, createdById: user.id } });
     await setAttachments(tx, user, a.id, [], input.attachmentFileIds);
+    await upsertItemFromAssignment(tx, a.id);
     return a.id;
   });
   await audit({ actorId: user.id, action: 'assignment.create', entityType: 'Assignment', entityId: id, metadata: { courseId, status: input.status }, request });
@@ -442,8 +455,10 @@ export async function updateAssignment(user: AccessUser, id: string, patch: Assi
     merged.status === 'SCHEDULED' &&
     (existing.status !== 'SCHEDULED' || existing.availableFrom?.getTime() !== merged.availableFrom?.getTime());
   if (scheduleChanged) assertSchedule(merged, new Date());
+  const wasVisible = isAssignmentVisible(existing, new Date());
 
   await prisma.$transaction(async (tx) => {
+    if (patch.categoryId !== undefined) await assertCategoryInCourse(tx, existing.courseId, merged.categoryId);
     let rubricId = existing.rubricId;
     if (patch.rubric !== undefined) {
       if (merged.rubric?.length) {
@@ -457,6 +472,7 @@ export async function updateAssignment(user: AccessUser, id: string, patch: Assi
     if (patch.attachmentFileIds !== undefined) {
       await setAttachments(tx, user, id, existing.attachments.map((x) => x.fileId), merged.attachmentFileIds);
     }
+    await upsertItemFromAssignment(tx, id, { wasVisible });
   });
   await audit({
     actorId: user.id,
@@ -486,10 +502,14 @@ export async function deleteOrArchiveAssignment(user: AccessUser, id: string, re
       await detachFiles(tx, a.attachments.map((x) => x.fileId));
       await tx.assignment.delete({ where: { id } });
       if (a.rubricId) await tx.rubric.delete({ where: { id: a.rubricId } });
+      await deleteItemForSource(tx, id);
     });
     result = 'deleted';
   } else {
-    await prisma.assignment.update({ where: { id }, data: { archivedAt: a.archivedAt ?? new Date() } });
+    await prisma.$transaction(async (tx) => {
+      await tx.assignment.update({ where: { id }, data: { archivedAt: a.archivedAt ?? new Date() } });
+      await hideItemForSource(tx, id);
+    });
     result = 'archived';
   }
   await audit({ actorId: user.id, action: result === 'deleted' ? 'assignment.delete' : 'assignment.archive', entityType: 'Assignment', entityId: id, metadata: { courseId: a.courseId, title: a.title }, request });
@@ -706,18 +726,23 @@ export async function gradeSubmission(user: AccessUser, submissionId: string, in
   const now = new Date();
   const returning = input.return && sub.status !== 'RETURNED';
 
-  await prisma.submission.update({
-    where: { id: submissionId },
-    data: {
-      rawScore: raw,
-      penaltyPercent: input.penaltyPercent,
-      finalScore,
-      rubricScores,
-      feedback: input.feedback ?? null,
-      gradedById: user.id,
-      gradedAt: now,
-      ...(returning ? { status: 'RETURNED' as const, returnedAt: now } : {}),
-    },
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.submission.update({
+      where: { id: submissionId },
+      data: {
+        rawScore: raw,
+        penaltyPercent: input.penaltyPercent,
+        finalScore,
+        rubricScores,
+        feedback: input.feedback ?? null,
+        gradedById: user.id,
+        gradedAt: now,
+        ...(returning ? { status: 'RETURNED' as const, returnedAt: now } : {}),
+      },
+      select: { status: true },
+    });
+    // PRD-11 FR-5 / AC-3: only returned work reaches the gradebook (also re-grades of returned work).
+    if (updated.status === 'RETURNED') await syncSubmissionGrade(tx, a.id, sub.studentId, user.id);
   });
   await audit({ actorId: user.id, action: 'submission.grade', entityType: 'Submission', entityId: submissionId, metadata: { assignmentId: a.id, studentId: sub.studentId, finalScore }, request });
   if (returning) {
@@ -749,10 +774,16 @@ export async function bulkReturn(user: AccessUser, assignmentId: string, submiss
   const eligible = candidates.filter((s) => s.status === 'SUBMITTED' && s.gradedAt);
   const now = new Date();
   if (eligible.length) {
-    await prisma.submission.updateMany({
-      where: { id: { in: eligible.map((s) => s.id) }, status: 'SUBMITTED' },
-      data: { status: 'RETURNED', returnedAt: now },
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.submission.updateMany({
+          where: { id: { in: eligible.map((s) => s.id) }, status: 'SUBMITTED' },
+          data: { status: 'RETURNED', returnedAt: now },
+        });
+        for (const s of eligible) await syncSubmissionGrade(tx, assignmentId, s.studentId, user.id);
+      },
+      { timeout: 60_000 },
+    );
   }
   for (const s of eligible) {
     await audit({ actorId: user.id, action: 'submission.return', entityType: 'Submission', entityId: s.id, metadata: { assignmentId, studentId: s.studentId, bulk: true }, request });
@@ -775,25 +806,29 @@ export async function gradeOffline(user: AccessUser, assignmentId: string, input
   const { raw, rubricScores } = scoreFrom(a, input);
   const finalScore = computeFinalScore(raw, 0).toFixed(2);
   const now = new Date();
-  const sub = await prisma.submission.create({
-    data: {
-      assignmentId,
-      studentId: input.studentId,
-      status: input.return ? 'RETURNED' : 'SUBMITTED',
-      text: null,
-      attemptNumber: 0,
-      submittedAt: now,
-      isLate: false,
-      lateDays: 0,
-      rawScore: raw,
-      penaltyPercent: '0',
-      finalScore,
-      rubricScores,
-      feedback: input.feedback ?? null,
-      gradedById: user.id,
-      gradedAt: now,
-      returnedAt: input.return ? now : null,
-    },
+  const sub = await prisma.$transaction(async (tx) => {
+    const created = await tx.submission.create({
+      data: {
+        assignmentId,
+        studentId: input.studentId,
+        status: input.return ? 'RETURNED' : 'SUBMITTED',
+        text: null,
+        attemptNumber: 0,
+        submittedAt: now,
+        isLate: false,
+        lateDays: 0,
+        rawScore: raw,
+        penaltyPercent: '0',
+        finalScore,
+        rubricScores,
+        feedback: input.feedback ?? null,
+        gradedById: user.id,
+        gradedAt: now,
+        returnedAt: input.return ? now : null,
+      },
+    });
+    if (input.return) await syncSubmissionGrade(tx, assignmentId, input.studentId, user.id);
+    return created;
   });
   await audit({ actorId: user.id, action: 'submission.grade_offline', entityType: 'Submission', entityId: sub.id, metadata: { assignmentId, studentId: input.studentId, finalScore }, request });
   if (input.return) await notifyReturned(a, input.studentId, finalScore);
@@ -815,13 +850,19 @@ export async function setExemption(
   if (exempt) {
     const enrolled = await prisma.enrollment.findFirst({ where: { courseId: a.courseId, studentId, status: 'ACTIVE' }, select: { id: true } });
     if (!enrolled) throw invalid('That student is not enrolled in this course.');
-    await prisma.gradeExemption.upsert({
-      where: { assignmentId_studentId: { assignmentId, studentId } },
-      update: { reason: reason ?? null },
-      create: { assignmentId, studentId, reason: reason ?? null },
+    await prisma.$transaction(async (tx) => {
+      await tx.gradeExemption.upsert({
+        where: { assignmentId_studentId: { assignmentId, studentId } },
+        update: { reason: reason ?? null },
+        create: { assignmentId, studentId, reason: reason ?? null },
+      });
+      await syncSubmissionGrade(tx, assignmentId, studentId, user.id);
     });
   } else {
-    await prisma.gradeExemption.deleteMany({ where: { assignmentId, studentId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.gradeExemption.deleteMany({ where: { assignmentId, studentId } });
+      await syncSubmissionGrade(tx, assignmentId, studentId, user.id); // A1
+    });
   }
   await audit({ actorId: user.id, action: exempt ? 'assignment.exempt' : 'assignment.unexempt', entityType: 'Assignment', entityId: assignmentId, metadata: { studentId, reason }, request });
   return exempt ? { assignmentId, studentId, exempt: true as const, reason: reason ?? null } : { assignmentId, studentId, exempt: false as const };

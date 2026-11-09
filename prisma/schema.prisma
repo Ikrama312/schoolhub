@@ -247,6 +247,7 @@ model Term {
   order          Int
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  gradeItems     GradeItem[]
 
   @@unique([academicYearId, name])
   @@unique([academicYearId, order])
@@ -427,6 +428,9 @@ model Course {
   description        String?
   capacity           Int?
   archivedAt         DateTime?
+  /// PRD-11 FR-2: null = school default scale.
+  gradingScaleId     String?
+  gradingScale       GradingScale?       @relation(fields: [gradingScaleId], references: [id], onDelete: SetNull)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   enrollments        Enrollment[]
@@ -435,6 +439,8 @@ model Course {
   modules            Module[]
   assignments        Assignment[]
   quizzes            Quiz[]
+  gradeCategories    GradeCategory[]
+  gradeItems         GradeItem[]
 
   @@unique([academicYearId, code])
 }
@@ -702,6 +708,9 @@ model Assignment {
   rubric                   Rubric?                @relation(fields: [rubricId], references: [id], onDelete: SetNull)
   notifiedAt               DateTime?
   archivedAt               DateTime?
+  /// PRD-11 FR-2
+  categoryId               String?
+  category                 GradeCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   createdById              String
   createdAt                DateTime               @default(now())
   updatedAt                DateTime               @updatedAt
@@ -877,6 +886,9 @@ model Quiz {
   showCorrectAnswers Boolean             @default(true) // when results are visible
   resultsReleasedAt  DateTime? // MANUAL release; also the AFTER_CLOSE "notified once" claim (A6)
   status             QuizStatus          @default(DRAFT)
+  /// PRD-11 FR-2
+  categoryId         String?
+  category           GradeCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   createdById        String
   createdBy          User                @relation("QuizCreatedBy", fields: [createdById], references: [id])
   createdAt          DateTime            @default(now())
@@ -955,4 +967,116 @@ model QuizAccommodation {
   extraAttempts    Int    @default(0) // 0–5
 
   @@id([quizId, studentId])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-11 Gradebook, grading scales & report cards (FR-1). Fields exactly per the PRD; only
+// back-relations and indexes added. Partial unique index "grading_scale_one_default" lives in
+// migration 20261111000000_add_gradebook — never use `prisma db push`.
+// ---------------------------------------------------------------------------
+
+enum GradeItemSource {
+  ASSIGNMENT
+  QUIZ
+  MANUAL
+}
+
+enum ReportCardStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model GradingScale {
+  id        String   @id @default(cuid())
+  name      String
+  isDefault Boolean  @default(false)
+  /// [{ letter, minPercent, gpa?, descriptor? }] sorted desc (bandsSchema)
+  bands     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  courses   Course[]
+}
+
+model GradeCategory {
+  id            String       @id @default(cuid())
+  courseId      String
+  course        Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  name          String
+  weightPercent Decimal      @db.Decimal(5, 2)
+  dropLowest    Int          @default(0)
+  order         Int
+  items         GradeItem[]
+  assignments   Assignment[]
+  quizzes       Quiz[]
+}
+
+model GradeItem {
+  id         String          @id @default(cuid())
+  courseId   String
+  course     Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  categoryId String?
+  category   GradeCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  termId     String
+  term       Term            @relation(fields: [termId], references: [id])
+  title      String
+  maxPoints  Decimal         @db.Decimal(6, 2)
+  dueAt      DateTime?
+  source     GradeItemSource
+  /// assignmentId or quizId
+  sourceId   String?         @unique
+  /// hidden items do not show to students/parents and do not count
+  isVisible  Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  grades     Grade[]
+
+  @@index([courseId, termId])
+}
+
+model Grade {
+  gradeItemId String
+  gradeItem   GradeItem @relation(fields: [gradeItemId], references: [id], onDelete: Cascade)
+  studentId   String
+  /// null = not graded yet
+  score       Decimal?  @db.Decimal(6, 2)
+  excused     Boolean   @default(false)
+  missing     Boolean   @default(false)
+  comment     String?
+  updatedById String
+  updatedAt   DateTime  @updatedAt
+
+  @@id([gradeItemId, studentId])
+  @@index([studentId])
+}
+
+model TermGradeOverride {
+  courseId       String
+  termId         String
+  studentId      String
+  percent        Decimal? @db.Decimal(5, 2)
+  letter         String?
+  /// max 1,000, appears on the report card
+  teacherComment String?
+  updatedById    String
+  updatedAt      DateTime @updatedAt
+
+  @@id([courseId, termId, studentId])
+  @@index([termId])
+}
+
+model ReportCard {
+  id               String           @id @default(cuid())
+  studentId        String
+  termId           String
+  status           ReportCardStatus @default(DRAFT)
+  /// frozen ReportCardSnapshotV1 (src/server/report-cards/snapshot.ts)
+  snapshot         Json
+  homeroomComment  String?
+  principalComment String?
+  generatedAt      DateTime         @default(now())
+  publishedAt      DateTime?
+  publishedById    String?
+
+  @@unique([studentId, termId])
+  @@index([termId, status])
 }

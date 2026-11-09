@@ -1,114 +1,126 @@
-# QA Report — SH-10 (PRD-10 Quizzes & Online Exams)
+# QA Report — SH-11 (PRD-11 Gradebook, Grading Scales & Report Cards)
 
 ## QA Summary
 
-- ticketId: SH-10
-- timestamp: 2026-11-09T07:57:09Z
+- ticketId: SH-11
+- timestamp: 2026-11-09T14:29:37Z
 - overallStatus: FAIL
-- requirementsChecked: 49
-- requirementsPassed: 47
-- requirementsFailed: 2
+- requirementsChecked: 55
+- requirementsPassed: 54
+- requirementsFailed: 1
 
-> This file replaces the stale SH-9 QA report.
-> **All 39 functional requirements PASS. The feature works end to end.**
-> Two non-functional requirements FAIL, and neither is a feature defect:
-> - **NFR-7:** two new `console.log` calls in the quiz seed (`prisma/seed.ts:463`, `:526`). The fix is to change them to `logger.info`, which the file already imports.
-> - **NFR-8:** the full `npm run test` run is still not green. It has the **same 6 failing tests that were already failing before SH-10** (the SH-9 report lists them). None of them import quiz code.
+> This file replaces the stale SH-10 QA report.
+> **All 42 functional requirements PASS. All 48 SH-11 tests pass (unit, integration on Postgres, Playwright on a fresh prod build).**
+> One non-functional requirement fails:
+> - **NFR-12 (quality gate):** `npm run test` is not green. 10 tests fail in the full run. Nine are pre-existing auth/attendance/toast failures or contention flakes, and none import gradebook code. **One is new and caused by SH-11:** `qa-sh9` "SCHEDULED … notified once" is now flaky (Headline 1).
 >
-> The verdict is consistent with SH-9, where the same two kinds of finding also produced FAIL. The feature is ready for review once the 2-line seed fix lands and the pre-existing failures are accepted as known or fixed separately.
+> The fix is small (move one line in `publishOnce`). After that, the remaining failures are the known pre-SH-11 set.
 
 ## Headline findings
 
-### 1. The build and tests run, and every quiz test is green
+### 1. SH-11 made `qa-sh9.test.ts` FR-13/FR-42 flaky (regression in the suite)
+- **Observed:** failed in the full run, and failed 1 of 3 isolated runs (`expected +0 to be 1`, `tests/integration/assignments/qa-sh9.test.ts:141`). It is not in the SH-10 failure list.
+- **Cause:** `publishOnce` (`src/server/assignments/assignments-service.ts:306-314`) claims `notifiedAt`, then **awaits `upsertItemFromAssignment` (≥4 queries) before `notify()`**. The student read path fires `publishOnce` fire-and-forget. The test's own awaited `publishOnce` calls then return early, because the claim is already taken, and it counts notifications before the background call has reached `notify()`. SH-11 widened that window.
+- **Product risk (minor):** if the gradebook upsert throws after the claim, the `assignment.published` notification is lost permanently, because `notifiedAt` is already set.
+- **Recommended fix:** call `upsertItemFromAssignment` **after** `notify()`, or wrap it in try/log so it can never block the notification. The test could also wait with `vi.waitFor`, but the ordering fix is the root cause. QA did not change product code.
+
+### 2. Remaining full-suite failures are outside SH-11
+| Failing test | Status |
+|---|---|
+| `attendance-qa.test.ts` FR-22, FR-10/FR-19 | Pre-existing (SH-9/SH-10 lists) |
+| `auth.test.ts` rate limit | Pre-existing (flaky) |
+| `auth.test.ts` password reset | Contention only: passes when the file is run alone |
+| `auth-forms.test.tsx` ForgotPasswordForm | Pre-existing (fails alone too) |
+| `auth-forms.test.tsx` ChangePasswordForm ×3 | Contention only: pass when the file is run alone |
+| `useToast.test.tsx` auto-hide | Pre-existing |
+| `lockout.test.ts` (file fails to load) | Pre-existing (next-auth ESM) |
+
+Full run: **399/409 pass**. SH-11 changed no auth, attendance or toast code (`git diff --stat`).
+
+### 3. Environment note (not a defect)
+The dev DB's current academic year (2026-2027) has **no terms**, so both SH-11 Playwright specs crash in `beforeAll` (`terms[0].id`). QA inserted a temporary term, ran both specs (**2/2 pass**), and then deleted the term. No rows referenced it.
+
+## Gates run by QA
 | Check | Result |
 |---|---|
-| `npx prisma migrate status` | ✅ 11 migrations, schema up to date (incl. `20261110000000_add_quizzes`) |
-| `npm run lint` | ✅ no warnings/errors |
-| `npx tsc --noEmit` | ✅ clean (incl. the new QA test) |
-| Quiz unit + integration (`tests/unit/quiz`, `tests/integration/quiz`) | ✅ **53/53**: 37 unit, 8 dev integration, 8 new QA integration |
-| E2E `tests/e2e/quizzes.spec.ts` (QA rerun on `next start -p 3100`) | ✅ **4/4** (build → publish → take with reload → grade essay → see results) |
-| Full `vitest run` | ⚠️ 360/366. 6 failures, all pre-existing (see below) |
+| `npm run lint` | ✅ no warnings or errors |
+| `npm run typecheck` | ✅ clean (including the QA test files) |
+| `next build` | ✅ |
+| `prisma migrate status` | ✅ up to date (12 migrations). `grading_scale_one_default` index present |
+| SH-11 unit (25) + integration (21) | ✅ 46/46 |
+| SH-11 Playwright (prod build :3100) | ✅ 2/2 |
+| Full `vitest run` | ❌ 399/409 (Headlines 1–2) |
+| Static: banned UI imports / Pro grid features / `console.*` in new code | ✅ none |
 
-### 2. Full-suite failures are pre-existing and do not touch quiz code
-| Failing test | Status before SH-10 |
-|---|---|
-| `attendance-qa.test.ts` FR-22, FR-10/FR-19 | Listed in the SH-9 report (time-of-day / attendance service) |
-| `auth.test.ts` rate limit | Listed in SH-9 (flaky) |
-| `auth-forms.test.tsx`, `useToast.test.tsx` | Listed in SH-9 |
-| `lockout.test.ts` | Listed in SH-9 (next-auth ESM resolution under Node 24) |
-| `email-dispatch.test.ts` AC-4 (concurrent dispatchers) | Flaky when run alongside other DB suites. Passed **3/3** when run alone. It tests `server/email/dispatch`, which SH-10 did not change; SH-10 only added two try/catch'd calls in the dispatch *route*. |
+## Tests added by QA
+- `tests/integration/gradebook/qa-sh11.test.ts` (7 tests, Postgres). Covers FR-40 weights, FR-15 end to end in both the gradebook and the student view, FR-18 sort, FR-38 + NFR-4 grade.posted once with audit old→new, FR-9 synced comment-only, FR-42/NFR-5 hidden and unreturned exclusion for student and parent, NFR-6 refusals, FR-24 mark-missing due gate, FR-14 letter-only override + audit, and the **NFR-2 perf check (35×80 < 800 ms)**. Self-cleaning; verified 3/3 runs with zero leftovers.
+- `tests/unit/gradebook/validators.test.ts` (4 tests). Covers FR-16 band rules, weight sum, unique category names, the 1,000-character comment cap.
 
-### 3. Dev's self-reported completion matches the code
-- All 51 paths in `file-ownership-matrix.json` exist and contain real implementations.
-- There are no `TODO` or `FIXME` markers and no stub functions in the quiz code.
-- The two `ponytail:` notes in `attempt-service.ts` are documented trade-offs, not missing features: a hand-rolled cuid-shaped id, and a rare save-vs-submit race that a Regrade fixes.
-- All 23 tasks are marked complete, and each maps to the code that implements it.
-
-### 4. New QA tests (`tests/integration/quiz/qa-sh10.test.ts`, 8 tests) fill the gaps in dev's coverage
-- **NFR-1:** asserts that the JSON from the student `getQuiz`, the in-progress attempt and the pre-release result never contains `"correct"`, `"explanation"` or the explanation text. Manager `getQuiz` does include them.
-- **FR-11 / FR-31:** the course list is shaped by role (manager / student / parent). Drafts are hidden from students. A student outside the course and a teacher of another course get NOT_FOUND. A quiz with no attempts can be deleted.
-- **FR-26 / FR-27:** checks the analytics summary (avg / median / high / low), the 10-bucket histogram, the option distribution, the most-chosen wrong option, and the CSV header and rows. Non-managers get NOT_FOUND.
-- **FR-34 / NFR-5:** a parent sees a linked child's result only after release. An unlinked parent, another student and another teacher get NOT_FOUND. Cross-student autosave and cross-course grading are refused.
-- **FR-28 / FR-38:** extra time feeds the deadline (10 + 15 = 25 min). An accommodation for a student not enrolled in the course gets NOT_FOUND. Accommodation, grade, regrade and release each write an `AuditLog` row.
-- **FR-31:** reorder rejects a partial or duplicate id list.
-- **NFR-2:** the median of 50 concurrent saves is under 50 ms. Saves are upserts: 2 rows after 51 saves.
+## Dev completion check
+All 33 tasks in `task-completion-markers.json` were checked. All 77 files in `file-ownership-matrix.json` exist and contain real implementations. No `TODO`/`FIXME`/stub markers were found in the new code.
 
 ## Requirement Results
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| FR-1 | PASS | `prisma/schema.prisma` (5 enums, 5 models, back-relations); `prisma/migrations/20261110000000_add_quizzes/migration.sql`; `migrate status` up to date; all integration tests use the models |
-| FR-2 | PASS | `src/lib/validators/quiz.ts`; `tests/unit/quiz/quiz-validators.test.ts` (window, 1–300, 1–10, 0.5–100, 2–8 options, 1–10 accepted, 10,000 chars, accommodation limits) |
-| FR-3 | PASS | `src/server/quiz/grading.ts`; `grading.test.ts` "MULTIPLE_CHOICE partial credit — FR-2 example" ({A,B}=0, {A}=2), SINGLE_CHOICE/TF all-or-nothing |
-| FR-4 | PASS | `grading.test.ts` "SHORT_ANSWER normalises; ' Photosynthesis ' is correct"; `needsReview` test; override in `regrade.test.ts` |
-| FR-5 | PASS | `grading.test.ts` "ESSAY is manual"; guidance in `correct.guidance` (`regrade.test.ts`) |
-| FR-6 | PASS | `edit/QuizSettingsPanel.tsx`; time-limit ≤ window rule in `quiz-validators.test.ts` "rejects a time limit longer than the window" |
-| FR-7 | PASS | `edit/QuestionList.tsx` (dnd-kit `useSortable`, Duplicate, Delete), `edit/QuestionEditor.tsx` (per-type editors); e2e adds 4 question types; server reorder tested in `qa-sh10.test.ts` |
-| FR-8 | PASS | `edit/QuizBuilder.tsx` L112 (running points total), L115/187 (Preview as student, `QuizPlayer mode='preview'` skips saves, L259/279) |
-| FR-9 | PASS | `grading.test.ts` "canPublish"; `regrade.test.ts` (publish with 0 questions → VALIDATION_ERROR) |
-| FR-10 | PASS | `regrade.test.ts` (edit lock: add/delete/points/essay-correct → CONFLICT; accepted answers editable; regrade keeps manual grades) |
-| FR-11 | PASS | `src/config/course-tabs.ts` L18; `CourseQuizzesView.tsx`; `qa-sh10.test.ts` role-shaped list test |
-| FR-12 | PASS | `take/page.tsx` + `QuizPlayer.tsx` start screen (time limit, attempts, confirm dialog L128); e2e student step |
-| FR-13 | PASS | `grading.test.ts` "computeDeadline" (AC-1) + "seededShuffle"; `serializers.test.ts` frozen order and seeded option shuffle |
-| FR-14 | PASS | `QuizPlayer.tsx` (RadioGroup/Checkbox/TextField, LinearProgress L332, navigator L336, sticky header L308, red timer under 2 min L319) |
-| FR-15 | PASS | `take/useAutosave.ts` (800 ms debounce, localStorage queue, 5 s retry); status pill labels `QuizPlayer.tsx` L221; e2e reload mid-attempt keeps answers |
-| FR-16 | PASS | `attempts.test.ts` "autosave within grace succeeds; after deadline + 30 s it is 409 and the attempt is auto-submitted" |
-| FR-17 | PASS | `regrade.test.ts` (essay → NEEDS_GRADING); `attempts.test.ts` double submit; unanswered count `QuizPlayer.tsx` L301 |
-| FR-18 | PASS | `attempts.test.ts` "GET auto-submits an expired attempt" + maintenance auto-submit test |
-| FR-19 | PASS | `attempts.test.ts` "resume returns the same attempt; concurrent starts produce one attempt"; e2e reload |
-| FR-20 | PASS | `grading.test.ts` "resultsVisible"; `regrade.test.ts` manual release (idempotent); `qa-sh10.test.ts` parent hidden until release |
-| FR-21 | PASS | `serializers.test.ts` (score, percent, correct + explanation only when showCorrectAnswers); `attempts/[attemptId]/page.tsx`; e2e "student sees the results" |
-| FR-22 | PASS | `grading.test.ts` "applyScoringPolicy" HIGHEST/LATEST/AVERAGE; `attempts.test.ts` getStudentQuizScore |
-| FR-23 | PASS | `grading.test.ts` "attemptLimit adds extra attempts"; `attempts.test.ts` attempt limit + accommodation (AC-8) |
-| FR-24 | PASS | `grade/QuizGradingWorkspace.tsx` (By student / By question, step 0.5); `regrade.test.ts` override + over-max → VALIDATION_ERROR; e2e "teacher grades the essay" |
-| FR-25 | PASS | `regrade.test.ts` essay graded → GRADED, score 6.50/7.00 |
-| FR-26 | PASS | `analytics.ts`, `QuizAnalytics.tsx` (x-charts BarChart); `qa-sh10.test.ts` summary + histogram |
-| FR-27 | PASS | `qa-sh10.test.ts` per-question % correct, avg points, option distribution, most-chosen wrong, CSV |
-| FR-28 | PASS | `qa-sh10.test.ts` (extra time → 25-min deadline; non-enrolled → NOT_FOUND); `attempts.test.ts` extra attempt |
-| FR-29 | PASS | `src/server/notifications/types.ts` L136 (`defaultEmail: false`, STUDENT); `regrade.test.ts` publish → 1 `quiz.published` notification |
-| FR-30 | PASS | `types.ts` L144 (STUDENT + PARENT); `regrade.test.ts` MANUAL release notifies students + parent once; `attempts.test.ts` AFTER_CLOSE idempotent under concurrent runs |
-| FR-31 | PASS | Route files under `src/app/api/{courses/[id]/quizzes,quizzes,questions}`; `regrade.test.ts` + `qa-sh10.test.ts` (CRUD, delete-only-without-attempts, reorder validation) |
-| FR-32 | PASS | `src/app/api/attempts/**`, `quizzes/[id]/attempts`; `attempts.test.ts` (start/resume, save, submit, owner-only) |
-| FR-33 | PASS | `attempts.test.ts` "getStudentQuizScore … reports isPractice" |
-| FR-34 | PASS | `src/server/quiz/access.ts` wraps `course-access.ts`; `qa-sh10.test.ts` parent / outsider / other-teacher checks |
-| FR-35 | PASS | `src/app/api/internal/email/dispatch/route.ts` L9, L40–50; `attempts.test.ts` "maintenance … idempotent under concurrent runs" |
-| FR-36 | PASS | `prisma/seed.ts` L455–557 (Fractions Check CLOSED + GRADED attempts; Unit 1 Test AFTER_CLOSE +3 days; Parts of Speech practice, 3 attempts, HIGHEST). Verified by code inspection: the dev DB has no MATH-7A, so this QA run could not execute it (the dev log records an idempotent fixture run) |
-| FR-37 | PASS | No sidebar entry needed per FR-37; the course tab (`course-tabs.ts` L18) plus direct routes cover it |
-| FR-38 | PASS | `qa-sh10.test.ts` asserts AuditLog actions `quiz.accommodation`, `quizAnswer.grade`, `quiz.regrade`, `quiz.release_results` |
-| FR-39 | PASS | `QuestionEditor.tsx` (MarkdownEditor + FileUpload); `QuizGradingWorkspace.tsx` MarkdownView; `files/contexts.ts` `'quiz'` resolver; `quiz-service.ts` `attachPromptFiles` |
-| NFR-1 | PASS | `serializers.test.ts` (no `correct` key); `qa-sh10.test.ts` (no `correct`/`explanation` in student quiz, attempt, or pre-release result JSON) |
-| NFR-2 | PASS | `attempt-service.ts` `saveAnswer` (one read + one upsert); `qa-sh10.test.ts` median of 50 concurrent saves < 50 ms, upsert-only. Not load-tested at 300 users |
-| NFR-3 | PASS | `QuizPlayer.tsx` native MUI Radio/Checkbox; `aria-live="assertive"` L329, announced at 5 and 1 min L286–288; e2e axe scan of `<main>` |
-| NFR-4 | PASS | Grep found no banned imports (Tailwind/Radix/Recharts/notistack/etc.) and no `className` in quiz UI; BarChart from `@mui/x-charts`; the dev log records the mui-mcp lookups |
-| NFR-5 | PASS | Every quiz route handler and page calls `requireUser`/`requireRole` (static check); `qa-sh10.test.ts` + `attempts.test.ts` NOT_FOUND for non-owners and non-managers |
-| NFR-6 | PASS | Handlers use `withHandler` + `parseBody(zod)` + `ok()`; pagination in `listCourseQuizzes`; `CONFLICT` after deadline (`attempts.test.ts`) |
-| NFR-7 | **FAIL** | Code lives in `src/server/quiz/` and reuses `grading-math`, `notify`, `audit`, `csv`, `logger`, MarkdownView and ConfirmDialog, with no new deps. **But `prisma/seed.ts:463` and `:526` add `console.log`** ("skipping its quizzes"). Fix: use `logger.info` (already imported at L3) |
-| NFR-8 | **FAIL** | All the required tests exist and pass: grading/deadline/policy/serializer units, autosave-after-deadline / auto-submit / regrade integration, and the 4-step e2e. **But `npm run test` is not green**: 6 failures, all pre-existing and outside SH-10 (Headline 2). lint and typecheck are green |
-| NFR-9 | PASS | Builder flow: add + type picker + per-type editor + publish (`QuizBuilder.tsx`, `QuestionList.tsx`). The e2e builds and publishes a 4-question quiz through the UI. No human timing study was done |
-| NFR-10 | PASS | Out of scope, and none of it is present (grep for lockdown/webcam/question bank in `src` and the schema: no matches) |
+| FR-1 | PASS | `prisma/migrations/20261111000000_add_gradebook/migration.sql` and `prisma/schema.prisma`. `migrate status` up to date. All integration tests write these models |
+| FR-2 | PASS | `schema.prisma` (Course.gradingScaleId, Assignment/Quiz.categoryId). Category select in `AssignmentForm.tsx:285-288` and `QuizSettingsPanel.tsx:123`. `assertCategoryInCourse` in `gradebook-sync.ts:92` |
+| FR-3 | PASS | `gradebook-sync.test.ts` "publishing an assignment creates its item in the containing term". `term-placement.test.ts` |
+| FR-4 | PASS | `gradebook-sync.test.ts` "FR-4: archive hides, hard delete removes". Practice/delete quiz test |
+| FR-5 | PASS | `gradebook-sync.test.ts` "AC-3: return syncs the score; saving without returning does not" |
+| FR-6 | PASS | `gradebook-sync.test.ts` "FR-6 / A1: exemption sets excused; removing it re-derives" |
+| FR-7 | PASS | `gradebook-sync.test.ts` FR-7 IMMEDIATELY / MANUAL / AFTER_CLOSE tests (scaled to maxPoints) |
+| FR-8 | PASS | `backfill.test.ts` "a second run changes nothing". `package.json` `gradebook:backfill`. `scripts/gradebook-backfill.ts`. `seed.ts:590` |
+| FR-9 | PASS | `qa-sh11.test.ts` "FR-9: synced grades accept a comment only" (score/excused/maxPoints → VALIDATION_ERROR). Manual grades are edited in the same file and in the e2e |
+| FR-10 | PASS | `grade-calc.test.ts` AC-5, hidden-items, strict-due-boundary and nothing-counted cases |
+| FR-11 | PASS | `grade-calc.test.ts` "AC-2: dropLowest 1" and "never drops every counted item" |
+| FR-12 | PASS | `grade-calc.test.ts` no-categories, empty-categories renormalised, A8 Uncategorised |
+| FR-13 | PASS | `grade-calc.test.ts` "89.95 → 90.0 → A-", 76.95→77.0 C+, 76.94→76.9 C |
+| FR-14 | PASS | `grade-calc.test.ts` AC-6 / A12. `qa-sh11.test.ts` letter-only override via service (78.0 B, computed C+) |
+| FR-15 | PASS | `grade-calc.test.ts` golden case. `qa-sh11.test.ts` 78.0 C+ in both `getGradebook` and `getStudentGrades`. `gradebook.spec.ts` e2e |
+| FR-16 | PASS | `validators.test.ts` FR-16. `scales-service.ts` default swap / no un-default. DB partial unique index `grading_scale_one_default`. `admin/grading-scales/*`. (The service has no runtime test, see coverage report) |
+| FR-17 | PASS | `qa-sh11.test.ts` weights≠100 rejected. `GradebookSettingsClient.tsx` (live sum via `weightSum`, scale select) |
+| FR-18 | PASS | `GradebookGrid.tsx:380` `columnGroupingModel`, no pinned columns. `qa-sh11.test.ts` last-name sort + NFR-2 35×80. `gradebook.spec.ts` |
+| FR-19 | PASS | `GradebookGrid.tsx:112-115` (EX / M / —), `:226` M in red, `:230` late clock icon |
+| FR-20 | PASS | `gradebook.spec.ts` (digits+Enter, E, M, Delete → 78.0% C+, 6 audit rows). `GradebookGrid.tsx:303-317` |
+| FR-21 | PASS | `GradebookGrid.tsx:343-344`. The target routes `assignments/[assignmentId]/grade` and `quizzes/[quizId]/attempts/[attemptId]` exist |
+| FR-22 | PASS | `AddManualItemDialog.tsx`. `api/courses/[id]/grade-items/route.ts`. `qa-sh11.test.ts` `createManualItem` |
+| FR-23 | PASS | `TermOverrideDialog.tsx`. `api/courses/[id]/term-overrides/[studentId]/route.ts`. `validators.test.ts` 1,000-character cap. `qa-sh11.test.ts` override |
+| FR-24 | PASS | `qa-sh11.test.ts` mark-missing refused before due and applied after. Hide via `updateItem`. `ItemStatsDialog.tsx:19` (avg/median/high/low) |
+| FR-25 | PASS | `gradebook-service.ts` `exportGradebookCsv` uses `toCsv` from `@/server/csv`. Export button in `GradebookGrid.tsx:365` (no runtime test) |
+| FR-26 | PASS | `student-tabs.ts:17`. `StudentGradesView.tsx`. `grade-calc.test.ts` gradeColour. `qa-sh11.test.ts` colour `warning` at 78.0 |
+| FR-27 | PASS | `src/app/(app)/grades/page.tsx` + `GradesClient.tsx`. Nav entry `navigation.ts:39` (STUDENT, PARENT) |
+| FR-28 | PASS | `course-tabs.ts:22`. `courses/[courseId]/grades/page.tsx`. `qa-sh11.test.ts` course-filtered `getStudentGrades` |
+| FR-29 | PASS | `report-cards.test.ts` "roster shows status and warnings". `ReportCardsAdminClient.tsx` |
+| FR-30 | PASS | `report-cards.test.ts` "generates a draft snapshot". `snapshot.ts` |
+| FR-31 | PASS | `report-cards.test.ts` "AC-8 … regeneration skips PUBLISHED". `report-card-service.ts` `updateMany where status DRAFT` |
+| FR-32 | PASS | `report-cards.test.ts` "comments follow field-level rules". `access.ts:25` `canEditHomeroomComment`. `report-cards/[id]/*` |
+| FR-33 | PASS | `src/app/(app)/report-cards/page.tsx`. Nav `navigation.ts:41` (TEACHER) |
+| FR-34 | PASS | `report-cards.test.ts` "AC-7: publish notifies Sam and Pat" and "unpublish … audited reason". `report-cards.spec.ts` |
+| FR-35 | PASS | `report-cards.spec.ts` (print view hides sidebar / app bar / button under `print` media). `ReportCardDocument.tsx:24-31` (A4, page breaks). `PrintButton.tsx` `window.print()`. `report-cards/print/page.tsx` bulk |
+| FR-36 | PASS | `student-tabs.ts:18`. `students/[id]/report-cards/page.tsx` |
+| FR-37 | PASS | `report-cards.test.ts` "a 7B student gets NOT_FOUND", drafts hidden from family. `access.ts:13-18` |
+| FR-38 | PASS | `notifications/types.ts:153,161` (defaultEmail false/true). `qa-sh11.test.ts` grade.posted once per student per item, including parent. `report-cards.test.ts` report_card.published |
+| FR-39 | PASS | All 17 route files are thin (`requireUser`/`requireRole('ADMIN')` → validator → service). Services call `assertCanManageCourse` / `assertCanViewStudent`. `qa-sh11.test.ts` FORBIDDEN cases |
+| FR-40 | PASS | `qa-sh11.test.ts` 40+50 → VALIDATION_ERROR, 40+60 OK. `categories-service.ts` full replace in a transaction |
+| FR-41 | PASS | `prisma/seed.ts:548-604` (Standard A–F bands, 7A Homework 30/drop 1, Quizzes 30, Exams 40, Oral presentation, S1 drafts). "Standard A–F" is the default in the dev DB. The 7A block was verified by Dev on temp fixtures; QA did not re-run it (no 7A courses in the dev DB) |
+| FR-42 | PASS | `qa-sh11.test.ts` "student view hides hidden items and unreturned scores" (student + parent) and refusal of other student / unlinked parent |
+| NFR-1 | PASS | `grade-calc.ts` is pure (no Prisma, `now` injected) and uses Decimal helpers from `grading-math`. `grade-calc.test.ts` matrix (17) |
+| NFR-2 | PASS | `qa-sh11.test.ts` "NFR-2: 35 students × 80 items loads in under 800 ms" (`getGradebook`, warm), 3/3 runs |
+| NFR-3 | PASS | `report-card-service.ts` generate uses a fixed set of `findMany` calls plus one `loadCourseTermData` for all students/courses, and chunked `createMany`/`updateMany` (no N+1). The 600×8 < 30 s timing was **not load-tested** (Dev also skipped the optional perf test) |
+| NFR-4 | PASS | `qa-sh11.test.ts` grade.update audit old 7.00 → new 8.00, termOverride.upsert audit old/new. `report-cards.test.ts` unpublish audit with reason |
+| NFR-5 | PASS | `qa-sh11.test.ts` (hidden / unreturned). `report-cards.test.ts` (draft hidden). `gradebook-sync.test.ts` MANUAL quiz syncs only on release |
+| NFR-6 | PASS | `qa-sh11.test.ts` other teacher FORBIDDEN on gradebook and putGrade, student FORBIDDEN on putGrade, other student / unlinked parent refused. `report-cards.test.ts` 7B NOT_FOUND |
+| NFR-7 | PASS | Static scan: new UI imports only `@mui/material`, `@mui/icons-material`, `@mui/x-data-grid`, `@mui/x-date-pickers`, `react`, `next`. No banned libraries. Minor: two raw `<span>`s (`GradingScalesClient.tsx:68` is the MUI-documented Tooltip-on-disabled wrapper; `StudentGradesView.tsx:117` could be `Typography`) |
+| NFR-8 | PASS | Repo-wide grep: no `pinnedColumns`, `DataGridPro`/`Premium`, row grouping or aggregation. `columnGroupingModel` + `processRowUpdate` only |
+| NFR-9 | PASS | Reuses `csv.ts`, `grading-math`, `student-access`, `course-access`, `notify`, `audit`, `logger`, quiz `resultsVisible`. New code in `src/server/gradebook/` and `src/server/report-cards/`. No `console.*` in new code or in the seed diff. (DataGrid used instead of `DataTable` for 2 lists. The deviation is justified in dev-log) |
+| NFR-10 | PASS | `term-placement.ts:21-22` uses `schoolToday(date, tz)`. `term-placement.test.ts` "uses the school-local date at day boundaries". Past-due is a strict instant compare (`grade-calc.test.ts` boundary) |
+| NFR-11 | PASS | `report-cards.spec.ts` print media check. `ReportCardDocument.tsx:24` `@page { size: A4 portrait; margin: 12mm }`, one card per page |
+| NFR-12 | **FAIL** | lint ✅, typecheck ✅, all required SH-11 tests exist and pass. **But `npm run test` is 399/409**: 1 SH-11-induced flake (`qa-sh9` FR-13/FR-42, Headline 1) plus pre-existing failures (Headline 2) |
+| NFR-13 | PASS | `grade-calc.ts` never reads `gpa`. GPA is only stored in band JSON (`validators/gradebook.ts:42`). No rank or transcript code |
 
-## Recommended follow-ups (not blocking feature behaviour)
-1. **NFR-7:** in `prisma/seed.ts` L463 and L526, change `console.log` to `logger.info`.
-2. **NFR-8:** triage the 6 pre-existing failures (carried over from SH-9), or mark them as known so the suite can be green.
-3. **Coverage gaps (low risk):** a unit test for the `useAutosave` offline queue/retry, and an e2e for builder duplicate, drag and preview.
-4. **From the dev log, outside SH-10's scope:** NUL bytes in `renderEmail` previews (`EmailOutbox` insert rejected); the chained-refine `DecimalError` in `validators/assignments.ts`; the app-shell sidebar axe `list` violation.
+## Recommended actions
+1. **Fix Headline 1:** in `publishOnce`, run the gradebook upsert after `notify()`, or guard it with try/log. Then rerun `qa-sh9.test.ts` several times.
+2. Triage or quarantine the pre-existing auth/attendance/toast/lockout failures so the suite can be green (carried over from SH-9/SH-10).
+3. Restore a term for the current academic year in the dev DB (the e2e specs require one), or make the specs create their own term.
+4. Optional: add runtime tests for `scales-service.ts` and the CSV export, and a load test for NFR-3.

@@ -2,6 +2,7 @@ import { prisma } from '@/server/db';
 import { ANSWER_GRACE_MS } from './grading';
 import { submitAttempt } from './attempt-service';
 import { notifyResultsReleased } from './quiz-service';
+import { syncQuizGrades } from '@/server/gradebook/gradebook-sync';
 
 /**
  * PRD-10 maintenance (FR-18, FR-30, FR-35), run by the internal dispatch cron on every call.
@@ -34,6 +35,7 @@ export async function sendAfterCloseResultsReleased(now = new Date()): Promise<n
   for (const q of due) {
     const { count } = await prisma.quiz.updateMany({ where: { id: q.id, resultsReleasedAt: null }, data: { resultsReleasedAt: now } });
     if (count !== 1) continue;
+    await syncQuizGrades(q.id, now); // PRD-11 FR-7 (R1)
     await notifyResultsReleased(q.id);
     sent++;
   }
