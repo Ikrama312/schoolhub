@@ -1,0 +1,585 @@
+{
+  "ticketId": "SH-10",
+  "timestamp": "2026-11-09T13:30:00Z",
+  "phase": "dev-planning",
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "TASK-1",
+      "description": "Prisma schema: enums QuizStatus/QuestionType/ResultsVisibility/AttemptStatus/ScoringPolicy and models Quiz, Question, QuizAttempt, QuizAnswer (@@id[attemptId,questionId]), QuizAccommodation exactly per PRD FR-1, plus relations/indexes from system-design §2 and back-relations on Course/User. Migration via `prisma migrate dev --create-only`, then append raw SQL partial unique index quiz_attempt_one_in_progress_uq (status='IN_PROGRESS') and add a schema comment pointing to it. Never use db push (ADR-2).",
+      "files": [
+        "prisma/schema.prisma",
+        "prisma/migrations/20261110000000_add_quizzes/migration.sql"
+      ],
+      "dependencies": [],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-1",
+        "FR-19"
+      ]
+    },
+    {
+      "id": "TASK-2",
+      "description": "Zod validators (client-safe): quizSettingsSchema (superRefine availableUntil>availableFrom, timeLimit<=window; timeLimit 1-300|null, maxAttempts 1-10), questionSchema discriminatedUnion on type (points 0.5-100, 2-8 options, >=1 correct for MC, 1-10 accepted), answerResponseSchema (type-agnostic, text<=10000), manualGradeSchema {pointsAwarded step 0.5, feedback?} (field name per api-contracts, NOT `points`), accommodationSchema, reorderSchema. Unit tests.",
+      "files": [
+        "src/lib/validators/quiz.ts",
+        "tests/unit/quiz/quiz-validators.test.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-2",
+        "FR-6",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-3",
+      "description": "Pure core grading.ts (no Prisma client; import dec/fixed2/Decimal from @/server/assignments/grading-math): gradeAnswer, needsReview (A8 derived rule), normalizeShortAnswer, computeDeadline, attemptLimit, resultsVisible, canPublish, applyScoringPolicy (HIGHEST/LATEST/AVERAGE over GRADED), seededShuffle (string hash + mulberry32), ANSWER_GRACE_MS=30000. Unit tests per system-design §6 incl. FR-2 example ({A,B}->0,{A}->2) and ' Photosynthesis '.",
+      "files": [
+        "src/server/quiz/grading.ts",
+        "tests/unit/quiz/grading.test.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-3",
+        "FR-4",
+        "FR-5",
+        "FR-9",
+        "FR-13",
+        "FR-20",
+        "FR-22",
+        "FR-23",
+        "FR-28",
+        "NFR-7",
+        "NFR-8"
+      ]
+    },
+    {
+      "id": "TASK-4",
+      "description": "Student serializers toStudentQuiz/toStudentAttempt (incl. serverNow, options shuffled via seededShuffle(attempt.id) when shuffleOptions)/toStudentResult built by explicit allow-list; correct/explanation only when resultsVisible && showCorrectAnswers. Unit test walks output recursively asserting no `correct` key before visibility (AC-7).",
+      "files": [
+        "src/server/quiz/serializers.ts",
+        "tests/unit/quiz/serializers.test.ts"
+      ],
+      "dependencies": [
+        "TASK-3"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "NFR-1",
+        "FR-11",
+        "FR-21"
+      ]
+    },
+    {
+      "id": "TASK-5",
+      "description": "Integrations: add notification types quiz.published (ACADEMIC, STUDENT, defaultEmail false) and quiz.results_released (ACADEMIC, STUDENT+PARENT, defaultEmail true); register('quiz', resolver) file context — course manager, or course viewer when quiz PUBLISHED.",
+      "files": [
+        "src/server/notifications/types.ts",
+        "src/server/files/contexts.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-29",
+        "FR-30",
+        "FR-39",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-6",
+      "description": "access.ts: assertCanAccessAttempt(user, attempt, {write}) — owner (write), manager via assertCanManageCourse, linked PARENT read-only only when resultsVisible; otherwise NOT_FOUND.",
+      "files": [
+        "src/server/quiz/access.ts"
+      ],
+      "dependencies": [
+        "TASK-3"
+      ],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-34",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-7",
+      "description": "attempt-service.ts: startOrResumeAttempt (window/limit CONFLICTs, cuid up front, seeded questionOrder, frozen deadlineAt, P2002 -> re-read and resume; 201 vs 200 signal), getAttempt (ensureNotExpired), saveAnswer hot path (1 attempt read + 1 upsert, no Quiz/Question load; deadline+30s -> auto-submit + CONFLICT 'Time is up'), submitAttempt(id,{auto}) idempotent via status claim, ensureNotExpired, gradeAnswerManually (points<=question.points, audit after commit), recomputeAttempt(tx,id), getStudentQuizScore (returns isPractice; no endpoint).",
+      "files": [
+        "src/server/quiz/attempt-service.ts"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-3",
+        "TASK-4",
+        "TASK-6"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-12",
+        "FR-13",
+        "FR-15",
+        "FR-16",
+        "FR-17",
+        "FR-18",
+        "FR-19",
+        "FR-22",
+        "FR-23",
+        "FR-24",
+        "FR-25",
+        "FR-32",
+        "FR-33",
+        "FR-38",
+        "NFR-2"
+      ]
+    },
+    {
+      "id": "TASK-8",
+      "description": "quiz-service.ts: listCourseQuizzes (role-shaped teacher/student/parent; A2 'missed'), createQuiz, getQuizForManager (locked/publishProblems/totalPoints), getQuizForStudent, updateQuiz (DRAFT->PUBLISHED conditional updateMany + canPublish VALIDATION_ERROR + notify quiz.published after commit), deleteQuiz (CONFLICT if attempts), add/update/delete/reorderQuestions behind edit lock (FR-10 message), regradeQuiz (one $transaction, skip gradedById!=null, recomputeAttempt, audit), releaseResults (MANUAL claim + notifyStudentAndParents + audit), upsertAccommodation (audit).",
+      "files": [
+        "src/server/quiz/quiz-service.ts"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-4",
+        "TASK-5",
+        "TASK-7"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-6",
+        "FR-7",
+        "FR-8",
+        "FR-9",
+        "FR-10",
+        "FR-11",
+        "FR-20",
+        "FR-28",
+        "FR-29",
+        "FR-30",
+        "FR-31",
+        "FR-38"
+      ]
+    },
+    {
+      "id": "TASK-9",
+      "description": "analytics.ts: getQuizAnalytics (count/mean/median/max/min/avg time, 10-bucket histogram with 100% in last bucket, per-question %correct, avg points, option distribution with most-chosen wrong option) and analyticsCsv via toCsv (student, attemptNumber, score, one column per question).",
+      "files": [
+        "src/server/quiz/analytics.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-3"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-26",
+        "FR-27"
+      ]
+    },
+    {
+      "id": "TASK-10",
+      "description": "maintenance.ts: autoSubmitExpiredAttempts(now) (IN_PROGRESS, deadlineAt < now-30s, cap 200, submitAttempt auto) and sendAfterCloseResultsReleased(now) (claim resultsReleasedAt null->now, notify only when count=1). Wire both into internal email dispatch route after sendDueReminders, each in own try/catch + logger.error.",
+      "files": [
+        "src/server/quiz/maintenance.ts",
+        "src/app/api/internal/email/dispatch/route.ts"
+      ],
+      "dependencies": [
+        "TASK-5",
+        "TASK-7"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-18",
+        "FR-30",
+        "FR-35"
+      ]
+    },
+    {
+      "id": "TASK-11",
+      "description": "Quiz & question CRUD route handlers (thin: withHandler -> requireUser/requireRole -> Zod -> one service call -> ok/paginated), shapes per api-contracts.json.",
+      "files": [
+        "src/app/api/courses/[id]/quizzes/route.ts",
+        "src/app/api/quizzes/[id]/route.ts",
+        "src/app/api/quizzes/[id]/questions/route.ts",
+        "src/app/api/quizzes/[id]/questions/reorder/route.ts",
+        "src/app/api/questions/[id]/route.ts"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-8"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-31",
+        "FR-6",
+        "FR-7",
+        "FR-9",
+        "FR-10",
+        "NFR-5",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-12",
+      "description": "Teacher action route handlers: regrade, release-results, analytics (?format=csv -> text/csv), accommodations PUT.",
+      "files": [
+        "src/app/api/quizzes/[id]/regrade/route.ts",
+        "src/app/api/quizzes/[id]/release-results/route.ts",
+        "src/app/api/quizzes/[id]/analytics/route.ts",
+        "src/app/api/quizzes/[id]/accommodations/[studentId]/route.ts"
+      ],
+      "dependencies": [
+        "TASK-8",
+        "TASK-9"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-10",
+        "FR-20",
+        "FR-26",
+        "FR-27",
+        "FR-28",
+        "FR-38",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-13",
+      "description": "Attempt route handlers: POST start/resume (201/200), GET attempt, PUT answer (response has no grading data), POST submit (returns StudentResult), PUT manual grade.",
+      "files": [
+        "src/app/api/quizzes/[id]/attempts/route.ts",
+        "src/app/api/attempts/[id]/route.ts",
+        "src/app/api/attempts/[id]/answers/[questionId]/route.ts",
+        "src/app/api/attempts/[id]/submit/route.ts",
+        "src/app/api/attempts/[id]/answers/[questionId]/grade/route.ts"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-7"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-32",
+        "FR-15",
+        "FR-16",
+        "FR-17",
+        "FR-24",
+        "FR-25",
+        "NFR-1",
+        "NFR-5",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-14",
+      "description": "Integration tests (Vitest + test DB): autosave 409 after deadline+30s and attempt auto-submitted; GET auto-submits expired attempt; concurrent start returns one attempt; double submit no-op; regrade changes auto-graded answers but not manual ones; maintenance pass idempotent.",
+      "files": [
+        "tests/integration/quiz/attempts.test.ts",
+        "tests/integration/quiz/regrade.test.ts"
+      ],
+      "dependencies": [
+        "TASK-7",
+        "TASK-8",
+        "TASK-10"
+      ],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "NFR-8",
+        "FR-16",
+        "FR-17",
+        "FR-18",
+        "FR-19",
+        "FR-10",
+        "FR-35"
+      ]
+    },
+    {
+      "id": "TASK-15",
+      "description": "Course Quizzes tab + list: course-tabs.ts entry (no sidebar entry, A1/FR-37); server page with requirePageRole + course access; CourseQuizzesView (teacher DataTable + New quiz; student Upcoming/Available/Completed/Missed; parent read-only completed results); new/page.tsx creates DRAFT and redirects to edit. mui-mcp lookup first (ADR-7).",
+      "files": [
+        "src/config/course-tabs.ts",
+        "src/app/(app)/courses/[courseId]/quizzes/page.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/CourseQuizzesView.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/new/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-8"
+      ],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "FR-11",
+        "FR-33",
+        "FR-6",
+        "NFR-4",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-16",
+      "description": "Quiz player: take/page.tsx (start screen + ConfirmDialog, ensureNotExpired), QuizPlayer (sticky header, mm:ss timer from deadlineAt+serverNow, red <2min, aria-live at 5:00/1:00, Chip save pill, LinearProgress, Radio/Checkbox/TextField per type, all-on-one-page or paged navigator with client-only flags, submit ConfirmDialog with unanswered count, mode='preview' no-op), useAutosave (800ms debounce, localStorage queue 'quiz-attempt:<id>', 5s retry, 409 -> clear + route to result, merge queue on mount). mui-mcp lookup first.",
+      "files": [
+        "src/app/(app)/quizzes/[quizId]/take/page.tsx",
+        "src/app/(app)/quizzes/[quizId]/take/QuizPlayer.tsx",
+        "src/app/(app)/quizzes/[quizId]/take/useAutosave.ts"
+      ],
+      "dependencies": [
+        "TASK-4",
+        "TASK-7",
+        "TASK-13"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-8",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-15",
+        "FR-16",
+        "FR-17",
+        "FR-19",
+        "NFR-3",
+        "NFR-4"
+      ]
+    },
+    {
+      "id": "TASK-17",
+      "description": "Builder question list: QuestionList (dnd-kit SortableContext of MUI Cards + Up/Down keyboard fallback, add via type picker defaulting to SINGLE_CHOICE, duplicate, delete, disabled controls + tooltip when locked) and QuestionEditor (per-type editors: options with correct Radio/Checkbox, Enter adds option, accepted-answers list, essay guidance, MarkdownEditor + FileUpload context 'quiz').",
+      "files": [
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuestionList.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuestionEditor.tsx"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-11"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-7",
+        "FR-10",
+        "FR-39",
+        "NFR-3",
+        "NFR-4",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-18",
+      "description": "Builder shell: edit/page.tsx (manager-only), QuizBuilder (running points total, Publish with canPublish errors, lock banner + Regrade button, Preview as student via QuizPlayer mode='preview'), QuizSettingsPanel (DateTimePicker window, Switch/Select/TextField settings, accommodations DataTable of enrolled students with note that changes apply to new attempts only, A7).",
+      "files": [
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/page.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizBuilder.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizSettingsPanel.tsx"
+      ],
+      "dependencies": [
+        "TASK-12",
+        "TASK-16",
+        "TASK-17"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-6",
+        "FR-8",
+        "FR-9",
+        "FR-10",
+        "FR-28",
+        "NFR-4",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-19",
+      "description": "Result page quizzes/[quizId]/attempts/[attemptId]: assertCanAccessAttempt, toStudentResult (score, %, per-question correctness, response, feedback, correct answers/explanations if allowed) or 'Submitted — results will be available later.' Used by student, parent, teacher.",
+      "files": [
+        "src/app/(app)/quizzes/[quizId]/attempts/[attemptId]/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-4",
+        "TASK-6",
+        "TASK-7"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-20",
+        "FR-21",
+        "NFR-1",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-20",
+      "description": "Manual grading: grade/page.tsx (manager-only, ensureNotExpired on load) + QuizGradingWorkspace (Tabs By student / By question, points TextField step 0.5 max=question points, feedback, override on auto-graded answers).",
+      "files": [
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/grade/page.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/grade/QuizGradingWorkspace.tsx"
+      ],
+      "dependencies": [
+        "TASK-7",
+        "TASK-13"
+      ],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "FR-24",
+        "FR-25",
+        "NFR-4",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-21",
+      "description": "Analytics UI: analytics/page.tsx + QuizAnalytics (StatCards, x-charts BarChart 10 buckets — first x-charts use, mui-mcp lookup mandatory, per-question DataTable with most-chosen wrong option highlighted, CSV link to ?format=csv).",
+      "files": [
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/analytics/page.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/analytics/QuizAnalytics.tsx"
+      ],
+      "dependencies": [
+        "TASK-9",
+        "TASK-12"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-26",
+        "FR-27",
+        "NFR-4",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-22",
+      "description": "Seed: three quizzes per FR-36, idempotent by (courseId, title); attempt scores computed with grading.ts.",
+      "files": [
+        "prisma/seed.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-3"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-36"
+      ]
+    },
+    {
+      "id": "TASK-23",
+      "description": "E2E (Playwright): teacher builds 4-question quiz incl. essay and publishes -> student starts, answers, page.reload(), answers persist, submits -> teacher grades essay -> student sees results; axe check on player.",
+      "files": [
+        "tests/e2e/quizzes.spec.ts"
+      ],
+      "dependencies": [
+        "TASK-15",
+        "TASK-16",
+        "TASK-18",
+        "TASK-19",
+        "TASK-20",
+        "TASK-22"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "NFR-8",
+        "NFR-3",
+        "FR-15"
+      ]
+    }
+  ],
+  "fileStructure": {
+    "./": [
+      "prisma/"
+    ],
+    "prisma/migrations/": [
+      "20261110000000_add_quizzes/"
+    ],
+    "src/": [
+      "config/"
+    ],
+    "src/app/(app)/courses/[courseId]/": [
+      "quizzes/"
+    ],
+    "src/app/(app)/courses/[courseId]/quizzes/": [
+      "new/"
+    ],
+    "src/app/(app)/courses/[courseId]/quizzes/[quizId]/": [
+      "analytics/",
+      "edit/",
+      "grade/"
+    ],
+    "src/app/(app)/quizzes/[quizId]/": [
+      "take/"
+    ],
+    "src/app/(app)/quizzes/[quizId]/attempts/": [
+      "[attemptId]/"
+    ],
+    "src/app/api/attempts/": [
+      "[id]/"
+    ],
+    "src/app/api/attempts/[id]/": [
+      "submit/"
+    ],
+    "src/app/api/attempts/[id]/answers/": [
+      "[questionId]/"
+    ],
+    "src/app/api/attempts/[id]/answers/[questionId]/": [
+      "grade/"
+    ],
+    "src/app/api/courses/[id]/": [
+      "quizzes/"
+    ],
+    "src/app/api/internal/email/": [
+      "dispatch/"
+    ],
+    "src/app/api/questions/": [
+      "[id]/"
+    ],
+    "src/app/api/quizzes/": [
+      "[id]/"
+    ],
+    "src/app/api/quizzes/[id]/": [
+      "analytics/",
+      "attempts/",
+      "questions/",
+      "regrade/",
+      "release-results/"
+    ],
+    "src/app/api/quizzes/[id]/accommodations/": [
+      "[studentId]/"
+    ],
+    "src/app/api/quizzes/[id]/questions/": [
+      "reorder/"
+    ],
+    "src/lib/": [
+      "validators/"
+    ],
+    "src/server/": [
+      "files/",
+      "notifications/",
+      "quiz/"
+    ],
+    "tests/": [
+      "e2e/"
+    ],
+    "tests/integration/": [
+      "quiz/"
+    ],
+    "tests/unit/": [
+      "quiz/"
+    ]
+  },
+  "totalEstimateHours": 51.5,
+  "nxpPatterns": [],
+  "status": "complete",
+  "notes": [
+    "Supersedes stale SH-9 dev-planning artifacts.",
+    "Dev gate (ADR-7/NFR-4): mui-mcp useMuiDocs->fetchDocs before every UI component; unreachable => stop and report.",
+    "Dev gate (ADR-2): use prisma migrate, never db push (partial unique index).",
+    "grading.ts holds deadline/scoring/shuffle per system-design §3.1 (ADR-3 split files not created).",
+    "manualGradeSchema field is pointsAwarded (api-contracts), not points.",
+    "FR-37 produces no code (A1); NFR-10 is a scope fence."
+  ]
+}

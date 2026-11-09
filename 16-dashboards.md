@@ -1,0 +1,188 @@
+# PRD-16: Role Dashboards, Reports & Early-Warning Insights
+
+**Ticket:** SCH-016 · **Depends on:** PRD-00 – PRD-15 · **Run mode:** `--brownfield --tech-stack react`
+
+## Summary
+
+Replace the placeholder `/dashboard` with purpose-built dashboards for each role, add an at-risk student early-warning list combining attendance, grades and missing work, and an admin reports centre with charts and CSV exports for enrollment, attendance, academic performance and engagement.
+
+## Platform Context (shared by every SchoolHub PRD)
+
+SchoolHub is a single-school web platform for administrators, teachers, students and parents. It is built incrementally by a sequence of PRDs (PRD-00 … PRD-18). **When this PRD runs, every lower-numbered PRD is already implemented in the workspace.** Reuse existing models, services, components and helpers — never re-scaffold the project, never duplicate a helper that already exists, never rename existing routes or models.
+
+### Fixed technology decisions
+
+| Concern | Decision |
+|---|---|
+| Framework | Next.js 14 (App Router), React 18, TypeScript `strict: true` |
+| UI components | **Material UI only** — `@mui/material` v9 (+ `@emotion/react`, `@emotion/styled`), `@mui/material-nextjs` (App Router cache provider), `@mui/icons-material`. Every component is looked up through the MUI MCP server first (see "UI component rule" below) |
+| Theming | MUI `createTheme` with `cssVariables: true` and light/dark `colorSchemes`, `InitColorSchemeScript`, `useColorScheme()` for the toggle; styling only through the theme, the `sx` prop and `styled()` — no Tailwind, no CSS modules |
+| Dates & pickers | `@mui/x-date-pickers` v9 (MIT) with `AdapterDateFns`; `date-fns` + `date-fns-tz` for logic |
+| Database | PostgreSQL 16 via Prisma ORM (`prisma/schema.prisma`), migrations with `prisma migrate` |
+| Auth | Auth.js (NextAuth v5) Credentials provider, JWT session strategy, bcrypt password hashes |
+| Validation | Zod schemas in `src/lib/validators/<feature>.ts`, shared by client forms and API handlers |
+| Forms | React Hook Form + `@hookform/resolvers/zod` |
+| Data tables | `@mui/x-data-grid` v9 (MIT `DataGrid`, server-side pagination/sorting/filtering) wrapped by the shared `DataTable` component |
+| Charts | `@mui/x-charts` v9 (MIT) |
+| Email | Nodemailer via the `EmailOutbox` table (from PRD-04); dev transport logs to console |
+| Calendar UI | `@mui/x-scheduler` (MIT Community `EventCalendar`; pin the exact version found via the MUI MCP — it is in beta) |
+| Tests | Vitest + Testing Library (unit/integration), Playwright (e2e in `tests/e2e`) |
+| Local infra | `docker-compose.yml` with Postgres; `.env.example` documents every env var |
+
+### UI component rule (mandatory — applies to every screen in this PRD)
+
+1. **Material UI components only.** Every visible UI element is built from `@mui/material`, `@mui/icons-material` or the MUI X packages listed above (`@mui/x-data-grid`, `@mui/x-date-pickers`, `@mui/x-charts`, `@mui/x-scheduler`) — composed with `Box`, `Stack`, `Grid` and the theme. Hand-styled raw HTML (`<div>`/`<button>`/`<table>` with custom CSS) is not allowed where an MUI component exists.
+2. **Look up every component through the MUI MCP server (`mui-mcp`) before using it.** Call `useMuiDocs` with the package (for example `@mui/material@9.5.0`, `@mui/x-data-grid`) to get the docs index, then `fetchDocs` on the component's page, and use only props, slots and imports documented there for the installed version. Never write MUI code from memory, and never invent props. If the MCP server is unreachable, stop and report it as a blocker instead of guessing.
+3. **Banned:** Tailwind CSS, shadcn/ui, Radix UI, Headless UI, Chakra UI, Ant Design, Bootstrap, `lucide-react`, `next-themes`, `@tanstack/react-table`, Recharts, FullCalendar, `react-select`, `react-datepicker`, `sonner`, `notistack` and any other component or styling library. PRD-00 enforces this with an ESLint `no-restricted-imports` rule.
+4. **Allowed non-visual libraries** (they render no UI of their own): React Hook Form, Zod, `@dnd-kit/core` and `@dnd-kit/sortable` (drag behaviour only — draggable items are MUI components), `react-markdown` + `remark-gfm` + `rehype-sanitize` (every Markdown element is mapped to an MUI component through the `components` prop), `papaparse`, `date-fns`. Email templates (`@react-email/components`) are exempt because email clients cannot render MUI.
+5. Shared wrappers live in `src/components/shared/` and are themselves built from MUI. Toasts use MUI `Snackbar` + `Alert` through the shared `useToast()` hook from PRD-00; side panels use `Drawer`; confirmations use `Dialog`; pickers and searchable selects use `Autocomplete`.
+6. Intake must record this rule as a non-functional requirement, and QA must check it: no banned imports, and every MUI import resolves to a documented component.
+
+### Code layout and conventions
+
+- `src/app/(public)/…` public pages, `src/app/(auth)/…` sign-in flows, `src/app/(app)/…` authenticated app with the shared sidebar shell.
+- `src/app/api/<feature>/…/route.ts` REST route handlers. Handlers are thin: parse with Zod → call a service → return JSON.
+- `src/server/services/<feature>.ts` business logic and Prisma access. Server components may call services directly; client components call the REST API. New features follow PRD-05's precedent of a feature-named subdirectory instead: `src/server/<feature>/<feature>-service.ts` (for example `src/server/sections/sections-service.ts`), not this older flat path — which remains accurate only for the already-built PRD-02/03-era services that still live there.
+- `src/server/auth/requireRole.ts` exposes `requireUser()`, `requireRole(...roles)` and per-entity access checks. Every handler and every server page enforces access server-side; hiding a button is never the only protection.
+- Response shape: success `{ "data": … }`; list `{ "data": [...], "page": 1, "pageSize": 20, "total": 134 }`; error `{ "error": { "code": "VALIDATION_ERROR", "message": "…", "details": {…} } }`. Error codes: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `RATE_LIMITED` (429), `INTERNAL` (500).
+- Pagination: `?page=` (default 1) and `?pageSize=` (default 20, maximum 100). Sorting: `?sort=field&order=asc|desc`. Search: `?q=`.
+- IDs are `cuid()` strings. Every model has `createdAt` and `updatedAt`. Timestamps are stored in UTC and displayed in the school timezone from `SchoolSettings.timezone`. Date-only values use `@db.Date`.
+- Sidebar navigation lives in `src/config/navigation.ts` as an array of `{ label, href, icon, roles }`. A PRD that adds a page adds its nav entry there.
+- Student detail page `/students/[studentId]` is tab-based; tabs are registered in `src/config/student-tabs.ts`. Feature PRDs add a tab there instead of creating a separate student page.
+- Mutations that change records owned by someone else write an `AuditLog` row through `audit()` (from PRD-01).
+- Notifications go through `notify()` (from PRD-04). Notification type keys are registered in `src/server/notifications/types.ts`.
+- No `console.log` in committed code except the dev email transport; use the `logger` from `src/lib/logger.ts`.
+
+### Roles
+
+`ADMIN` (school office staff and principal), `TEACHER`, `STUDENT`, `PARENT` (parent or guardian). A user has exactly one role. Parents see data only for students linked to them; students see only their own data; teachers see data for courses they teach and sections they are homeroom teacher of; admins see everything.
+
+### Assumptions and constraints
+
+- **Assumptions:** one school per deployment (no multi-tenancy); English-only UI; the school timezone is the reference for every date rule; users have a modern evergreen browser (last 2 versions of Chrome, Edge, Firefox, Safari).
+- **Constraints:** this PRD is delivered in a single forge run, so its scope must not expand beyond the sections below; do not modify behaviour owned by later PRDs; keep all existing tests passing (`npm run lint && npm run typecheck && npm run test`) and add the tests listed in this PRD.
+- **Delivery milestones:** Milestone 1 "Core platform" = PRD-00 – PRD-05 · Milestone 2 "Teaching & learning" = PRD-06 – PRD-11 · Milestone 3 "Communication" = PRD-12 – PRD-15 · Milestone 4 "Operations & public" = PRD-16 – PRD-18.
+
+## Background
+
+All the data now exists, but each user must click through several pages to answer "what needs my attention today?". Dashboards answer that question per role, and the early-warning list surfaces students who are slipping before report cards reveal it.
+
+## Goals
+
+1. Each role's dashboard answers "what needs my attention today" without further navigation.
+2. Teachers and admins see at-risk students identified from 3 signals, refreshed at least hourly.
+3. Admins can produce the 6 standard reports in under 1 minute each.
+
+## Out of Scope
+
+- Custom drag-and-drop dashboard layouts.
+- Predictive machine-learning risk models (rule-based only).
+- Scheduled report emails (future work).
+
+## User Stories
+
+- As a teacher, I want to see today's classes, registers to take, work to grade and at-risk students so that I can plan my day.
+- As a student, I want to see today's classes, what's due, recent grades and announcements so that I stay organised.
+- As a parent, I want the child overview (PRD-15) as my dashboard so that I see what matters immediately.
+- As an admin, I want school-wide KPIs and trends so that I can monitor the school's health.
+- As an admin or teacher, I want a list of at-risk students with the reasons so that I can intervene early.
+- As an admin, I want standard reports with filters and exports so that I can answer questions from leadership and authorities.
+
+## Functional Requirements
+
+### FR-1 Dashboard routing
+1. `/dashboard` renders by role: `AdminDashboard`, `TeacherDashboard`, `StudentDashboard`; PARENT is redirected to their child overview (PRD-15 FR-3 rules).
+2. Each widget is an independent server component wrapped in Suspense with an MUI `Skeleton`, and in an error boundary that shows "This widget could not load — Retry" without breaking the page.
+3. Greeting header: "Good morning, Tom" (by school-timezone time of day) plus today's date and the current term name.
+
+### FR-2 Teacher dashboard widgets
+1. **Today's classes:** timetable for today with Now/Next badges, each with "Take attendance" (status: taken / not taken) and a link to the course.
+2. **To grade:** count and list (top 5, oldest first) of submitted-but-ungraded assignment submissions and quiz attempts needing grading across their courses, with links.
+3. **Upcoming deadlines:** assignments and quizzes in their courses due in the next 7 days with submission rate.
+4. **At-risk students:** top 5 at-risk students among their students (FR-6) with reasons, link to full list.
+5. **Messages & announcements:** unread messages count, latest 3 announcements.
+6. **Quick actions:** New assignment, New announcement, Take attendance, New quiz.
+
+### FR-3 Student dashboard widgets
+1. **Today:** schedule with Now/Next, or holiday message.
+2. **Due soon:** assignments and open quizzes due in the next 7 days, overdue (missing) highlighted at top in red.
+3. **Recent grades:** last 5 grades with course and percent.
+4. **My courses:** course cards with current percent and letter, content progress bar (PRD-08) and next lesson link.
+5. **Announcements:** latest 3 unread.
+6. **Attendance this term:** rate with a small MUI X `Gauge`.
+
+### FR-4 Admin dashboard widgets
+1. **KPI row** (`StatCard`): active students, active teachers, today's attendance rate (with delta vs. same weekday last week), registers missing today, open safeguarding reports (safeguarding leads only), pending absence notes.
+2. **Attendance trend:** MUI X `LineChart` of daily school-wide attendance rate over the last 30 school days, with the alert threshold as a reference line.
+3. **Enrollment by grade level:** MUI X `BarChart` of active students per grade level, stacked by gender.
+4. **Grade distribution:** MUI X `BarChart` histogram of current course percentages across all students for the current term (10 % buckets) with average and median.
+5. **At-risk summary:** counts by risk level (High / Medium) and by reason, link to list.
+6. **Upcoming events:** next 5 school events (PRD-14).
+7. **Recent activity:** last 10 audit entries of types `user.*`, `report_card.*`, `settings.*`.
+
+### FR-5 Data caching
+1. Expensive aggregates (admin KPIs, trends, distributions, risk scores) are computed by `src/server/dashboards/insights.ts` and cached with Next.js `unstable_cache` keyed by role scope with a 15-minute revalidate (at-risk: 60 minutes). Each widget shows "Updated 12 min ago" and admins have a "Refresh" button that revalidates tags.
+
+### FR-6 Early-warning (at-risk) model (`src/server/dashboards/risk.ts`)
+1. For each ACTIVE student in the current term compute three signals:
+   - **Attendance:** term attendance rate below the school threshold (PRD-07, default 90 %) → Medium; below 80 % → High.
+   - **Grades:** any course percent below 60 % → Medium; two or more courses below 60 %, or any below 50 % → High.
+   - **Missing work:** 3–4 missing assignments in the last 30 days → Medium; 5 or more → High.
+2. Overall level = High if any signal is High or two signals are Medium; Medium if exactly one signal is Medium; otherwise none.
+3. Store results in `StudentRiskSnapshot { studentId, termId, level, reasons Json, computedAt }` (one row per student per term, upserted) refreshed by the maintenance run at most once per hour and on admin "Refresh".
+4. Full list page `/insights/at-risk` (ADMIN: all students; TEACHER: their students; homeroom teacher: their section): table with student, section, level badge, reasons as chips ("Attendance 78 %", "2 courses < 60 %", "6 missing"), trend arrow vs. the previous snapshot, and actions (open student, message parents). Filters: level, reason, grade level, section. CSV export.
+5. Register student tab "Insights" (ADMIN/TEACHER) showing the current signals with values and a short history of snapshots.
+6. Risk level changes from none/Medium to High notify the homeroom teacher (`insights.student_high_risk`, default email true; at most once per student per 14 days).
+
+### FR-7 Reports centre (`/admin/reports`)
+Each report has filters, a chart, a data table and CSV export (formula-injection safe, as PRD-03):
+1. **Enrollment:** students by grade level, section and gender; new enrollments and archives by month.
+2. **Attendance:** rate by grade level / section / course for a date range; daily trend; top 20 lowest students (reuses PRD-07 service).
+3. **Academic performance:** average percent and letter distribution by course and by subject for a term; comparison between sections of the same grade for the same subject.
+4. **Assignment completion:** on-time / late / missing rates by course and by teacher for a date range.
+5. **Engagement:** lesson completion rate by course (PRD-08), announcement read rate (PRD-12), parent portal activity (distinct parents signed in during the last 7 / 30 days from `lastLoginAt` and audit `auth.login.success`).
+6. **Teacher workload:** per teacher — courses, students taught, weekly periods (PRD-06), grading backlog.
+7. Reports respect the selected academic year and term selector at the top of the page.
+
+### FR-8 Navigation
+1. "Dashboard" remains the first item for all roles. ADMIN: "Reports", "At-risk students". TEACHER: "At-risk students".
+
+## API
+
+| Method & path | Role | Notes |
+|---|---|---|
+| `GET /api/dashboard/teacher` | TEACHER | Widget data (also used by client refresh) |
+| `GET /api/dashboard/student` | STUDENT | |
+| `GET /api/dashboard/admin` | ADMIN | |
+| `POST /api/dashboard/refresh` | ADMIN | Revalidates cache tags |
+| `GET /api/insights/at-risk?level=&reason=&sectionId=&page=` | ADMIN, TEACHER (scoped) | `?format=csv` |
+| `GET /api/students/:id/insights` | ADMIN, TEACHER of student | |
+| `GET /api/reports/:reportKey?…filters` | ADMIN | `reportKey` ∈ enrollment, attendance, performance, completion, engagement, workload; `?format=csv` |
+
+## Non-Functional Requirements
+
+1. **Performance:** with seed data scaled to 600 students, 40 teachers and one year of activity (`npm run seed:large` script added by this PRD), every dashboard renders first content in under 1.5 seconds and each report in under 3 seconds.
+2. **Accessibility:** every chart has a visually hidden data table or `aria-label` summary ("Attendance trend: 94.2 % average, lowest 88.1 % on 3 Oct"), and colours meet 3:1 contrast against the background with patterns or labels where colour alone conveys meaning.
+3. **Privacy:** teacher dashboards and risk lists only include students the teacher can access (`getAccessibleStudentIds`).
+
+## Acceptance Criteria
+
+1. Given Tom signs in on a teaching day, then the dashboard shows his classes today, with MATH-7A's attendance status, and a To grade count matching ungraded submissions.
+2. Given Sam signs in, then Due soon lists the assignment due in 2 days, missing items appear first in red, and My courses show current percentages consistent with the Grades tab.
+3. Given Pat signs in, then they are redirected to the child overview.
+4. Given a student with 78 % attendance and one course at 55 %, then the risk level is High with reasons "Attendance 78 %" and "1 course < 60 %".
+5. Given a student with only 3 missing assignments, then the level is Medium.
+6. Given Tom opens At-risk students, then only his students appear; a student he does not teach never appears even via API filters.
+7. Given an admin opens the Attendance report for September for Grade 7 and exports CSV, then the CSV rows match the on-screen table.
+8. Given a widget's query throws, then only that widget shows the retry message and the rest of the dashboard renders.
+
+## Test Requirements
+
+- Unit: risk level rules (each boundary: 90/80 %, 60/50 %, 3/5 missing, combined Medium+Medium → High).
+- Integration: report queries against seeded data with known expected totals; cache revalidation.
+- Playwright: each role's dashboard renders without errors and passes an axe scan.
+
+## Seed Data
+
+- `npm run seed:large` script generating 600 students across Grades 6–8 (8 sections), 40 teachers, full timetables, 60 school days of attendance, assignments and grades, deterministic with a fixed random seed. The default seed stays small.
+- Ensure at least 3 default-seed students hit each risk level.

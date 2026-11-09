@@ -1,0 +1,50 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals", "plugin:@typescript-eslint/recommended"],
+  "parser": "@typescript-eslint/parser",
+  "rules": {
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "destructuredArrayIgnorePattern": "^_" }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          { "name": "tailwindcss", "message": "MUI is the only permitted UI/styling library (ADR-5)." },
+          { "name": "lucide-react", "message": "Use @mui/icons-material instead." },
+          { "name": "next-themes", "message": "Use MUI cssVariables colorSchemes + useColorScheme() instead." },
+          { "name": "@tanstack/react-table", "message": "Use the shared DataTable (MUI X DataGrid) instead." },
+          { "name": "recharts", "message": "Use @mui/x-charts instead." },
+          { "name": "react-select", "message": "Use MUI Autocomplete instead." },
+          { "name": "react-datepicker", "message": "Use @mui/x-date-pickers instead." },
+          { "name": "sonner", "message": "Use the shared useToast()/ToastProvider instead." },
+          { "name": "notistack", "message": "Use the shared useToast()/ToastProvider instead." },
+          { "name": "antd", "message": "MUI is the only permitted UI/styling library (ADR-5)." },
+          { "name": "react-bootstrap", "message": "MUI is the only permitted UI/styling library (ADR-5)." }
+        ],
+        "patterns": [
+          { "group": ["@radix-ui/*"], "message": "MUI is the only permitted UI/styling library (ADR-5)." },
+          { "group": ["@headlessui/*"], "message": "MUI is the only permitted UI/styling library (ADR-5)." },
+          { "group": ["@fullcalendar/*"], "message": "Use @mui/x-scheduler (later PRD) instead." },
+          { "group": ["@chakra-ui/*"], "message": "MUI is the only permitted UI/styling library (ADR-5)." }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.{ts,tsx}"],
+      "parserOptions": { "project": "./tsconfig.json" },
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "error"
+      }
+    },
+    {
+      "files": ["src/server/email/templates/**"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}

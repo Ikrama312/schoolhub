@@ -1,0 +1,2 @@
+first_name,last_name,email,admission_number,date_of_birth,gender,grade_level,enrollment_date,parent1_first_name,parent1_last_name,parent1_email,parent1_phone,parent1_relationship,parent2_first_name,parent2_last_name,parent2_email,parent2_phone,parent2_relationship
+Jane,Doe,jane.doe@example.com,S2026-0001,2015-04-12,FEMALE,Grade 7,2026-08-01,John,Doe,john.doe@example.com,+1 555-123-4567,FATHER,,,,,

@@ -1,0 +1,10 @@
+{
+  "ticketId": "SH-10",
+  "timestamp": "2026-11-09T12:00:00Z",
+  "phase": "intake",
+  "version": "1.0",
+  "techStack": "react",
+  "confidencePct": 100,
+  "detectionNotes": "The PRD declares '--brownfield --tech-stack react', and the workspace confirms it: Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict, Prisma on PostgreSQL 16, Auth.js v5, and Vitest 2.1.1 + Playwright. The MUI packages (@mui/material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts) are pinned at 9.5.0, and @mui/x-internals is overridden to 9.1.0. PRD-10 needs no new dependencies: x-charts BarChart covers the score histogram, @dnd-kit/core 6.3.1 + @dnd-kit/sortable 10.0.0 cover question reorder, the existing MarkdownEditor/MarkdownView cover Markdown prompts, src/server/csv.ts covers CSV export, and Prisma.Decimal (via the grading-math helpers) covers score maths. The mui-mcp server is available for component lookup. Styling goes only through the MUI theme, sx and styled().",
+  "cssPreprocessor": "css"
+}

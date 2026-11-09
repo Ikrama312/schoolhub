@@ -1,0 +1,128 @@
+{
+  "ticketId": "SH-10",
+  "timestamp": "2026-11-09T08:31:48.046Z",
+  "succeeded": true,
+  "phases": {
+    "intake": {
+      "succeededCount": 1,
+      "failedCount": 0,
+      "cost": {
+        "totalUsd": 0.6093958,
+        "tokens": {
+          "input": 18,
+          "output": 12055,
+          "cacheRead": 355454,
+          "cacheWrite": 43412
+        }
+      }
+    },
+    "architect": {
+      "succeededCount": 4,
+      "failedCount": 0,
+      "cost": {
+        "totalUsd": 2.8838532000000003,
+        "tokens": {
+          "input": 84,
+          "output": 58429,
+          "cacheRead": 1988086,
+          "cacheWrite": 226414
+        }
+      }
+    },
+    "dev-planning": {
+      "succeededCount": 1,
+      "failedCount": 0,
+      "cost": {
+        "totalUsd": 0.7132098,
+        "tokens": {
+          "input": 18,
+          "output": 14114,
+          "cacheRead": 375549,
+          "cacheWrite": 60832
+        }
+      }
+    },
+    "dev": {
+      "succeededCount": 1,
+      "failedCount": 0,
+      "cost": {
+        "totalUsd": 11.005028400000002,
+        "tokens": {
+          "input": 244,
+          "output": 172327,
+          "cacheRead": 28602587,
+          "cacheWrite": 357226
+        }
+      }
+    },
+    "qa": {
+      "succeededCount": 1,
+      "failedCount": 0,
+      "cost": {
+        "totalUsd": 1.5546920000000002,
+        "tokens": {
+          "input": 60,
+          "output": 27491,
+          "cacheRead": 2165685,
+          "cacheWrite": 104558
+        }
+      }
+    },
+    "ui-verification": {
+      "succeededCount": 1,
+      "failedCount": 0,
+      "cost": {
+        "totalUsd": 2.8719984000000003,
+        "tokens": {
+          "input": 66,
+          "output": 35760,
+          "cacheRead": 2128137,
+          "cacheWrite": 336498
+        }
+      }
+    }
+  },
+  "scopeIntegrity": null,
+  "apiRetry": {
+    "counts": {
+      "byErrorClass": {
+        "Unknown": {
+          "retries": 0,
+          "exhaustions": 35
+        },
+        "WallClockHardCap": {
+          "retries": 0,
+          "exhaustions": 2
+        },
+        "ReadTimeoutStall": {
+          "retries": 1,
+          "exhaustions": 0
+        }
+      },
+      "byPhase": {
+        "dev": {
+          "retries": 0,
+          "exhaustions": 35
+        },
+        "dev-planning": {
+          "retries": 0,
+          "exhaustions": 1
+        },
+        "architect": {
+          "retries": 0,
+          "exhaustions": 1
+        },
+        "ui-verification": {
+          "retries": 1,
+          "exhaustions": 0
+        }
+      },
+      "totalRetries": 1,
+      "totalExhaustions": 37
+    },
+    "verdict": "Repeated \"Unknown\" errors — check artifacts/telemetry/api-retries.jsonl for details."
+  },
+  "cost": {
+    "totalUsd": 19.638177600000002
+  }
+}

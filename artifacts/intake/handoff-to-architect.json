@@ -1,0 +1,25 @@
+{
+  "ticketId": "SH-10",
+  "timestamp": "2026-11-09T12:00:00Z",
+  "phase": "intake",
+  "version": "1.0",
+  "status": "complete",
+  "requirementsCount": 49,
+  "functionalCount": 39,
+  "nonFunctionalCount": 10,
+  "overallConfidencePct": 96,
+  "techStack": "react",
+  "figmaPresent": false,
+  "blockers": [],
+  "assumptionsFlagged": [
+    "FR-37 (LOW): no sidebar nav entry; quizzes are reached through the course 'Quizzes' tab and direct routes.",
+    "FR-33/34/35/38/39 (MEDIUM): practice quizzes are excluded from the gradebook only; course-access.ts is reused for manage/view; maintenance hooks into /api/internal/email/dispatch; teacher actions write AuditLog rows; Markdown prompts reuse the existing editor and viewer."
+  ],
+  "keyRisks": [
+    "NFR-1: the student serializer must strip `correct`, explanation and scores until results are visible. This covers GET /api/quizzes/:id, GET /api/attempts/:id and the course list.",
+    "NFR-2: autosave is a single QuizAnswer upsert on the (attemptId, questionId) PK under 50 ms. Check the deadline from the attempt row only.",
+    "FR-19: one IN_PROGRESS attempt per student per quiz needs race-safe creation (unique attemptNumber plus a transaction or partial unique index).",
+    "FR-5.2 deadlineAt = min(startedAt + limit + extraTime, availableUntil). An untimed quiz uses availableUntil."
+  ],
+  "nextPhase": "architect"
+}

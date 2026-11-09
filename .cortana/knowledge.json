@@ -1,0 +1,6240 @@
+{
+  "$schema": "https://pdlc-cortana.dev/knowledge/v1",
+  "version": "2.0.0",
+  "generatedAt": "2026-11-06T05:28:22.656Z",
+  "generatedBy": "pdlc-cortana-knowledge-builder",
+  "metadata": {
+    "workspacePath": "",
+    "checksums": {
+      "techStack": "sha256:27c41985db811167b43614f1dc947862f7f5998a6e0163695174cbf7b4e94980",
+      "structure": "sha256:07071d3c99ba6afc6df0313bbc5014f7456eeb03e8f81d03bdc4418c77080b83",
+      "api": "sha256:empty",
+      "dataModels": "sha256:4688c29c6f6438d75af5173c3100f313fda2c7a9c798890e88769ee390e825d6",
+      "conventions": "sha256:55654e2912f82a13a929ce99e4db5e96e4b6b2a511bdb0907663699fa36fb16a",
+      "dependencies": "sha256:27c41985db811167b43614f1dc947862f7f5998a6e0163695174cbf7b4e94980",
+      "testing": "sha256:cc22020644b9909941ebfa5e1a7c48ab9f13668c26ccc49ff1c3ee74e6c1f04a",
+      "buildDeploy": "sha256:3f33e0773e0796d7b2212fb38cf84b43879c80cfffb2a1273ec207d203c2a2cb",
+      "intelligence": "always-stale",
+      "domain": "sha256:empty",
+      "segments": "sha256:67b487810832c96a820cb78bd64e140175128dbd696a4315e446a49fb9bd8e09",
+      "functionalKnowledge": "sha256:empty",
+      "architecturalPatterns": "sha256:629c404248902418be95410e9a1e578d87559bbeb166dcba0a54aa20f0dbd8d0",
+      "brittleAreas": "sha256:07071d3c99ba6afc6df0313bbc5014f7456eeb03e8f81d03bdc4418c77080b83",
+      "keyAreas": "sha256:07071d3c99ba6afc6df0313bbc5014f7456eeb03e8f81d03bdc4418c77080b83",
+      "knownLimitations": "sha256:07071d3c99ba6afc6df0313bbc5014f7456eeb03e8f81d03bdc4418c77080b83",
+      "coreConcepts": "sha256:629c404248902418be95410e9a1e578d87559bbeb166dcba0a54aa20f0dbd8d0",
+      "keyIdeas": "sha256:9ad9689c67a4e0c4e7849eafb2f24fa2fb5a473bb765ba536511c9a84ddf4d03",
+      "technicalKnowledge": "sha256:empty",
+      "regressions": "always-stale"
+    }
+  },
+  "overview": {
+    "name": "schoolhub",
+    "projectType": "data-engineering",
+    "language": "typescript",
+    "framework": "react",
+    "confidence": 0.85
+  },
+  "functionalKnowledge": {
+    "cliCommands": [],
+    "apiRoutes": [],
+    "capabilities": [
+      "dashboard page (/dashboard)",
+      "landing page (/)",
+      "authorizeCredentials",
+      "acceptInvite",
+      "password reset",
+      "changePassword",
+      "ConfirmDialog",
+      "DataTable",
+      "ForgotPasswordForm (FR-17)",
+      "TokenPasswordForm (FR-13, FR-14, FR-16, FR-19)",
+      "ChangePasswordForm (FR-20)",
+      "passwordChecks",
+      "safeCallbackUrl",
+      "schemas",
+      "formatInSchoolTz",
+      "env.ts",
+      "no-restricted-imports (ADR-5: MUI-only)",
+      "ok/paginated/apiError envelopes",
+      "withHandler error mapping",
+      "parsePagination",
+      "parseBody / parseQuery",
+      "computeLockout",
+      "loginErrorMessage",
+      "resolvePrefs",
+      "nextRetry",
+      "isSafeRelativeLink",
+      "expandStudentRecipients",
+      "registry helpers",
+      "assertPasswordAllowed",
+      "isPublicPath"
+    ],
+    "pageRoutes": [
+      "/(app)/account/notifications",
+      "/(app)/account/security",
+      "/(app)/admin/courses/[id]/enrollment",
+      "/(app)/admin/courses",
+      "/(app)/admin/email-log",
+      "/(app)/admin/sections/[id]",
+      "/(app)/admin/sections",
+      "/(app)/courses/[courseId]",
+      "/(app)/courses/[courseId]/roster",
+      "/(app)/dashboard",
+      "/(app)/my-courses",
+      "/(app)/notifications",
+      "/(app)/students/[id]/courses",
+      "/(auth)/forgot-password",
+      "/(auth)/invite/[token]",
+      "/(auth)/login",
+      "/(auth)/reset-password/[token]",
+      "/(public)"
+    ],
+    "scripts": {
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "lint": "next lint",
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run",
+      "test:e2e": "playwright test",
+      "db:migrate": "prisma migrate dev",
+      "db:deploy": "prisma migrate deploy",
+      "db:seed": "tsx prisma/seed.ts",
+      "db:reset": "prisma migrate reset --force",
+      "worker:email": "tsx scripts/worker-email.ts",
+      "format": "prettier --write ."
+    }
+  },
+  "techStack": {
+    "runtime": "sql",
+    "framework": "react",
+    "buildTool": "sql-scripts",
+    "database": "postgresql",
+    "orm": null,
+    "testing": null,
+    "apiStyle": "sql",
+    "version": "0.1.0"
+  },
+  "architecture": {
+    "directories": [
+      ".pdlc",
+      "artifacts",
+      "artifacts/approvals",
+      "artifacts/architect",
+      "artifacts/dev",
+      "artifacts/dev-planning",
+      "artifacts/intake",
+      "artifacts/qa",
+      "artifacts/telemetry",
+      "artifacts/ui-verification",
+      "artifacts/ui-verification/screenshots",
+      "prisma",
+      "prisma/migrations",
+      "prisma/migrations/20261019000000_init",
+      "prisma/migrations/20261019151500_user_management_profiles",
+      "prisma/migrations/20261027000000_classes_enrollment",
+      "prisma/migrations/20261104000000_auth_reconcile",
+      "prisma/migrations/20261104120000_notifications_email",
+      "prisma/migrations/20261105000000_timetable",
+      "prisma/migrations/20261106000000_user_role_status_index",
+      "public",
+      "public/templates",
+      "scripts",
+      "src",
+      "src/app",
+      "src/app/(app)",
+      "src/app/(app)/account",
+      "src/app/(app)/account/notifications",
+      "src/app/(app)/account/security",
+      "src/app/(app)/admin",
+      "src/app/(app)/admin/courses",
+      "src/app/(app)/admin/email-log",
+      "src/app/(app)/admin/sections",
+      "src/app/(app)/courses",
+      "src/app/(app)/courses/[courseId]",
+      "src/app/(app)/dashboard",
+      "src/app/(app)/my-courses",
+      "src/app/(app)/notifications",
+      "src/app/(app)/students",
+      "src/app/(app)/students/[id]",
+      "src/app/(auth)",
+      "src/app/(auth)/forgot-password",
+      "src/app/(auth)/invite",
+      "src/app/(auth)/invite/[token]",
+      "src/app/(auth)/login",
+      "src/app/(auth)/reset-password",
+      "src/app/(auth)/reset-password/[token]",
+      "src/app/(public)",
+      "src/app/api",
+      "src/app/api/academic-years",
+      "src/app/api/academic-years/[id]",
+      "src/app/api/account",
+      "src/app/api/account/password",
+      "src/app/api/admin",
+      "src/app/api/admin/email-log",
+      "src/app/api/admin/notifications",
+      "src/app/api/audit-logs",
+      "src/app/api/auth",
+      "src/app/api/auth/[...nextauth]",
+      "src/app/api/auth/accept-invite",
+      "src/app/api/auth/forgot-password",
+      "src/app/api/auth/reset-password",
+      "src/app/api/courses",
+      "src/app/api/courses/[id]",
+      "src/app/api/enrollments",
+      "src/app/api/enrollments/[id]",
+      "src/app/api/grade-levels",
+      "src/app/api/grade-levels/[id]",
+      "src/app/api/health",
+      "src/app/api/internal",
+      "src/app/api/internal/email",
+      "src/app/api/me",
+      "src/app/api/me/children",
+      "src/app/api/me/courses",
+      "src/app/api/me/notification-preferences",
+      "src/app/api/me/profile",
+      "src/app/api/me/timetable",
+      "src/app/api/notifications",
+      "src/app/api/notifications/[id]",
+      "src/app/api/notifications/read-all",
+      "src/app/api/notifications/unread-count",
+      "src/app/api/periods",
+      "src/app/api/periods/[id]",
+      "src/app/api/periods/reorder",
+      "src/app/api/rooms",
+      "src/app/api/rooms/[id]",
+      "src/app/api/school-days",
+      "src/app/api/sections",
+      "src/app/api/sections/[id]",
+      "src/app/api/sections/copy-to-year",
+      "src/app/api/settings",
+      "src/app/api/settings/school",
+      "src/app/api/students",
+      "src/app/api/students/[id]",
+      "src/app/api/subjects",
+      "src/app/api/subjects/[id]",
+      "src/app/api/terms",
+      "src/app/api/terms/[id]",
+      "src/app/api/terms/reorder",
+      "src/app/api/timetable"
+    ],
+    "layers": [
+      "component",
+      "config",
+      "route",
+      "service",
+      "test",
+      "utility"
+    ],
+    "patterns": {
+      "stateManagement": null,
+      "styling": "emotion",
+      "routing": "next-router",
+      "dataFetching": "fetch"
+    }
+  },
+  "technicalKnowledge": {
+    "bootstrapFlow": [],
+    "concurrencyPatterns": [
+      "Promise.all parallelism (16 files)"
+    ],
+    "ipcMechanisms": []
+  },
+  "segments": [
+    {
+      "name": "artifacts",
+      "purpose": "Application module",
+      "fileCount": 1
+    },
+    {
+      "name": "prisma",
+      "purpose": "Prisma schema and migrations",
+      "fileCount": 2,
+      "dependsOn": [
+        "src"
+      ]
+    },
+    {
+      "name": "public",
+      "purpose": "Static assets",
+      "fileCount": 0
+    },
+    {
+      "name": "scripts",
+      "purpose": "Build/deploy scripts",
+      "fileCount": 1
+    },
+    {
+      "name": "src",
+      "purpose": "Primary source code",
+      "fileCount": 1
+    },
+    {
+      "name": "tests",
+      "purpose": "Test suites",
+      "fileCount": 0
+    }
+  ],
+  "architecturalPatterns": [
+    {
+      "name": "Factory",
+      "evidence": "22 create*() functions",
+      "category": "creational"
+    }
+  ],
+  "coreConcepts": [
+    {
+      "name": "AppError",
+      "references": 140
+    },
+    {
+      "name": "User",
+      "references": 48
+    },
+    {
+      "name": "Role",
+      "references": 47
+    },
+    {
+      "name": "Option",
+      "references": 24
+    },
+    {
+      "name": "UserPickerOption",
+      "references": 24
+    },
+    {
+      "name": "Clash",
+      "references": 22
+    },
+    {
+      "name": "Student",
+      "references": 17
+    },
+    {
+      "name": "Ctx",
+      "references": 17
+    },
+    {
+      "name": "EmailSchool",
+      "references": 11
+    },
+    {
+      "name": "FormState",
+      "references": 10
+    },
+    {
+      "name": "TxClient",
+      "references": 10
+    },
+    {
+      "name": "CandidateCourse",
+      "references": 10
+    },
+    {
+      "name": "AccessUser",
+      "references": 9
+    },
+    {
+      "name": "NotificationCategory",
+      "references": 9
+    },
+    {
+      "name": "Status",
+      "references": 8
+    },
+    {
+      "name": "BaseProps",
+      "references": 8
+    },
+    {
+      "name": "SessionUser",
+      "references": 8
+    },
+    {
+      "name": "EnrollResult",
+      "references": 8
+    },
+    {
+      "name": "AuditCtx",
+      "references": 8
+    },
+    {
+      "name": "NotificationTypeDef",
+      "references": 7
+    }
+  ],
+  "api": {
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/auth/callback/credentials",
+        "description": "Auth.js credentials sign-in (served by /api/auth/[...nextauth]). Called ONLY through signIn('credentials', { email, password, redirect: false }) from next-auth/react, which fetches the CSRF token itself. Runs authorizeCredentials: IP rate limit (10 / 5 min), user lookup, bcrypt or DUMMY_HASH compare, status and lock checks, lockout counter, audit. Used by the existing /login (verify only), C4 post-invite sign-in, and the C9 e2e signInAs helper.",
+        "auth": "public",
+        "requestSchema": {
+          "contentType": "application/x-www-form-urlencoded",
+          "type": "object",
+          "required": [
+            "email",
+            "password",
+            "csrfToken"
+          ],
+          "properties": {
+            "email": {
+              "$ref": "#/sharedSchemas/Email"
+            },
+            "password": {
+              "type": "string",
+              "minLength": 1
+            },
+            "csrfToken": {
+              "type": "string",
+              "note": "from GET /api/auth/csrf; added automatically by signIn()"
+            },
+            "callbackUrl": {
+              "type": "string",
+              "note": "sanitised by the redirect callback; the client also applies safeCallbackUrl()"
+            }
+          }
+        },
+        "responseSchema": {
+          "note": "Not the {data} envelope — Auth.js framework response. signIn(..., { redirect: false }) resolves to the object below.",
+          "success": {
+            "ok": true,
+            "error": null,
+            "sideEffects": "sets the HttpOnly session cookie (8h JWT); failedLoginCount=0, lastLoginAt=now; audit auth.login.success"
+          },
+          "failure": {
+            "ok": false,
+            "error": "CredentialsSignin",
+            "code": {
+              "type": "string",
+              "enum": [
+                "invalid",
+                "disabled",
+                "rate_limited",
+                "locked:<N>"
+              ],
+              "uiMapping": {
+                "locked:<N>": "This account is temporarily locked. Try again in N minutes.",
+                "disabled": "This account is disabled. Contact the school office.",
+                "rate_limited": "Too many attempts. Wait a few minutes and try again.",
+                "*": "Email or password is incorrect."
+              },
+              "note": "Mapped by the existing loginErrorMessage(code) in src/app/(auth)/login/LoginForm.tsx (already handles rate_limited, R3). Each failure audits auth.login.failure { email, reason }; the 5th consecutive failure also audits auth.lockout and returns locked:15."
+            }
+          }
+        },
+        "requirementIds": [
+          "FR-2",
+          "FR-3",
+          "FR-4",
+          "FR-5",
+          "FR-6",
+          "FR-7",
+          "FR-8",
+          "FR-9",
+          "NFR-2",
+          "NFR-3",
+          "NFR-4",
+          "NFR-14"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth/csrf",
+        "description": "Auth.js CSRF token (served by /api/auth/[...nextauth]). Called implicitly by signIn()/signOut(). C9 signs in through the UI, so no test calls it directly.",
+        "auth": "public",
+        "requestSchema": {},
+        "responseSchema": {
+          "type": "object",
+          "required": [
+            "csrfToken"
+          ],
+          "properties": {
+            "csrfToken": {
+              "type": "string"
+            }
+          }
+        },
+        "requirementIds": [
+          "NFR-2"
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/signout",
+        "description": "Auth.js sign-out (served by /api/auth/[...nextauth]). Called only through signOut({ redirectTo: '/login' }) from the shell user menu (C7). Clears the session cookie.",
+        "auth": "session cookie (no-op if absent)",
+        "requestSchema": {
+          "contentType": "application/x-www-form-urlencoded",
+          "type": "object",
+          "required": [
+            "csrfToken"
+          ],
+          "properties": {
+            "csrfToken": {
+              "type": "string"
+            }
+          }
+        },
+        "responseSchema": {
+          "note": "Framework redirect; client navigates to /login."
+        },
+        "requirementIds": [
+          "FR-26",
+          "NFR-2"
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/forgot-password",
+        "description": "Request a password reset link (C1 /forgot-password). Always returns the same 200 body whether or not the account exists (no enumeration). IP limit 10/h → 429; per-email limit 3/h is SILENT (still 200, no token). For an ACTIVE, non-archived user: createToken(PASSWORD_RESET, 60 min), sendAuthEmail('password-reset') → EmailOutbox, audit auth.password.reset_requested. UI (C1): 2xx → success Alert with data.message; 429 → error Alert 'Too many attempts. Wait a few minutes and try again.' (IP-scoped, so it reveals nothing about the account).",
+        "auth": "public",
+        "requestSchema": {
+          "contentType": "application/json",
+          "zod": "forgotPasswordSchema",
+          "type": "object",
+          "required": [
+            "email"
+          ],
+          "properties": {
+            "email": {
+              "$ref": "#/sharedSchemas/Email"
+            }
+          }
+        },
+        "responseSchema": {
+          "200": {
+            "data": {
+              "message": "If an account exists for that email, we've sent a reset link."
+            }
+          },
+          "400": {
+            "error": {
+              "code": "VALIDATION_ERROR",
+              "details": {
+                "$ref": "#/sharedSchemas/FieldErrors"
+              }
+            }
+          },
+          "429": {
+            "error": {
+              "code": "RATE_LIMITED",
+              "message": "Too many requests. Wait a few minutes and try again."
+            }
+          }
+        },
+        "requirementIds": [
+          "FR-17",
+          "FR-18",
+          "FR-31",
+          "NFR-1",
+          "NFR-10"
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/reset-password",
+        "description": "Set a new password from a reset link (C2 page → C4 TokenPasswordForm mode=reset). verifyToken(PASSWORD_RESET) → policy → bcrypt 12 → transaction(consume token, set hash, passwordChangedAt=now, failedLoginCount=0, lockedUntil=null) → audit auth.password.reset. Success → router.replace('/login?reset=1'). 410 → C4 switches to the invalid-link Alert. Other sessions are revoked within 5 min through the passwordChangedAt recheck.",
+        "auth": "public (token-gated)",
+        "requestSchema": {
+          "contentType": "application/json",
+          "zod": "resetPasswordSchema",
+          "type": "object",
+          "required": [
+            "token",
+            "password",
+            "confirm"
+          ],
+          "properties": {
+            "token": {
+              "type": "string",
+              "minLength": 1,
+              "note": "raw token from the URL; never logged or audited"
+            },
+            "password": {
+              "$ref": "#/sharedSchemas/NewPassword"
+            },
+            "confirm": {
+              "type": "string",
+              "note": "must equal password. Field is `confirm`, NOT `confirmPassword` (system-design C4 wording is wrong). SetPasswordForm's onSubmit(password, confirm) already uses this name."
+            }
+          }
+        },
+        "responseSchema": {
+          "200": {
+            "data": {
+              "$ref": "#/sharedSchemas/Ok"
+            }
+          },
+          "400": {
+            "error": {
+              "code": "VALIDATION_ERROR",
+              "details": {
+                "$ref": "#/sharedSchemas/FieldErrors"
+              },
+              "note": "policy failures come back under fieldErrors.password (incl. 'This password is too common. Choose another.')"
+            }
+          },
+          "410": {
+            "error": {
+              "code": "INVALID_TOKEN",
+              "message": "This link is invalid or has expired."
+            }
+          }
+        },
+        "requirementIds": [
+          "FR-12",
+          "FR-15",
+          "FR-19",
+          "FR-10",
+          "NFR-1",
+          "NFR-8",
+          "NFR-10"
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/accept-invite",
+        "description": "Activate an invited account (C3 page → C4 TokenPasswordForm mode=invite). verifyToken(INVITE) → policy → bcrypt 12 → transaction(consume token, set hash, status=ACTIVE, passwordChangedAt=now) → audit auth.invite.accepted. Does NOT create a session: C4 then calls signIn('credentials', { email, password, redirect: false }) and router.replace('/dashboard'). On 410 C4 renders the FR-13 copy ('This invitation link is invalid or has expired. Ask the school office to send a new one.'), not the service message.",
+        "auth": "public (token-gated)",
+        "requestSchema": {
+          "contentType": "application/json",
+          "zod": "acceptInviteSchema",
+          "type": "object",
+          "required": [
+            "token",
+            "password",
+            "confirm"
+          ],
+          "properties": {
+            "token": {
+              "type": "string",
+              "minLength": 1
+            },
+            "password": {
+              "$ref": "#/sharedSchemas/NewPassword"
+            },
+            "confirm": {
+              "type": "string"
+            }
+          }
+        },
+        "responseSchema": {
+          "200": {
+            "data": {
+              "type": "object",
+              "required": [
+                "email"
+              ],
+              "properties": {
+                "email": {
+                  "$ref": "#/sharedSchemas/Email"
+                }
+              }
+            }
+          },
+          "400": {
+            "error": {
+              "code": "VALIDATION_ERROR",
+              "details": {
+                "$ref": "#/sharedSchemas/FieldErrors"
+              }
+            }
+          },
+          "410": {
+            "error": {
+              "code": "INVALID_TOKEN",
+              "message": "This link is invalid or has expired."
+            }
+          }
+        },
+        "requirementIds": [
+          "FR-12",
+          "FR-13",
+          "FR-14",
+          "FR-15",
+          "NFR-1",
+          "NFR-8",
+          "NFR-10",
+          "NFR-14"
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/api/account/password",
+        "description": "Signed-in password change (C5 /account/security). requireUser → changePasswordSchema → bcrypt compare current → policy → update hash + passwordChangedAt → audit auth.password.changed → unstable_update({ reauth: true }) re-issues THIS session so only other sessions are revoked (within 5 min). Success → useToast 'Password updated', form reset, router.refresh().",
+        "auth": "session required (requireUser; middleware returns 401 UNAUTHENTICATED JSON without a session)",
+        "requestSchema": {
+          "contentType": "application/json",
+          "zod": "changePasswordSchema",
+          "type": "object",
+          "required": [
+            "currentPassword",
+            "newPassword",
+            "confirm"
+          ],
+          "properties": {
+            "currentPassword": {
+              "type": "string",
+              "minLength": 1
+            },
+            "newPassword": {
+              "$ref": "#/sharedSchemas/NewPassword"
+            },
+            "confirm": {
+              "type": "string"
+            }
+          }
+        },
+        "responseSchema": {
+          "200": {
+            "data": {
+              "$ref": "#/sharedSchemas/Ok"
+            }
+          },
+          "400": {
+            "error": {
+              "code": "VALIDATION_ERROR",
+              "details": {
+                "$ref": "#/sharedSchemas/FieldErrors"
+              }
+            },
+            "cases": {
+              "wrongCurrent": "{ message: 'Current password is incorrect.', details: { fieldErrors: { currentPassword: ['Current password is incorrect.'] } } }",
+              "policyFailure": "details.fieldErrors.password (NOT newPassword): assertPasswordAllowed (src/server/auth/password-policy.ts) hard-codes the `password` key. ChangePasswordForm must remap password → newPassword before applyFieldErrors(), or the error renders nowhere. Client-side Zod already catches every rule except common-password, so in practice this case only appears for common passwords."
+            }
+          },
+          "401": {
+            "error": {
+              "code": "UNAUTHENTICATED"
+            }
+          }
+        },
+        "requirementIds": [
+          "FR-10",
+          "FR-15",
+          "FR-20",
+          "FR-23",
+          "NFR-9",
+          "NFR-10",
+          "NFR-11"
+        ]
+      }
+    ],
+    "authentication": [],
+    "baseUrl": null,
+    "framework": null,
+    "language": null,
+    "port": null
+  },
+  "dataModels": [
+    {
+      "name": "User",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "email",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "passwordHash",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "firstName",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "lastName",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "failedLoginCount",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "lockedUntil",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "lastLoginAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "passwordChangedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AuthToken",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "userId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "tokenHash",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "expiresAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "usedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AuditLog",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "actorId",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "action",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "entityType",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "entityId",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "metadata",
+          "type": "JSONB",
+          "constraints": []
+        },
+        {
+          "name": "ip",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SchoolSettings",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "shortName",
+          "type": "TEXT",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "logoUrl",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "timezone",
+          "type": "TEXT",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "addressLine1",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "addressLine2",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "city",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "country",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "phone",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "email",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "website",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AcademicYear",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "startDate",
+          "type": "DATE",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "endDate",
+          "type": "DATE",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "isCurrent",
+          "type": "BOOLEAN",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Term",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "startDate",
+          "type": "DATE",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "endDate",
+          "type": "DATE",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "order",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GradeLevel",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "shortName",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "order",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "archivedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Subject",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "code",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "color",
+          "type": "TEXT",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "archivedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Room",
+      "source": "sql-ddl:prisma/migrations/20261019000000_init/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "building",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "capacity",
+          "type": "INTEGER",
+          "constraints": []
+        },
+        {
+          "name": "archivedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "StudentProfile",
+      "source": "sql-ddl:prisma/migrations/20261019151500_user_management_profiles/migration.sql",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "admissionNumber",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "dateOfBirth",
+          "type": "DATE",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "gradeLevelId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "enrollmentDate",
+          "type": "DATE",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "addressLine1",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "city",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "medicalNotes",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "emergencyContact",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "emergencyPhone",
+          "type": "TEXT",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "TeacherProfile",
+      "source": "sql-ddl:prisma/migrations/20261019151500_user_management_profiles/migration.sql",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "employeeNumber",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "qualifications",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "hireDate",
+          "type": "DATE",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "ParentProfile",
+      "source": "sql-ddl:prisma/migrations/20261019151500_user_management_profiles/migration.sql",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "occupation",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "address",
+          "type": "TEXT",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "ParentStudentLink",
+      "source": "sql-ddl:prisma/migrations/20261019151500_user_management_profiles/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "parentId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "studentId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "isPrimary",
+          "type": "BOOLEAN",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Section",
+      "source": "sql-ddl:prisma/migrations/20261027000000_classes_enrollment/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "gradeLevelId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "homeroomTeacherId",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "roomId",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "capacity",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SectionMember",
+      "source": "sql-ddl:prisma/migrations/20261027000000_classes_enrollment/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "sectionId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "studentId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "joinedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Course",
+      "source": "sql-ddl:prisma/migrations/20261027000000_classes_enrollment/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "subjectId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "sectionId",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "teacherId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "code",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "capacity",
+          "type": "INTEGER",
+          "constraints": []
+        },
+        {
+          "name": "archivedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Enrollment",
+      "source": "sql-ddl:prisma/migrations/20261027000000_classes_enrollment/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "courseId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "studentId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "enrolledAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "droppedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Notification",
+      "source": "sql-ddl:prisma/migrations/20261104120000_notifications_email/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "userId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "type",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "body",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "link",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "readAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotificationPreference",
+      "source": "sql-ddl:prisma/migrations/20261104120000_notifications_email/migration.sql",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "type",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "inApp",
+          "type": "BOOLEAN",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "email",
+          "type": "BOOLEAN",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "EmailOutbox",
+      "source": "sql-ddl:prisma/migrations/20261104120000_notifications_email/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "toEmail",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "toName",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "subject",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "html",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "text",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "attempts",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "lastError",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "nextAttemptAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "sentAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Period",
+      "source": "sql-ddl:prisma/migrations/20261105000000_timetable/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "startTime",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "endTime",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "order",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SchoolDay",
+      "source": "sql-ddl:prisma/migrations/20261105000000_timetable/migration.sql",
+      "fields": [
+        {
+          "name": "dayOfWeek",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "isTeaching",
+          "type": "BOOLEAN",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TimetableSlot",
+      "source": "sql-ddl:prisma/migrations/20261105000000_timetable/migration.sql",
+      "fields": [
+        {
+          "name": "id",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "courseId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "dayOfWeek",
+          "type": "INTEGER",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "periodId",
+          "type": "TEXT",
+          "constraints": [
+            "notNull"
+          ]
+        },
+        {
+          "name": "roomId",
+          "type": "TEXT",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull",
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "TIMESTAMP(3)",
+          "constraints": [
+            "notNull"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "email",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "passwordHash",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "firstName",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "lastName",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "phone",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "role",
+          "type": "Role",
+          "constraints": []
+        },
+        {
+          "name": "status",
+          "type": "UserStatus",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "failedLoginCount",
+          "type": "Int",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "lockedUntil",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "lastLoginAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "passwordChangedAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "archivedAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "authTokens",
+          "type": "AuthToken[]",
+          "constraints": []
+        },
+        {
+          "name": "auditLogs",
+          "type": "AuditLog[]",
+          "constraints": []
+        },
+        {
+          "name": "studentProfile",
+          "type": "StudentProfile?",
+          "constraints": []
+        },
+        {
+          "name": "teacherProfile",
+          "type": "TeacherProfile?",
+          "constraints": []
+        },
+        {
+          "name": "parentProfile",
+          "type": "ParentProfile?",
+          "constraints": []
+        },
+        {
+          "name": "parentLinks",
+          "type": "ParentStudentLink[]",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "studentLinks",
+          "type": "ParentStudentLink[]",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "notifications",
+          "type": "Notification[]",
+          "constraints": []
+        },
+        {
+          "name": "notificationPreferences",
+          "type": "NotificationPreference[]",
+          "constraints": []
+        },
+        {
+          "name": "homeroomSections",
+          "type": "Section[]",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "sectionMemberships",
+          "type": "SectionMember[]",
+          "constraints": []
+        },
+        {
+          "name": "taughtCourses",
+          "type": "Course[]",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "enrollments",
+          "type": "Enrollment[]",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "StudentProfile",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "String",
+          "constraints": [
+            "id"
+          ]
+        },
+        {
+          "name": "user",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "admissionNumber",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "dateOfBirth",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "gender",
+          "type": "Gender",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "gradeLevelId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "gradeLevel",
+          "type": "GradeLevel",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "enrollmentDate",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "addressLine1",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "city",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "medicalNotes",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "emergencyContact",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "emergencyPhone",
+          "type": "String?",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "TeacherProfile",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "String",
+          "constraints": [
+            "id"
+          ]
+        },
+        {
+          "name": "user",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "employeeNumber",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "title",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "qualifications",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "hireDate",
+          "type": "DateTime?",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "ParentProfile",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "String",
+          "constraints": [
+            "id"
+          ]
+        },
+        {
+          "name": "user",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "occupation",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "address",
+          "type": "String?",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "ParentStudentLink",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "parentId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "parent",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "studentId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "student",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "relationship",
+          "type": "GuardianRelationship",
+          "constraints": []
+        },
+        {
+          "name": "isPrimary",
+          "type": "Boolean",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AuthToken",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "userId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "user",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "type",
+          "type": "AuthTokenType",
+          "constraints": []
+        },
+        {
+          "name": "tokenHash",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "expiresAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "usedAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AuditLog",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "actorId",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "actor",
+          "type": "User?",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "action",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "entityType",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "entityId",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "metadata",
+          "type": "Json?",
+          "constraints": []
+        },
+        {
+          "name": "ip",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SchoolSettings",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "shortName",
+          "type": "String",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "logoUrl",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "timezone",
+          "type": "String",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "addressLine1",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "addressLine2",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "city",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "country",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "phone",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "email",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "website",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "AcademicYear",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "startDate",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "endDate",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "isCurrent",
+          "type": "Boolean",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "terms",
+          "type": "Term[]",
+          "constraints": []
+        },
+        {
+          "name": "sections",
+          "type": "Section[]",
+          "constraints": []
+        },
+        {
+          "name": "courses",
+          "type": "Course[]",
+          "constraints": []
+        },
+        {
+          "name": "timetableSlots",
+          "type": "TimetableSlot[]",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Term",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "academicYear",
+          "type": "AcademicYear",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "startDate",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "endDate",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "order",
+          "type": "Int",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "GradeLevel",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "shortName",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "order",
+          "type": "Int",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "archivedAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "studentProfiles",
+          "type": "StudentProfile[]",
+          "constraints": []
+        },
+        {
+          "name": "sections",
+          "type": "Section[]",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Subject",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "code",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "description",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "color",
+          "type": "String",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "archivedAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "courses",
+          "type": "Course[]",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Room",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "building",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "capacity",
+          "type": "Int?",
+          "constraints": []
+        },
+        {
+          "name": "archivedAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "sections",
+          "type": "Section[]",
+          "constraints": []
+        },
+        {
+          "name": "timetableSlots",
+          "type": "TimetableSlot[]",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Notification",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "userId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "user",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "body",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "link",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "readAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "NotificationPreference",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "userId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "user",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "inApp",
+          "type": "Boolean",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "email",
+          "type": "Boolean",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "EmailOutbox",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "toEmail",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "toName",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "subject",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "html",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "text",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "status",
+          "type": "EmailStatus",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "attempts",
+          "type": "Int",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "lastError",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "nextAttemptAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "sentAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Section",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "academicYear",
+          "type": "AcademicYear",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "gradeLevelId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "gradeLevel",
+          "type": "GradeLevel",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "homeroomTeacherId",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "homeroomTeacher",
+          "type": "User?",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "roomId",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "room",
+          "type": "Room?",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "capacity",
+          "type": "Int",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "members",
+          "type": "SectionMember[]",
+          "constraints": []
+        },
+        {
+          "name": "courses",
+          "type": "Course[]",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "SectionMember",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "sectionId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "section",
+          "type": "Section",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "studentId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "student",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "joinedAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "String",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Course",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "academicYear",
+          "type": "AcademicYear",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "subjectId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "subject",
+          "type": "Subject",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "sectionId",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "section",
+          "type": "Section?",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "teacherId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "teacher",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "coTeacherIds",
+          "type": "String[]",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "code",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "kind",
+          "type": "CourseKind",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "description",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "capacity",
+          "type": "Int?",
+          "constraints": []
+        },
+        {
+          "name": "archivedAt",
+          "type": "DateTime?",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        },
+        {
+          "name": "enrollments",
+          "type": "Enrollment[]",
+          "constraints": []
+        },
+        {
+          "name": "timetableSlots",
+          "type": "TimetableSlot[]",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Enrollment",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "courseId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "course",
+          "type": "Course",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "studentId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "student",
+          "type": "User",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "status",
+          "type": "EnrollmentStatus",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "enrolledAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "droppedAt",
+          "type": "DateTime?",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "Period",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "startTime",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "endTime",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "kind",
+          "type": "PeriodKind",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "order",
+          "type": "Int",
+          "constraints": [
+            "unique"
+          ]
+        },
+        {
+          "name": "slots",
+          "type": "TimetableSlot[]",
+          "constraints": []
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        }
+      ]
+    },
+    {
+      "name": "SchoolDay",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "dayOfWeek",
+          "type": "Int",
+          "constraints": [
+            "id"
+          ]
+        },
+        {
+          "name": "isTeaching",
+          "type": "Boolean",
+          "constraints": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TimetableSlot",
+      "source": "prisma",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "id",
+            "default"
+          ]
+        },
+        {
+          "name": "academicYearId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "academicYear",
+          "type": "AcademicYear",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "courseId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "course",
+          "type": "Course",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "dayOfWeek",
+          "type": "Int",
+          "constraints": []
+        },
+        {
+          "name": "periodId",
+          "type": "String",
+          "constraints": []
+        },
+        {
+          "name": "period",
+          "type": "Period",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "roomId",
+          "type": "String?",
+          "constraints": []
+        },
+        {
+          "name": "room",
+          "type": "Room?",
+          "constraints": [
+            "relation"
+          ]
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "constraints": [
+            "default"
+          ]
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "constraints": []
+        }
+      ]
+    }
+  ],
+  "dataEngineering": {
+    "flavor": "postgresql",
+    "schemas": [],
+    "tables": [
+      {
+        "name": "User",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "email",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "passwordHash",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "firstName",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "lastName",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "failedLoginCount",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "lockedUntil",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "lastLoginAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "passwordChangedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AuthToken",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "userId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "tokenHash",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "expiresAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "usedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AuditLog",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "actorId",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "action",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "entityType",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "entityId",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "metadata",
+            "type": "JSONB",
+            "constraints": []
+          },
+          {
+            "name": "ip",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "SchoolSettings",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "shortName",
+            "type": "TEXT",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "logoUrl",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "timezone",
+            "type": "TEXT",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "addressLine1",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "addressLine2",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "city",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "country",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "phone",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "email",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "website",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AcademicYear",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "startDate",
+            "type": "DATE",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "endDate",
+            "type": "DATE",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "isCurrent",
+            "type": "BOOLEAN",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "Term",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "academicYearId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "startDate",
+            "type": "DATE",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "endDate",
+            "type": "DATE",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "order",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "GradeLevel",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "shortName",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "order",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "archivedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "Subject",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "code",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "description",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "color",
+            "type": "TEXT",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "archivedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "Room",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "building",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "capacity",
+            "type": "INTEGER",
+            "constraints": []
+          },
+          {
+            "name": "archivedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "StudentProfile",
+        "schema": null,
+        "fields": [
+          {
+            "name": "userId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "admissionNumber",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "dateOfBirth",
+            "type": "DATE",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "gradeLevelId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "enrollmentDate",
+            "type": "DATE",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "addressLine1",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "city",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "medicalNotes",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "emergencyContact",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "emergencyPhone",
+            "type": "TEXT",
+            "constraints": []
+          }
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "TeacherProfile",
+        "schema": null,
+        "fields": [
+          {
+            "name": "userId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "employeeNumber",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "title",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "qualifications",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "hireDate",
+            "type": "DATE",
+            "constraints": []
+          }
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "ParentProfile",
+        "schema": null,
+        "fields": [
+          {
+            "name": "userId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "occupation",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "address",
+            "type": "TEXT",
+            "constraints": []
+          }
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "ParentStudentLink",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "parentId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "studentId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "isPrimary",
+            "type": "BOOLEAN",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "Section",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "academicYearId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "gradeLevelId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "homeroomTeacherId",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "roomId",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "capacity",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "SectionMember",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "sectionId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "studentId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "joinedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "academicYearId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "Course",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "academicYearId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "subjectId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "sectionId",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "teacherId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "code",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "description",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "capacity",
+            "type": "INTEGER",
+            "constraints": []
+          },
+          {
+            "name": "archivedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "Enrollment",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "courseId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "studentId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "enrolledAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "droppedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          }
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "Notification",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "userId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "type",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "title",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "body",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "link",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "readAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261104120000_notifications_email/migration.sql"
+      },
+      {
+        "name": "NotificationPreference",
+        "schema": null,
+        "fields": [
+          {
+            "name": "userId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "type",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "inApp",
+            "type": "BOOLEAN",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "email",
+            "type": "BOOLEAN",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261104120000_notifications_email/migration.sql"
+      },
+      {
+        "name": "EmailOutbox",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "toEmail",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "toName",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "subject",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "html",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "text",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "attempts",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "lastError",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "nextAttemptAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "sentAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261104120000_notifications_email/migration.sql"
+      },
+      {
+        "name": "Period",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "name",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "startTime",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "endTime",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "order",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "name": "SchoolDay",
+        "schema": null,
+        "fields": [
+          {
+            "name": "dayOfWeek",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "isTeaching",
+            "type": "BOOLEAN",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "name": "TimetableSlot",
+        "schema": null,
+        "fields": [
+          {
+            "name": "id",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "academicYearId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "courseId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "dayOfWeek",
+            "type": "INTEGER",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "periodId",
+            "type": "TEXT",
+            "constraints": [
+              "notNull"
+            ]
+          },
+          {
+            "name": "roomId",
+            "type": "TEXT",
+            "constraints": []
+          },
+          {
+            "name": "createdAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull",
+              "default"
+            ]
+          },
+          {
+            "name": "updatedAt",
+            "type": "TIMESTAMP(3)",
+            "constraints": [
+              "notNull"
+            ]
+          }
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      }
+    ],
+    "views": [],
+    "functions": [],
+    "procedures": [],
+    "indexes": [
+      {
+        "name": "User_email_key",
+        "table": "User",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"email\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AuthToken_tokenHash_key",
+        "table": "AuthToken",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"tokenHash\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AuthToken_userId_type_idx",
+        "table": "AuthToken",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"userId\"",
+          "\"type\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AuditLog_actorId_idx",
+        "table": "AuditLog",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"actorId\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AuditLog_action_idx",
+        "table": "AuditLog",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"action\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "AcademicYear_name_key",
+        "table": "AcademicYear",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"name\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "Term_academicYearId_name_key",
+        "table": "Term",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"academicYearId\"",
+          "\"name\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "Term_academicYearId_order_key",
+        "table": "Term",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"academicYearId\"",
+          "\"order\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "GradeLevel_name_key",
+        "table": "GradeLevel",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"name\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "GradeLevel_shortName_key",
+        "table": "GradeLevel",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"shortName\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "GradeLevel_order_key",
+        "table": "GradeLevel",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"order\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "Subject_code_key",
+        "table": "Subject",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"code\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "Room_name_key",
+        "table": "Room",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"name\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "name": "User_lastName_firstName_email_idx",
+        "table": "User",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"lastName\"",
+          "\"firstName\"",
+          "\"email\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "StudentProfile_admissionNumber_key",
+        "table": "StudentProfile",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"admissionNumber\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "TeacherProfile_employeeNumber_key",
+        "table": "TeacherProfile",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"employeeNumber\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "ParentStudentLink_parentId_studentId_key",
+        "table": "ParentStudentLink",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"parentId\"",
+          "\"studentId\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "ParentStudentLink_studentId_idx",
+        "table": "ParentStudentLink",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"studentId\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "name": "Section_academicYearId_name_key",
+        "table": "Section",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"academicYearId\"",
+          "\"name\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "SectionMember_studentId_academicYearId_key",
+        "table": "SectionMember",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"studentId\"",
+          "\"academicYearId\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "Course_academicYearId_code_key",
+        "table": "Course",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"academicYearId\"",
+          "\"code\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "Enrollment_studentId_status_idx",
+        "table": "Enrollment",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"studentId\"",
+          "\"status\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "Enrollment_courseId_studentId_key",
+        "table": "Enrollment",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"courseId\"",
+          "\"studentId\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "name": "AuditLog_entityType_entityId_idx",
+        "table": "AuditLog",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"entityType\"",
+          "\"entityId\""
+        ],
+        "file": "prisma/migrations/20261104000000_auth_reconcile/migration.sql"
+      },
+      {
+        "name": "AuditLog_actorId_createdAt_idx",
+        "table": "AuditLog",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"actorId\"",
+          "\"createdAt\""
+        ],
+        "file": "prisma/migrations/20261104000000_auth_reconcile/migration.sql"
+      },
+      {
+        "name": "Notification_userId_readAt_createdAt_idx",
+        "table": "Notification",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"userId\"",
+          "\"readAt\"",
+          "\"createdAt\""
+        ],
+        "file": "prisma/migrations/20261104120000_notifications_email/migration.sql"
+      },
+      {
+        "name": "EmailOutbox_status_nextAttemptAt_idx",
+        "table": "EmailOutbox",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"status\"",
+          "\"nextAttemptAt\""
+        ],
+        "file": "prisma/migrations/20261104120000_notifications_email/migration.sql"
+      },
+      {
+        "name": "Period_order_key",
+        "table": "Period",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"order\""
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "name": "TimetableSlot_academicYearId_dayOfWeek_periodId_idx",
+        "table": "TimetableSlot",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"academicYearId\"",
+          "\"dayOfWeek\"",
+          "\"periodId\""
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "name": "TimetableSlot_courseId_dayOfWeek_periodId_key",
+        "table": "TimetableSlot",
+        "schema": null,
+        "unique": true,
+        "columns": [
+          "\"courseId\"",
+          "\"dayOfWeek\"",
+          "\"periodId\""
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "name": "User_role_status_idx",
+        "table": "User",
+        "schema": null,
+        "unique": false,
+        "columns": [
+          "\"role\"",
+          "\"status\""
+        ],
+        "file": "prisma/migrations/20261106000000_user_role_status_index/migration.sql"
+      }
+    ],
+    "sequences": [],
+    "triggers": [],
+    "foreignKeys": [
+      {
+        "fromTable": "AuthToken",
+        "fromColumns": [
+          "\"userId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "fromTable": "AuditLog",
+        "fromColumns": [
+          "\"actorId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "fromTable": "Term",
+        "fromColumns": [
+          "\"academicYearId\""
+        ],
+        "toTable": "AcademicYear",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019000000_init/migration.sql"
+      },
+      {
+        "fromTable": "StudentProfile",
+        "fromColumns": [
+          "\"userId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "fromTable": "StudentProfile",
+        "fromColumns": [
+          "\"gradeLevelId\""
+        ],
+        "toTable": "GradeLevel",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "fromTable": "TeacherProfile",
+        "fromColumns": [
+          "\"userId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "fromTable": "ParentProfile",
+        "fromColumns": [
+          "\"userId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "fromTable": "ParentStudentLink",
+        "fromColumns": [
+          "\"parentId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "fromTable": "ParentStudentLink",
+        "fromColumns": [
+          "\"studentId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261019151500_user_management_profiles/migration.sql"
+      },
+      {
+        "fromTable": "Section",
+        "fromColumns": [
+          "\"academicYearId\""
+        ],
+        "toTable": "AcademicYear",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Section",
+        "fromColumns": [
+          "\"gradeLevelId\""
+        ],
+        "toTable": "GradeLevel",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Section",
+        "fromColumns": [
+          "\"homeroomTeacherId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Section",
+        "fromColumns": [
+          "\"roomId\""
+        ],
+        "toTable": "Room",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "SectionMember",
+        "fromColumns": [
+          "\"sectionId\""
+        ],
+        "toTable": "Section",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "SectionMember",
+        "fromColumns": [
+          "\"studentId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Course",
+        "fromColumns": [
+          "\"academicYearId\""
+        ],
+        "toTable": "AcademicYear",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Course",
+        "fromColumns": [
+          "\"subjectId\""
+        ],
+        "toTable": "Subject",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Course",
+        "fromColumns": [
+          "\"sectionId\""
+        ],
+        "toTable": "Section",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Course",
+        "fromColumns": [
+          "\"teacherId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Enrollment",
+        "fromColumns": [
+          "\"courseId\""
+        ],
+        "toTable": "Course",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Enrollment",
+        "fromColumns": [
+          "\"studentId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql"
+      },
+      {
+        "fromTable": "Notification",
+        "fromColumns": [
+          "\"userId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261104120000_notifications_email/migration.sql"
+      },
+      {
+        "fromTable": "NotificationPreference",
+        "fromColumns": [
+          "\"userId\""
+        ],
+        "toTable": "User",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261104120000_notifications_email/migration.sql"
+      },
+      {
+        "fromTable": "TimetableSlot",
+        "fromColumns": [
+          "\"academicYearId\""
+        ],
+        "toTable": "AcademicYear",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "fromTable": "TimetableSlot",
+        "fromColumns": [
+          "\"courseId\""
+        ],
+        "toTable": "Course",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "fromTable": "TimetableSlot",
+        "fromColumns": [
+          "\"periodId\""
+        ],
+        "toTable": "Period",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      },
+      {
+        "fromTable": "TimetableSlot",
+        "fromColumns": [
+          "\"roomId\""
+        ],
+        "toTable": "Room",
+        "toColumns": [
+          "\"id\""
+        ],
+        "file": "prisma/migrations/20261105000000_timetable/migration.sql"
+      }
+    ],
+    "totalObjects": 54,
+    "filesScanned": 7,
+    "truncated": false
+  },
+  "conventions": {
+    "naming": "camelCase",
+    "errorHandling": "try-catch",
+    "authPattern": null,
+    "importStyle": "barrel-exports-with-aliases"
+  },
+  "keyIdeas": [
+    {
+      "aspect": "Linting",
+      "value": "ESLint (.eslintrc.json)"
+    },
+    {
+      "aspect": "Formatting",
+      "value": "Prettier (.prettierrc.json)"
+    },
+    {
+      "aspect": "Type Safety",
+      "value": "TypeScript strict mode"
+    },
+    {
+      "aspect": "Module System",
+      "value": "CommonJS (require/module.exports)"
+    },
+    {
+      "aspect": "Engine Requirements",
+      "value": "node >=18.18.0"
+    },
+    {
+      "aspect": "Async Style",
+      "value": "async/await dominant"
+    },
+    {
+      "aspect": "Logging",
+      "value": "structured logger"
+    }
+  ],
+  "dependencies": {
+    "production": {
+      "@dnd-kit/core": "6.3.1",
+      "@emotion/react": "11.13.3",
+      "@emotion/styled": "11.13.0",
+      "@hookform/resolvers": "3.9.0",
+      "@mui/icons-material": "9.5.0",
+      "@mui/material": "9.5.0",
+      "@mui/material-nextjs": "9.5.0",
+      "@mui/x-charts": "9.5.0",
+      "@mui/x-data-grid": "9.5.0",
+      "@mui/x-date-pickers": "9.5.0",
+      "@prisma/client": "5.20.0",
+      "@react-email/components": "0.0.25",
+      "@react-email/render": "1.0.1",
+      "bcrypt": "^6.0.0",
+      "date-fns": "3.6.0",
+      "date-fns-tz": "3.2.0",
+      "next": "14.2.18",
+      "next-auth": "5.0.0-beta.25",
+      "nodemailer": "^6.9.14",
+      "papaparse": "^5.4.1",
+      "react": "18.3.1",
+      "react-dom": "18.3.1",
+      "react-hook-form": "7.53.0",
+      "react-is": "18.3.1",
+      "zod": "3.23.8"
+    },
+    "development": {
+      "@axe-core/playwright": "4.10.0",
+      "@playwright/test": "1.47.2",
+      "@testing-library/jest-dom": "6.5.0",
+      "@testing-library/react": "16.0.1",
+      "@testing-library/user-event": "14.5.2",
+      "@types/bcrypt": "^6.0.0",
+      "@types/eslint": "^8.56.10",
+      "@types/node": "20.14.10",
+      "@types/nodemailer": "^6.4.15",
+      "@types/papaparse": "^5.3.14",
+      "@types/react": "18.3.3",
+      "@types/react-dom": "18.3.0",
+      "@typescript-eslint/eslint-plugin": "7.16.1",
+      "@typescript-eslint/parser": "7.16.1",
+      "@vitejs/plugin-react": "4.3.1",
+      "eslint": "8.57.0",
+      "eslint-config-next": "14.2.18",
+      "jsdom": "25.0.0",
+      "prettier": "3.3.3",
+      "prisma": "5.20.0",
+      "tsx": "4.16.2",
+      "typescript": "5.5.4",
+      "vitest": "2.1.1"
+    }
+  },
+  "testing": {
+    "framework": "vitest",
+    "fileCount": 27,
+    "structure": "tests/"
+  },
+  "buildDeploy": {
+    "buildCommand": "psql -f <script>.sql",
+    "startCommand": "npm start",
+    "testCommand": "npm test",
+    "port": null,
+    "docker": {
+      "baseImage": null,
+      "exposedPort": null
+    },
+    "ci": [
+      {
+        "type": "docker-compose",
+        "file": "docker-compose.yml"
+      }
+    ]
+  },
+  "keyAreas": {
+    "criticalFiles": [],
+    "largeFiles": [
+      {
+        "file": "src/server/timetable/timetable-service.ts",
+        "lines": 574
+      },
+      {
+        "file": "src/server/courses/courses-service.ts",
+        "lines": 520
+      },
+      {
+        "file": "src/app/(app)/admin/courses/CoursesClient.tsx",
+        "lines": 471
+      },
+      {
+        "file": "src/server/sections/sections-service.ts",
+        "lines": 412
+      },
+      {
+        "file": "src/app/(app)/admin/sections/SectionsClient.tsx",
+        "lines": 401
+      },
+      {
+        "file": "src/server/services/users.ts",
+        "lines": 399
+      },
+      {
+        "file": "src/app/(app)/admin/sections/[id]/SectionDetailClient.tsx",
+        "lines": 389
+      }
+    ],
+    "entryPoints": []
+  },
+  "brittleAreas": {
+    "largeFilesWithoutTests": [
+      {
+        "file": "src/server/timetable/timetable-service.ts",
+        "lines": 574
+      },
+      {
+        "file": "src/server/courses/courses-service.ts",
+        "lines": 520
+      }
+    ],
+    "emptyCatchBlocks": [],
+    "circularDeps": [],
+    "godFiles": [
+      {
+        "file": "src/lib/validators/users.ts",
+        "exports": 20
+      },
+      {
+        "file": "src/server/timetable/timetable-service.ts",
+        "exports": 20
+      }
+    ]
+  },
+  "knownLimitations": [],
+  "intelligence": {
+    "decisions": [],
+    "patterns": [],
+    "regressions": []
+  },
+  "domain": {
+    "prdSummary": null,
+    "requirements": [
+      {
+        "id": "FR-1",
+        "description": "Prisma enums Role, UserStatus, AuthTokenType and models User, AuthToken, AuditLog exist with the fields in the PRD (status default INVITED, failedLoginCount default 0, nullable passwordHash until invite accepted, AuthToken.tokenHash unique, cascade delete). Status: already present; keep as-is.",
+        "confidence": "HIGH",
+        "source": "PRD §Functional Requirements › FR-1 Data model"
+      },
+      {
+        "id": "FR-2",
+        "description": "A public /login page built from MUI sign-in template patterns (Card, TextField, Button, InputAdornment+IconButton show-password toggle, Alert for form errors). It has email and password fields and submits through Auth.js signIn('credentials'). Status: PRESENT (src/app/(auth)/login). Verify only; do not rebuild.",
+        "confidence": "HIGH",
+        "source": "PRD FR-2.1; Pages & Routes '/login'"
+      },
+      {
+        "id": "FR-3",
+        "description": "The credentials authorize function lower-cases and trims the email. It rejects when the user does not exist, status != ACTIVE, archivedAt is set, or lockedUntil > now, and it verifies the password with bcrypt cost 12. Status: present in src/server/auth/credentials.ts.",
+        "confidence": "HIGH",
+        "source": "PRD FR-2.2"
+      },
+      {
+        "id": "FR-4",
+        "description": "Every sign-in failure shows 'Email or password is incorrect.', with two exceptions: a locked account shows 'This account is temporarily locked. Try again in N minutes.' and a disabled account shows 'This account is disabled. Contact the school office.' The /login UI must surface the server's message.",
+        "confidence": "HIGH",
+        "source": "PRD FR-2.3; Acceptance Criteria 2, 3"
+      },
+      {
+        "id": "FR-5",
+        "description": "A failed password increments failedLoginCount. At 5 failures, lockedUntil is set to now+15min and the count resets to 0. A successful sign-in resets failedLoginCount to 0 and sets lastLoginAt. Status: present (computeLockout).",
+        "confidence": "HIGH",
+        "source": "PRD FR-2.4; Acceptance Criterion 2"
+      },
+      {
+        "id": "FR-6",
+        "description": "Sign-in is rate-limited to 10 attempts per IP per 5 minutes using the in-memory sliding window exported from src/server/rate-limit.ts. Going over returns RATE_LIMITED, and the form shows 'Too many attempts. Wait a few minutes and try again.' Status: limiter present; the UI message is MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD FR-2.5"
+      },
+      {
+        "id": "FR-7",
+        "description": "After sign-in, the user is redirected to callbackUrl only when it is a same-origin relative path; otherwise to /dashboard. Reuse safeCallbackUrl() from src/lib/validators/auth.ts.",
+        "confidence": "HIGH",
+        "source": "PRD FR-2.6; Acceptance Criterion 1"
+      },
+      {
+        "id": "FR-8",
+        "description": "Sign-in writes the audit entries auth.login.success, auth.login.failure (metadata: attempted email and reason) and auth.lockout.",
+        "confidence": "HIGH",
+        "source": "PRD FR-2.7; Acceptance Criterion 2"
+      },
+      {
+        "id": "FR-9",
+        "description": "The JWT session lasts 8 hours and is refreshed on activity. The JWT and session.user carry id, role, firstName, lastName and email. Status: present.",
+        "confidence": "HIGH",
+        "source": "PRD FR-3.1"
+      },
+      {
+        "id": "FR-10",
+        "description": "A session is invalid when passwordChangedAt is later than the token issue time. The jwt callback checks this at most once every 5 minutes per token, so other devices are signed out within 5 minutes. Status: present (RECHECK_MS).",
+        "confidence": "HIGH",
+        "source": "PRD FR-3.2; Acceptance Criterion 7"
+      },
+      {
+        "id": "FR-11",
+        "description": "middleware.ts redirects unauthenticated (app)-group page requests to /login?callbackUrl=<path>. Unauthenticated /api/* requests get 401 JSON with error.code UNAUTHENTICATED, except /api/health, /api/auth/* and the paths in src/config/public-routes.ts. Status: present in src/middleware.ts.",
+        "confidence": "HIGH",
+        "source": "PRD FR-3.3; Goals 2; Acceptance Criterion 8"
+      },
+      {
+        "id": "FR-12",
+        "description": "All AuthToken creation, lookup and consumption goes through src/server/auth/tokens.ts: createToken(userId, type, ttl) returns the raw token and stores its SHA-256 hash; verifyToken(raw, type) returns user/token or null when missing, used or expired; consumeToken(tokenId) sets usedAt. Status: present; no other module may re-implement hashing.",
+        "confidence": "HIGH",
+        "source": "PRD FR-4.0"
+      },
+      {
+        "id": "FR-13",
+        "description": "A public /invite/[token] page verifies the INVITE token (7-day expiry). An invalid, used or expired token shows 'This invitation link is invalid or has expired. Ask the school office to send a new one.' A valid token shows the user's name and email read-only, plus new-password and confirm fields. Status: MISSING (UI page). The API and service exist.",
+        "confidence": "HIGH",
+        "source": "PRD FR-4.1, FR-4.2; Acceptance Criteria 4, 5"
+      },
+      {
+        "id": "FR-14",
+        "description": "Accepting an invite validates the password policy, hashes the password, sets status=ACTIVE and passwordChangedAt=now, consumes the token, signs the user in, redirects to /dashboard, and audits auth.invite.accepted. Reusing the link afterwards shows the invalid-link message. Status: the service and API exist; the UI page is MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD FR-4.3; Acceptance Criterion 4"
+      },
+      {
+        "id": "FR-15",
+        "description": "Password policy in src/lib/validators/auth.ts: 10–128 characters, at least one letter and one digit, not equal to the user's email, and not in the bundled 1,000-entry src/server/auth/common-passwords.txt. 'password123' fails the common-password rule. Status: present.",
+        "confidence": "HIGH",
+        "source": "PRD FR-5.1; Acceptance Criterion 10"
+      },
+      {
+        "id": "FR-16",
+        "description": "A live strength checklist under every new-password field (invite, reset, change) shows each policy rule as met or unmet, driven by passwordChecks()/PASSWORD_RULES. Status: the PasswordChecklist component exists. It must be wired into the invite, reset and security pages.",
+        "confidence": "HIGH",
+        "source": "PRD FR-5.2"
+      },
+      {
+        "id": "FR-17",
+        "description": "A public /forgot-password page has an email field. It always shows \"If an account exists for that email, we've sent a reset link.\" (no user enumeration) and is rate-limited to 3 requests per email per hour and 10 per IP per hour. Status: the API exists; the /forgot-password UI page is MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD FR-6.1; Acceptance Criterion 6"
+      },
+      {
+        "id": "FR-18",
+        "description": "When the email belongs to an ACTIVE user, the service creates a PASSWORD_RESET token via createToken(userId, 'PASSWORD_RESET', { minutes: 60 }) (32 random bytes, base64url), invalidates older unused reset tokens, and calls sendAuthEmail(user, 'password-reset', link). An unknown email creates no token row.",
+        "confidence": "HIGH",
+        "source": "PRD FR-6.2; Acceptance Criterion 6"
+      },
+      {
+        "id": "FR-19",
+        "description": "A public /reset-password/[token] page has new-password and confirm fields. On success the service sets the hash and passwordChangedAt=now, clears the lockout fields, consumes the token, and audits auth.password.reset. The UI then redirects to /login, which shows a useToast success toast. Status: the API exists; the /reset-password/[token] UI page is MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD FR-6.3; Acceptance Criterion 7"
+      },
+      {
+        "id": "FR-20",
+        "description": "An /account/security page (any signed-in user) has current, new and confirm password fields and calls POST /api/account/password. A wrong current password shows the field error 'Current password is incorrect.' Success shows the toast 'Password updated', invalidates other sessions through passwordChangedAt, and re-issues the current session. Status: the API exists; the /account/security UI page is MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD FR-7.1; Pages & Routes '/account/security'"
+      },
+      {
+        "id": "FR-21",
+        "description": "Add an 'Account security' item, linking to /account/security, to the top-bar user menu. Status: MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD FR-7.2"
+      },
+      {
+        "id": "FR-22",
+        "description": "src/server/services/users.ts provides createUser (INVITED, throws CONFLICT on duplicate email), createInviteToken (7-day INVITE token via tokens.ts, invalidates older unused invites), sendInvite (createInviteToken + sendAuthEmail 'invite'), setUserStatus and unlockUser. Status: present; verify only.",
+        "confidence": "HIGH",
+        "source": "PRD FR-8.1–FR-8.4"
+      },
+      {
+        "id": "FR-23",
+        "description": "src/server/auth/requireRole.ts exposes getCurrentUser() (session user or null), requireUser() (throws AppError UNAUTHENTICATED; pages redirect to /login) and requireRole(...roles) (throws FORBIDDEN, so a STUDENT calling an ADMIN handler gets 403; pages redirect to /forbidden). There is no separate permissions.ts and no can() helper. Status: present.",
+        "confidence": "HIGH",
+        "source": "PRD FR-9.1–FR-9.5; Goals 3; Acceptance Criterion 9"
+      },
+      {
+        "id": "FR-24",
+        "description": "src/server/audit.ts audit({ actorId, action, entityType?, entityId?, metadata?, request? }) inserts an AuditLog row, captures the IP from x-forwarded-for when a request is passed, and never throws (errors go to the logger). Status: present.",
+        "confidence": "HIGH",
+        "source": "PRD FR-10.1"
+      },
+      {
+        "id": "FR-25",
+        "description": "Delete PLACEHOLDER_USER from src/app/(app)/shell.tsx. The shell gets the real signed-in user from the session, so the codebase has exactly one source of 'current user'. Status: MISSING (PLACEHOLDER_USER is still in shell.tsx).",
+        "confidence": "HIGH",
+        "source": "PRD FR-11.1"
+      },
+      {
+        "id": "FR-26",
+        "description": "The top-bar user menu shows the real user's name, a role badge and avatar initials. 'Sign out' calls signOut() and redirects to /login. Status: MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD FR-11.2; Acceptance Criterion 1"
+      },
+      {
+        "id": "FR-27",
+        "description": "Sidebar navigation filtering (navigationForRole in src/config/navigation.ts) uses the session role instead of the placeholder role. Status: MISSING (navigationForRole(PLACEHOLDER_USER.role)).",
+        "confidence": "HIGH",
+        "source": "PRD FR-11.3"
+      },
+      {
+        "id": "FR-28",
+        "description": "The seed idempotently creates six ACTIVE users with password 'SchoolHub123!': admin@ Alice Admin ADMIN, teacher@ Tom Teacher TEACHER, teacher2@ Tina Tutor TEACHER, student@ Sam Student STUDENT, student2@ Sara Scholar STUDENT, parent@ Pat Parent PARENT (all @schoolhub.test). The existing seed has no users. Status: PRESENT (prisma/seed.ts).",
+        "confidence": "HIGH",
+        "source": "PRD §Seed Data table"
+      },
+      {
+        "id": "FR-29",
+        "description": "The seed creates one INVITED user, invited@schoolhub.test, and logs its invite link during seeding. Status: PRESENT (prisma/seed.ts).",
+        "confidence": "HIGH",
+        "source": "PRD §Seed Data, final sentence"
+      },
+      {
+        "id": "FR-30",
+        "description": "The seed logs the invite link through logger (createInviteToken + authLink) rather than through sendAuthEmail, because PRD-04's sendAuthEmail enqueues email and deliberately never logs raw links.",
+        "confidence": "MEDIUM",
+        "source": "PRD §Seed Data + §Out of Scope (sendAuthEmail/PRD-04 note); inferred from workspace state"
+      },
+      {
+        "id": "FR-31",
+        "description": "Keep the existing PRD-04 sendAuthEmail() behaviour (render template and enqueue into EmailOutbox). Do not revert it to the interim logger.info stub described for the pre-PRD-04 state.",
+        "confidence": "MEDIUM",
+        "source": "PRD §Out of Scope (email delivery) + §Platform Context 'reuse existing… never duplicate'; inferred from brownfield state"
+      },
+      {
+        "id": "FR-32",
+        "description": "The AuditLog IP column stays `ip` (existing name) rather than being renamed to the PRD snippet's `ipAddress`, because renaming existing model fields is prohibited. Flagged for human validation.",
+        "confidence": "LOW",
+        "source": "PRD FR-1 (AuditLog.ipAddress) vs §Platform Context 'never rename existing routes or models'"
+      },
+      {
+        "id": "FR-33",
+        "description": "An additive migration adds @@index([role, status]) on User, which the PRD FR-1 model declares and the current schema lacks. Status: PRESENT (migration 20261106000000_user_role_status_index).",
+        "confidence": "MEDIUM",
+        "source": "PRD FR-1 User model '@@index([role, status])'"
+      },
+      {
+        "id": "FR-34",
+        "description": "Tests: unit tests for password policy, token hashing/expiry, lockout counter, rate limiter and callbackUrl check (mostly existing); Vitest integration tests against the test DB for authorize branches, accept-invite, reset-password and change-password (MISSING); Playwright e2e for sign-in/out, the failed-login message and forgot → reset, reading the link from a test-only DB helper or the EmailOutbox (MISSING). Status: the unit tests exist. The integration tests and Playwright auth specs are MISSING.",
+        "confidence": "HIGH",
+        "source": "PRD §Test Requirements"
+      }
+    ]
+  },
+  "regressions": {
+    "resolved": [],
+    "unresolved": []
+  },
+  "dependencyGraph": {
+    "nodes": 219,
+    "edges": 47,
+    "highFanIn": [
+      {
+        "file": "prisma/migrations/20261019000000_init/migration.sql",
+        "fanIn": 4
+      },
+      {
+        "file": "src/server/email/templates/BaseLayout.tsx",
+        "fanIn": 4
+      },
+      {
+        "file": "src/server/notifications/types.ts",
+        "fanIn": 3
+      },
+      {
+        "file": "src/app/(auth)/TokenPasswordForm.tsx",
+        "fanIn": 2
+      },
+      {
+        "file": "src/config/navigation.ts",
+        "fanIn": 2
+      },
+      {
+        "file": "src/server/services/dateRange.ts",
+        "fanIn": 2
+      },
+      {
+        "file": "tests/e2e/helpers/auth.ts",
+        "fanIn": 2
+      },
+      {
+        "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql",
+        "fanIn": 1
+      },
+      {
+        "file": "src/lib/logger.ts",
+        "fanIn": 1
+      },
+      {
+        "file": "src/server/services/users.ts",
+        "fanIn": 1
+      },
+      {
+        "file": "src/server/auth/email.ts",
+        "fanIn": 1
+      },
+      {
+        "file": "src/server/db.ts",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/account/notifications/PreferencesTable.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/account/security/ChangePasswordForm.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/admin/courses/[id]/enrollment/EnrollmentClient.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/admin/courses/CoursesClient.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/admin/email-log/EmailLogTable.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/admin/sections/[id]/SectionDetailClient.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/admin/sections/SectionsClient.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/courses/[courseId]/CourseTabs.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/shell.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(app)/notifications/NotificationsList.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(auth)/forgot-password/ForgotPasswordForm.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/(auth)/login/LoginForm.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/app/providers.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/components/PasswordChecklist/PasswordChecklist.tsx",
+        "fanIn": 1
+      },
+      {
+        "file": "src/components/Toast/useToast.ts",
+        "fanIn": 1
+      },
+      {
+        "file": "src/server/email/backoff.ts",
+        "fanIn": 1
+      },
+      {
+        "file": "src/server/email/transport.ts",
+        "fanIn": 1
+      },
+      {
+        "file": "src/server/email/templates/Invite.tsx",
+        "fanIn": 1
+      }
+    ],
+    "entryPoints": [
+      "next-env.d.ts",
+      "next.config.js",
+      "playwright.config.ts",
+      "prisma/migrations/20261019151500_user_management_profiles/migration.sql",
+      "prisma/migrations/20261104000000_auth_reconcile/migration.sql",
+      "prisma/migrations/20261104120000_notifications_email/migration.sql",
+      "prisma/migrations/20261105000000_timetable/migration.sql",
+      "prisma/migrations/20261106000000_user_role_status_index/migration.sql",
+      "prisma/seed.ts",
+      "scripts/worker-email.ts",
+      "src/app/(app)/account/notifications/page.tsx",
+      "src/app/(app)/account/security/page.tsx",
+      "src/app/(app)/admin/courses/[id]/enrollment/page.tsx",
+      "src/app/(app)/admin/courses/page.tsx",
+      "src/app/(app)/admin/email-log/page.tsx",
+      "src/app/(app)/admin/sections/[id]/page.tsx",
+      "src/app/(app)/admin/sections/page.tsx",
+      "src/app/(app)/courses/[courseId]/layout.tsx",
+      "src/app/(app)/courses/[courseId]/page.tsx",
+      "src/app/(app)/courses/[courseId]/roster/page.tsx",
+      "src/app/(app)/dashboard/page.tsx",
+      "src/app/(app)/layout.tsx",
+      "src/app/(app)/my-courses/page.tsx",
+      "src/app/(app)/notifications/page.tsx",
+      "src/app/(app)/students/[id]/courses/page.tsx",
+      "src/app/(auth)/forgot-password/page.tsx",
+      "src/app/(auth)/invite/[token]/page.tsx",
+      "src/app/(auth)/layout.tsx",
+      "src/app/(auth)/login/page.tsx",
+      "src/app/(auth)/reset-password/[token]/page.tsx",
+      "src/app/(public)/layout.tsx",
+      "src/app/(public)/page.tsx",
+      "src/app/api/academic-years/[id]/route.ts",
+      "src/app/api/academic-years/[id]/set-current/route.ts",
+      "src/app/api/academic-years/[id]/terms/route.ts",
+      "src/app/api/academic-years/route.ts",
+      "src/app/api/account/password/route.ts",
+      "src/app/api/admin/email-log/[id]/retry/route.ts",
+      "src/app/api/admin/email-log/route.ts",
+      "src/app/api/admin/notifications/test/route.ts",
+      "src/app/api/audit-logs/route.ts",
+      "src/app/api/auth/[...nextauth]/route.ts",
+      "src/app/api/auth/accept-invite/route.ts",
+      "src/app/api/auth/forgot-password/route.ts",
+      "src/app/api/auth/reset-password/route.ts",
+      "src/app/api/courses/[id]/enrollments/route.ts",
+      "src/app/api/courses/[id]/roster/route.ts",
+      "src/app/api/courses/[id]/route.ts",
+      "src/app/api/courses/route.ts",
+      "src/app/api/enrollments/[id]/route.ts",
+      "src/app/api/health/route.ts",
+      "src/app/api/internal/email/dispatch/route.ts",
+      "src/app/api/me/children/route.ts",
+      "src/app/api/me/courses/route.ts",
+      "src/app/api/me/notification-preferences/route.ts",
+      "src/app/api/me/profile/route.ts",
+      "src/app/api/me/timetable/route.ts",
+      "src/app/api/notifications/[id]/read/route.ts",
+      "src/app/api/notifications/[id]/unread/route.ts",
+      "src/app/api/notifications/read-all/route.ts",
+      "src/app/api/notifications/route.ts",
+      "src/app/api/notifications/unread-count/route.ts",
+      "src/app/api/periods/[id]/route.ts",
+      "src/app/api/periods/reorder/route.ts",
+      "src/app/api/periods/route.ts",
+      "src/app/api/school-days/route.ts",
+      "src/app/api/sections/[id]/core-courses/route.ts",
+      "src/app/api/sections/[id]/members/[studentId]/route.ts",
+      "src/app/api/sections/[id]/members/route.ts",
+      "src/app/api/sections/[id]/route.ts",
+      "src/app/api/sections/copy-to-year/route.ts",
+      "src/app/api/sections/route.ts",
+      "src/app/api/students/[id]/move-section/route.ts",
+      "src/app/api/students/[id]/parents/[parentId]/route.ts",
+      "src/app/api/students/[id]/parents/route.ts",
+      "src/app/api/students/[id]/route.ts",
+      "src/app/api/timetable/availability/route.ts",
+      "src/app/api/timetable/free-rooms/route.ts",
+      "src/app/api/timetable/route.ts",
+      "src/app/api/timetable/slots/[id]/route.ts",
+      "src/app/api/timetable/slots/route.ts",
+      "src/app/api/users/[id]/archive/route.ts",
+      "src/app/api/users/[id]/invite/route.ts",
+      "src/app/api/users/[id]/restore/route.ts",
+      "src/app/api/users/[id]/route.ts",
+      "src/app/api/users/[id]/status/route.ts",
+      "src/app/api/users/[id]/unlock/route.ts",
+      "src/app/api/users/export/route.ts",
+      "src/app/api/users/import/route.ts",
+      "src/app/api/users/route.ts",
+      "src/app/api/users/search/route.ts",
+      "src/app/error.tsx",
+      "src/app/forbidden/page.tsx",
+      "src/app/global-error.tsx",
+      "src/app/layout.tsx",
+      "src/app/not-found.tsx",
+      "src/components/ConfirmDialog/ConfirmDialog.tsx",
+      "src/components/DataTable/DataTable.tsx",
+      "src/components/DateDisplay/DateDisplay.tsx",
+      "src/components/EmptyState/EmptyState.tsx",
+      "src/components/FormField/FormField.tsx",
+      "src/components/LoadingSkeleton/LoadingSkeleton.tsx",
+      "src/components/NotificationBell/NotificationBell.tsx",
+      "src/components/PageHeader/PageHeader.tsx",
+      "src/components/PasswordChecklist/SetPasswordForm.tsx",
+      "src/components/PasswordChecklist/index.ts",
+      "src/components/StatCard/StatCard.tsx",
+      "src/components/Toast/ToastProvider.tsx",
+      "src/components/UserAvatar/UserAvatar.tsx",
+      "src/components/UserPicker/UserPicker.tsx",
+      "src/config/course-tabs.ts",
+      "src/config/public-routes.ts",
+      "src/config/student-tabs.ts",
+      "src/lib/dates.ts",
+      "src/lib/env.ts",
+      "src/lib/validators/auth.ts",
+      "src/lib/validators/courses.ts",
+      "src/lib/validators/notifications.ts",
+      "src/lib/validators/sections.ts",
+      "src/lib/validators/timetable.ts",
+      "src/lib/validators/users.ts",
+      "src/middleware.ts",
+      "src/server/audit.ts",
+      "src/server/auth/auth.config.ts",
+      "src/server/auth/auth.ts",
+      "src/server/auth/course-access.ts",
+      "src/server/auth/credentials.ts",
+      "src/server/auth/password-policy.ts",
+      "src/server/auth/requireRole.ts",
+      "src/server/auth/student-access.ts",
+      "src/server/auth/tokens.ts",
+      "src/server/courses/courses-service.ts",
+      "src/server/csv.ts",
+      "src/server/email/admin.ts",
+      "src/server/email/dispatch.ts",
+      "src/server/email/outbox.ts",
+      "src/server/email/render.ts",
+      "src/server/enrollment/roster-engine.ts",
+      "src/server/http.ts",
+      "src/server/notifications/notify.ts",
+      "src/server/notifications/purge.ts",
+      "src/server/notifications/service.ts",
+      "src/server/rate-limit.ts",
+      "src/server/sections/sections-service.ts",
+      "src/server/services/academicYears.ts",
+      "src/server/services/auth.ts",
+      "src/server/services/gradeLevels.ts",
+      "src/server/services/rooms.ts",
+      "src/server/services/subjects.ts",
+      "src/server/services/terms.ts",
+      "src/server/services/userImport.ts",
+      "src/server/services/userLinks.ts",
+      "src/server/timetable/timetable-service.ts",
+      "src/theme/theme.ts",
+      "src/types/next-auth.d.ts",
+      "tests/e2e/auth-qa.spec.ts",
+      "tests/e2e/auth.spec.ts",
+      "tests/e2e/dashboard.spec.ts",
+      "tests/e2e/landing.spec.ts",
+      "tests/e2e/notifications.spec.ts",
+      "tests/integration/auth.test.ts",
+      "tests/integration/email-dispatch.test.ts",
+      "tests/integration/timetable-concurrency.test.ts",
+      "tests/unit/ConfirmDialog.test.tsx",
+      "tests/unit/DataTable.test.tsx",
+      "tests/unit/auth-forms.test.tsx",
+      "tests/unit/auth-validators.test.ts",
+      "tests/unit/dates.test.ts",
+      "tests/unit/env.test.ts",
+      "tests/unit/eslint-no-restricted-imports.test.ts",
+      "tests/unit/http.test.ts",
+      "tests/unit/lockout.test.ts",
+      "tests/unit/login-error-message.test.ts",
+      "tests/unit/notifications.test.ts",
+      "tests/unit/password-policy.test.ts",
+      "tests/unit/public-routes.test.ts",
+      "tests/unit/rate-limit.test.ts",
+      "tests/unit/roster-engine.test.ts",
+      "tests/unit/timetable-clash.test.ts",
+      "tests/unit/timetable-time.test.ts",
+      "tests/unit/tokens.test.ts",
+      "tests/unit/useToast.test.tsx",
+      "vitest.config.ts",
+      "vitest.tmp.config.ts"
+    ],
+    "cycles": []
+  },
+  "fileSummaries": null,
+  "cliFlags": [],
+  "envVars": [],
+  "hookEvents": [],
+  "validationCriteria": {},
+  "skillsAndMcp": {},
+  "agentDirectives": {},
+  "productKnowledge": {},
+  "extras": null,
+  "llmInsights": null
+}

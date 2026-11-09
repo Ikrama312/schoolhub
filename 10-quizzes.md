@@ -1,0 +1,281 @@
+# PRD-10: Quizzes & Online Exams
+
+**Ticket:** SCH-010 · **Depends on:** PRD-00 – PRD-09 · **Run mode:** `--brownfield --tech-stack react`
+
+## Summary
+
+Teachers build quizzes with five question types, set availability windows, time limits and attempt limits; students take them in a focused, autosaving player with a server-enforced timer; objective questions are graded automatically and open-ended questions are graded manually; teachers get per-question analytics. Quizzes can be practice (ungraded) or graded.
+
+## Platform Context (shared by every SchoolHub PRD)
+
+SchoolHub is a single-school web platform for administrators, teachers, students and parents. It is built incrementally by a sequence of PRDs (PRD-00 … PRD-18). **When this PRD runs, every lower-numbered PRD is already implemented in the workspace.** Reuse existing models, services, components and helpers — never re-scaffold the project, never duplicate a helper that already exists, never rename existing routes or models.
+
+### Fixed technology decisions
+
+| Concern | Decision |
+|---|---|
+| Framework | Next.js 14 (App Router), React 18, TypeScript `strict: true` |
+| UI components | **Material UI only** — `@mui/material` v9 (+ `@emotion/react`, `@emotion/styled`), `@mui/material-nextjs` (App Router cache provider), `@mui/icons-material`. Every component is looked up through the MUI MCP server first (see "UI component rule" below) |
+| Theming | MUI `createTheme` with `cssVariables: true` and light/dark `colorSchemes`, `InitColorSchemeScript`, `useColorScheme()` for the toggle; styling only through the theme, the `sx` prop and `styled()` — no Tailwind, no CSS modules |
+| Dates & pickers | `@mui/x-date-pickers` v9 (MIT) with `AdapterDateFns`; `date-fns` + `date-fns-tz` for logic |
+| Database | PostgreSQL 16 via Prisma ORM (`prisma/schema.prisma`), migrations with `prisma migrate` |
+| Auth | Auth.js (NextAuth v5) Credentials provider, JWT session strategy, bcrypt password hashes |
+| Validation | Zod schemas in `src/lib/validators/<feature>.ts`, shared by client forms and API handlers |
+| Forms | React Hook Form + `@hookform/resolvers/zod` |
+| Data tables | `@mui/x-data-grid` v9 (MIT `DataGrid`, server-side pagination/sorting/filtering) wrapped by the shared `DataTable` component |
+| Charts | `@mui/x-charts` v9 (MIT) |
+| Email | Nodemailer via the `EmailOutbox` table (from PRD-04); dev transport logs to console |
+| Calendar UI | `@mui/x-scheduler` (MIT Community `EventCalendar`; pin the exact version found via the MUI MCP — it is in beta) |
+| Tests | Vitest + Testing Library (unit/integration), Playwright (e2e in `tests/e2e`) |
+| Local infra | `docker-compose.yml` with Postgres; `.env.example` documents every env var |
+
+### UI component rule (mandatory — applies to every screen in this PRD)
+
+1. **Material UI components only.** Every visible UI element is built from `@mui/material`, `@mui/icons-material` or the MUI X packages listed above (`@mui/x-data-grid`, `@mui/x-date-pickers`, `@mui/x-charts`, `@mui/x-scheduler`) — composed with `Box`, `Stack`, `Grid` and the theme. Hand-styled raw HTML (`<div>`/`<button>`/`<table>` with custom CSS) is not allowed where an MUI component exists.
+2. **Look up every component through the MUI MCP server (`mui-mcp`) before using it.** Call `useMuiDocs` with the package (for example `@mui/material@9.5.0`, `@mui/x-data-grid`) to get the docs index, then `fetchDocs` on the component's page, and use only props, slots and imports documented there for the installed version. Never write MUI code from memory, and never invent props. If the MCP server is unreachable, stop and report it as a blocker instead of guessing.
+3. **Banned:** Tailwind CSS, shadcn/ui, Radix UI, Headless UI, Chakra UI, Ant Design, Bootstrap, `lucide-react`, `next-themes`, `@tanstack/react-table`, Recharts, FullCalendar, `react-select`, `react-datepicker`, `sonner`, `notistack` and any other component or styling library. PRD-00 enforces this with an ESLint `no-restricted-imports` rule.
+4. **Allowed non-visual libraries** (they render no UI of their own): React Hook Form, Zod, `@dnd-kit/core` and `@dnd-kit/sortable` (drag behaviour only — draggable items are MUI components), `react-markdown` + `remark-gfm` + `rehype-sanitize` (every Markdown element is mapped to an MUI component through the `components` prop), `papaparse`, `date-fns`. Email templates (`@react-email/components`) are exempt because email clients cannot render MUI.
+5. Shared wrappers live in `src/components/shared/` and are themselves built from MUI. Toasts use MUI `Snackbar` + `Alert` through the shared `useToast()` hook from PRD-00; side panels use `Drawer`; confirmations use `Dialog`; pickers and searchable selects use `Autocomplete`.
+6. Intake must record this rule as a non-functional requirement, and QA must check it: no banned imports, and every MUI import resolves to a documented component.
+
+### Code layout and conventions
+
+- `src/app/(public)/…` public pages, `src/app/(auth)/…` sign-in flows, `src/app/(app)/…` authenticated app with the shared sidebar shell.
+- `src/app/api/<feature>/…/route.ts` REST route handlers. Handlers are thin: parse with Zod → call a service → return JSON.
+- `src/server/services/<feature>.ts` business logic and Prisma access. Server components may call services directly; client components call the REST API. New features follow PRD-05's precedent of a feature-named subdirectory instead: `src/server/<feature>/<feature>-service.ts` (for example `src/server/sections/sections-service.ts`), not this older flat path — which remains accurate only for the already-built PRD-02/03-era services that still live there.
+- `src/server/auth/requireRole.ts` exposes `requireUser()`, `requireRole(...roles)` and per-entity access checks. Every handler and every server page enforces access server-side; hiding a button is never the only protection.
+- Response shape: success `{ "data": … }`; list `{ "data": [...], "page": 1, "pageSize": 20, "total": 134 }`; error `{ "error": { "code": "VALIDATION_ERROR", "message": "…", "details": {…} } }`. Error codes: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `RATE_LIMITED` (429), `INTERNAL` (500).
+- Pagination: `?page=` (default 1) and `?pageSize=` (default 20, maximum 100). Sorting: `?sort=field&order=asc|desc`. Search: `?q=`.
+- IDs are `cuid()` strings. Every model has `createdAt` and `updatedAt`. Timestamps are stored in UTC and displayed in the school timezone from `SchoolSettings.timezone`. Date-only values use `@db.Date`.
+- Sidebar navigation lives in `src/config/navigation.ts` as an array of `{ label, href, icon, roles }`. A PRD that adds a page adds its nav entry there.
+- Student detail page `/students/[studentId]` is tab-based; tabs are registered in `src/config/student-tabs.ts`. Feature PRDs add a tab there instead of creating a separate student page.
+- Mutations that change records owned by someone else write an `AuditLog` row through `audit()` (from PRD-01).
+- Notifications go through `notify()` (from PRD-04). Notification type keys are registered in `src/server/notifications/types.ts`.
+- No `console.log` in committed code except the dev email transport; use the `logger` from `src/lib/logger.ts`.
+
+### Roles
+
+`ADMIN` (school office staff and principal), `TEACHER`, `STUDENT`, `PARENT` (parent or guardian). A user has exactly one role. Parents see data only for students linked to them; students see only their own data; teachers see data for courses they teach and sections they are homeroom teacher of; admins see everything.
+
+### Assumptions and constraints
+
+- **Assumptions:** one school per deployment (no multi-tenancy); English-only UI; the school timezone is the reference for every date rule; users have a modern evergreen browser (last 2 versions of Chrome, Edge, Firefox, Safari).
+- **Constraints:** this PRD is delivered in a single forge run, so its scope must not expand beyond the sections below; do not modify behaviour owned by later PRDs; keep all existing tests passing (`npm run lint && npm run typecheck && npm run test`) and add the tests listed in this PRD.
+- **Delivery milestones:** Milestone 1 "Core platform" = PRD-00 – PRD-05 · Milestone 2 "Teaching & learning" = PRD-06 – PRD-11 · Milestone 3 "Communication" = PRD-12 – PRD-15 · Milestone 4 "Operations & public" = PRD-16 – PRD-18.
+
+## Background
+
+Teachers run weekly checks for understanding and termly tests. Paper quizzes take hours to mark. Auto-grading objective questions saves that time and gives students immediate feedback, while essay questions still need a teacher.
+
+## Goals
+
+1. A teacher can build a 10-question multiple-choice quiz in under 10 minutes.
+2. Objective questions are graded instantly and correctly on submit.
+3. A student never loses answers because of a page refresh, network drop or browser crash.
+
+## Out of Scope
+
+- Lockdown browser, webcam proctoring.
+- Shared question banks across teachers and random draws from banks (future work).
+- Mathematical formula input (LaTeX) beyond plain text answers.
+
+## User Stories
+
+- As a teacher, I want to create questions of different types with points so that I can assess different skills.
+- As a teacher, I want to set when a quiz opens and closes, a time limit and how many attempts are allowed so that I control the conditions.
+- As a teacher, I want to choose when students see correct answers so that results are not leaked while others are still taking it.
+- As a student, I want my answers saved as I go and a visible timer so that I can focus without worry.
+- As a teacher, I want to grade essay answers quickly and see which questions most students got wrong so that I can reteach.
+- As a parent, I want to see my child's quiz results once released so that I can follow progress.
+
+## Functional Requirements
+
+### FR-1 Data model
+
+```prisma
+enum QuizStatus { DRAFT PUBLISHED CLOSED }
+enum QuestionType { SINGLE_CHOICE MULTIPLE_CHOICE TRUE_FALSE SHORT_ANSWER ESSAY }
+enum ResultsVisibility { IMMEDIATELY AFTER_CLOSE MANUAL }
+enum AttemptStatus { IN_PROGRESS SUBMITTED NEEDS_GRADING GRADED }
+enum ScoringPolicy { HIGHEST LATEST AVERAGE }
+
+model Quiz {
+  id                 String            @id @default(cuid())
+  courseId           String
+  course             Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title              String
+  instructions       String            @default("")   // Markdown
+  isPractice         Boolean           @default(false) // practice quizzes never reach the gradebook
+  availableFrom      DateTime
+  availableUntil     DateTime                          // > availableFrom
+  timeLimitMinutes   Int?                              // 1–300, null = untimed
+  maxAttempts        Int               @default(1)     // 1–10
+  scoringPolicy      ScoringPolicy     @default(HIGHEST)
+  shuffleQuestions   Boolean           @default(false)
+  shuffleOptions     Boolean           @default(false)
+  oneQuestionPerPage Boolean           @default(false)
+  resultsVisibility  ResultsVisibility @default(AFTER_CLOSE)
+  showCorrectAnswers Boolean           @default(true)  // when results are visible
+  resultsReleasedAt  DateTime?                         // for MANUAL
+  status             QuizStatus        @default(DRAFT)
+  createdById        String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  questions          Question[]
+  attempts           QuizAttempt[]
+}
+
+model Question {
+  id            String       @id @default(cuid())
+  quizId        String
+  quiz          Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  type          QuestionType
+  prompt        String                     // Markdown, may include an uploaded image
+  points        Decimal      @db.Decimal(5, 2)   // 0.5–100
+  order         Int
+  options       Json?                      // choice types: [{ id, text }]
+  correct       Json                       // see FR-2
+  explanation   String?                    // shown with correct answers
+  caseSensitive Boolean      @default(false)  // SHORT_ANSWER
+}
+
+model QuizAttempt {
+  id             String        @id @default(cuid())
+  quizId         String
+  quiz           Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        User          @relation(fields: [studentId], references: [id])
+  attemptNumber  Int
+  status         AttemptStatus @default(IN_PROGRESS)
+  startedAt      DateTime      @default(now())
+  deadlineAt     DateTime?                  // min(startedAt + limit + extraTime, availableUntil)
+  submittedAt    DateTime?
+  autoSubmitted  Boolean       @default(false)
+  questionOrder  String[]                   // frozen order for this attempt
+  score          Decimal?      @db.Decimal(7, 2)
+  maxScore       Decimal       @db.Decimal(7, 2)
+  answers        QuizAnswer[]
+  @@unique([quizId, studentId, attemptNumber])
+}
+
+model QuizAnswer {
+  attemptId     String
+  attempt       QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId    String
+  response      Json?
+  pointsAwarded Decimal?    @db.Decimal(5, 2)
+  isCorrect     Boolean?
+  feedback      String?
+  gradedById    String?
+  updatedAt     DateTime    @updatedAt
+  @@id([attemptId, questionId])
+}
+
+model QuizAccommodation {
+  quizId           String
+  studentId        String
+  extraTimeMinutes Int      @default(0)    // 0–300
+  extraAttempts    Int      @default(0)    // 0–5
+  @@id([quizId, studentId])
+}
+```
+
+### FR-2 Question types and auto-grading (`src/server/quiz/grading.ts`)
+
+| Type | `options` | `correct` | `response` | Scoring |
+|---|---|---|---|---|
+| SINGLE_CHOICE | 2–8 options | `{ optionId }` | `{ optionId }` | full points if equal, else 0 |
+| MULTIPLE_CHOICE | 2–8 options | `{ optionIds: [] }` (≥1) | `{ optionIds: [] }` | partial credit: `points × max(0, (correctSelected − incorrectSelected) / totalCorrect)` |
+| TRUE_FALSE | none | `{ value: true }` | `{ value: false }` | full or 0 |
+| SHORT_ANSWER | none | `{ accepted: ["photosynthesis", "photo-synthesis"] }` (1–10) | `{ text }` | full if trimmed, whitespace-collapsed text matches any accepted answer (case-insensitive unless `caseSensitive`), else 0 — teacher can override |
+| ESSAY | none | `{ guidance?: "…" }` | `{ text }` (max 10,000) | manual |
+
+Example: a MULTIPLE_CHOICE worth 4 points with correct {A, C}; a student selecting {A, B} scores `4 × max(0, (1 − 1) / 2) = 0`; selecting {A} scores 2.
+
+### FR-3 Quiz builder (`/courses/[courseId]/quizzes/[quizId]/edit`)
+1. Settings panel for every `Quiz` field with validation (availableUntil > availableFrom; time limit ≤ window length).
+2. Question list with add (type picker), edit inline, duplicate, delete, drag reorder. Each type has a tailored editor: option rows with "correct" radio/checkbox, accepted answers list, essay guidance.
+3. Running total of points; "Preview as student" opens the player in a non-recording preview mode.
+4. Publishing validates: at least 1 question, every choice question has a correct answer, every question has points > 0.
+5. After the first attempt exists, editing questions is limited: text, explanation and accepted answers may change (with a "Regrade" action that recomputes auto-graded answers for all attempts); adding/removing questions or changing points/type is blocked with an explanation.
+
+### FR-4 Course quizzes tab
+1. Register course tab "Quizzes". Teacher: list with status, window, attempts count, average score, "Needs grading" count. Student: Upcoming (opens in…), Available now (with "Start" / "Resume"), Completed (score if visible), Missed. Parent: read-only completed results.
+
+### FR-5 Quiz player (`/quizzes/[quizId]/take`)
+1. Start screen: instructions, question count, total points, time limit, attempts used / allowed. "Start attempt" confirms because the timer starts immediately.
+2. Starting creates an attempt with frozen `questionOrder` (shuffled when enabled) and per-attempt option order (deterministic shuffle seeded by attempt id), and computes `deadlineAt`.
+3. Layout (MUI `RadioGroup`/`FormGroup` of `Checkbox`es/`TextField` per question type, `LinearProgress` for completion): all questions on one scrollable page, or one per page with a question navigator grid of MUI `Button`s (answered / unanswered / flagged-for-review states). Sticky header with title, timer (mm:ss, turns red under 2 minutes, screen-reader announcement at 5 and 1 minutes remaining) and "Submit".
+4. Autosave: every answer change is sent `PUT /api/attempts/:id/answers/:questionId` debounced 800 ms; failures are queued in `localStorage` and retried every 5 seconds; a status pill shows "All answers saved" / "Saving…" / "Offline — answers saved on this device".
+5. Timer is display only; the server rejects answer writes after `deadlineAt + 30 s` grace and auto-submits.
+6. Submit confirms, listing unanswered question count. On submit: auto-grade, set status `NEEDS_GRADING` if any ESSAY (or SHORT_ANSWER with no match flagged for review) else `GRADED`.
+7. Auto-submit: any IN_PROGRESS attempt past `deadlineAt` is submitted with `autoSubmitted = true` lazily when the student or teacher next loads it, and by `autoSubmitExpiredAttempts()` in the maintenance run.
+8. Only one IN_PROGRESS attempt per student per quiz; opening the quiz in a second tab resumes the same attempt.
+
+### FR-6 Results
+1. Visibility: IMMEDIATELY → right after submit; AFTER_CLOSE → after `availableUntil`; MANUAL → after the teacher clicks "Release results". Until then students see "Submitted — results will be available later."
+2. Result page: score, percentage, per-question correctness, the student's response, correct answer and explanation (only when `showCorrectAnswers`), teacher feedback.
+3. Quiz score for a student = scoring policy across GRADED attempts (HIGHEST, LATEST or AVERAGE), exposed via `getStudentQuizScore(quizId, studentId)` for PRD-11.
+
+### FR-7 Manual grading (`/courses/[courseId]/quizzes/[quizId]/grade`)
+1. Two modes: "By student" (one attempt at a time) and "By question" (all students' answers to one question, ideal for essays). Inputs: points (0 – question points, step 0.5), feedback. Override for auto-graded answers.
+2. When all answers of an attempt are graded, the attempt becomes GRADED and the score recomputes.
+
+### FR-8 Analytics tab (teacher)
+1. Summary: attempts, average, median, highest, lowest, average time taken, score distribution histogram (10 % buckets, MUI X `BarChart`).
+2. Per-question table: % correct, average points, and for choice questions the distribution of selected options (highlights the most chosen wrong option). CSV export of all attempts (student, attempt, score, per-question points).
+
+### FR-9 Accommodations
+1. On the quiz settings page, a teacher can grant individual students extra time and extra attempts (`QuizAccommodation`), used in `deadlineAt` and attempt-limit checks.
+
+### FR-10 Notifications
+1. `quiz.published` → enrolled students when published (default email false).
+2. `quiz.results_released` → student + parents when results become visible (for AFTER_CLOSE, sent by the maintenance run once after close; for MANUAL on release; for IMMEDIATELY no notification).
+
+## API
+
+| Method & path | Role | Notes |
+|---|---|---|
+| `GET /api/courses/:id/quizzes` | view course | Role-shaped |
+| `POST /api/courses/:id/quizzes` | manage | |
+| `GET /api/quizzes/:id` | manage → full incl. answers; student → no `correct` fields ever | |
+| `PATCH /api/quizzes/:id` · `DELETE /api/quizzes/:id` | manage | Delete only without attempts |
+| `POST /api/quizzes/:id/questions` · `PATCH /api/questions/:id` · `DELETE /api/questions/:id` | manage | Edit limits per FR-3.5 |
+| `POST /api/quizzes/:id/questions/reorder` | manage | |
+| `POST /api/quizzes/:id/regrade` | manage | |
+| `POST /api/quizzes/:id/attempts` | STUDENT | Start or resume |
+| `GET /api/attempts/:id` | owner, manage | Student: questions without answers until results visible |
+| `PUT /api/attempts/:id/answers/:questionId` | owner | `{ response }`; `409` after deadline |
+| `POST /api/attempts/:id/submit` | owner | |
+| `PUT /api/attempts/:id/answers/:questionId/grade` | manage | `{ pointsAwarded, feedback }` |
+| `POST /api/quizzes/:id/release-results` | manage | |
+| `GET /api/quizzes/:id/analytics` | manage | `?format=csv` |
+| `PUT /api/quizzes/:id/accommodations/:studentId` | manage | |
+
+## Non-Functional Requirements
+
+1. **Security:** correct answers are never sent to a student's browser before results are visible — enforced by a dedicated serializer with a unit test that asserts the `correct` key is absent.
+2. **Reliability:** answer autosave handles 300 concurrent students saving every few seconds; each save is a single upsert under 50 ms.
+3. **Accessibility:** the player is fully keyboard operable; choice options are native radio/checkbox inputs; timer warnings use `aria-live="assertive"`.
+
+## Acceptance Criteria
+
+1. Given a quiz with time limit 20 minutes and `availableUntil` 10 minutes from now, when Sam starts, then `deadlineAt` is 10 minutes from now.
+2. Given Sam answered 5 questions and closes the browser, when Sam reopens the quiz within the deadline, then the same attempt resumes with all 5 answers.
+3. Given the deadline passed while Sam was offline, when Sam reconnects, then the attempt is auto-submitted with saved answers and `autoSubmitted = true`.
+4. Given the MULTIPLE_CHOICE example in FR-2, then the scores match the example exactly.
+5. Given a SHORT_ANSWER accepting "photosynthesis", when Sam answers " Photosynthesis ", then it is marked correct.
+6. Given a quiz with one essay, when Sam submits, then the status is NEEDS_GRADING and the score shows only after Tom grades the essay.
+7. Given AFTER_CLOSE visibility, when Sam fetches the attempt before close, then the response contains no correct answers or scores.
+8. Given `maxAttempts = 2` and HIGHEST policy with attempts of 60 % and 80 %, then the quiz score is 80 % and a third attempt is refused; with an accommodation of 1 extra attempt, a third attempt is allowed.
+9. Given a published quiz with attempts, when Tom tries to delete a question, then the action is blocked with an explanation.
+
+## Test Requirements
+
+- Unit: every grading rule incl. partial credit, short-answer normalisation, deadline computation with accommodations, scoring policies, student serializer omits answers.
+- Integration: autosave after deadline rejected, auto-submit on load, regrade.
+- Playwright: teacher builds a 4-question quiz; student takes it with a page reload mid-attempt; teacher grades essay; student sees results.
+
+## Seed Data
+
+- MATH-7A: "Fractions Check" (8 questions mixing all objective types, IMMEDIATELY, closed, all students attempted), "Unit 1 Test" (12 questions incl. 2 essays, AFTER_CLOSE, open for the next 3 days, no attempts). ENG-7A: practice quiz "Parts of Speech" (5 questions, 3 attempts, HIGHEST).

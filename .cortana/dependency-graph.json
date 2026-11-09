@@ -1,0 +1,313 @@
+{
+  "nodes": 219,
+  "edges": 47,
+  "highFanIn": [
+    {
+      "file": "prisma/migrations/20261019000000_init/migration.sql",
+      "fanIn": 4
+    },
+    {
+      "file": "src/server/email/templates/BaseLayout.tsx",
+      "fanIn": 4
+    },
+    {
+      "file": "src/server/notifications/types.ts",
+      "fanIn": 3
+    },
+    {
+      "file": "src/app/(auth)/TokenPasswordForm.tsx",
+      "fanIn": 2
+    },
+    {
+      "file": "src/config/navigation.ts",
+      "fanIn": 2
+    },
+    {
+      "file": "src/server/services/dateRange.ts",
+      "fanIn": 2
+    },
+    {
+      "file": "tests/e2e/helpers/auth.ts",
+      "fanIn": 2
+    },
+    {
+      "file": "prisma/migrations/20261027000000_classes_enrollment/migration.sql",
+      "fanIn": 1
+    },
+    {
+      "file": "src/lib/logger.ts",
+      "fanIn": 1
+    },
+    {
+      "file": "src/server/services/users.ts",
+      "fanIn": 1
+    },
+    {
+      "file": "src/server/auth/email.ts",
+      "fanIn": 1
+    },
+    {
+      "file": "src/server/db.ts",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/account/notifications/PreferencesTable.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/account/security/ChangePasswordForm.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/admin/courses/[id]/enrollment/EnrollmentClient.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/admin/courses/CoursesClient.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/admin/email-log/EmailLogTable.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/admin/sections/[id]/SectionDetailClient.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/admin/sections/SectionsClient.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/courses/[courseId]/CourseTabs.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/shell.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(app)/notifications/NotificationsList.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(auth)/forgot-password/ForgotPasswordForm.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/(auth)/login/LoginForm.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/app/providers.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/components/PasswordChecklist/PasswordChecklist.tsx",
+      "fanIn": 1
+    },
+    {
+      "file": "src/components/Toast/useToast.ts",
+      "fanIn": 1
+    },
+    {
+      "file": "src/server/email/backoff.ts",
+      "fanIn": 1
+    },
+    {
+      "file": "src/server/email/transport.ts",
+      "fanIn": 1
+    },
+    {
+      "file": "src/server/email/templates/Invite.tsx",
+      "fanIn": 1
+    }
+  ],
+  "entryPoints": [
+    "next-env.d.ts",
+    "next.config.js",
+    "playwright.config.ts",
+    "prisma/migrations/20261019151500_user_management_profiles/migration.sql",
+    "prisma/migrations/20261104000000_auth_reconcile/migration.sql",
+    "prisma/migrations/20261104120000_notifications_email/migration.sql",
+    "prisma/migrations/20261105000000_timetable/migration.sql",
+    "prisma/migrations/20261106000000_user_role_status_index/migration.sql",
+    "prisma/seed.ts",
+    "scripts/worker-email.ts",
+    "src/app/(app)/account/notifications/page.tsx",
+    "src/app/(app)/account/security/page.tsx",
+    "src/app/(app)/admin/courses/[id]/enrollment/page.tsx",
+    "src/app/(app)/admin/courses/page.tsx",
+    "src/app/(app)/admin/email-log/page.tsx",
+    "src/app/(app)/admin/sections/[id]/page.tsx",
+    "src/app/(app)/admin/sections/page.tsx",
+    "src/app/(app)/courses/[courseId]/layout.tsx",
+    "src/app/(app)/courses/[courseId]/page.tsx",
+    "src/app/(app)/courses/[courseId]/roster/page.tsx",
+    "src/app/(app)/dashboard/page.tsx",
+    "src/app/(app)/layout.tsx",
+    "src/app/(app)/my-courses/page.tsx",
+    "src/app/(app)/notifications/page.tsx",
+    "src/app/(app)/students/[id]/courses/page.tsx",
+    "src/app/(auth)/forgot-password/page.tsx",
+    "src/app/(auth)/invite/[token]/page.tsx",
+    "src/app/(auth)/layout.tsx",
+    "src/app/(auth)/login/page.tsx",
+    "src/app/(auth)/reset-password/[token]/page.tsx",
+    "src/app/(public)/layout.tsx",
+    "src/app/(public)/page.tsx",
+    "src/app/api/academic-years/[id]/route.ts",
+    "src/app/api/academic-years/[id]/set-current/route.ts",
+    "src/app/api/academic-years/[id]/terms/route.ts",
+    "src/app/api/academic-years/route.ts",
+    "src/app/api/account/password/route.ts",
+    "src/app/api/admin/email-log/[id]/retry/route.ts",
+    "src/app/api/admin/email-log/route.ts",
+    "src/app/api/admin/notifications/test/route.ts",
+    "src/app/api/audit-logs/route.ts",
+    "src/app/api/auth/[...nextauth]/route.ts",
+    "src/app/api/auth/accept-invite/route.ts",
+    "src/app/api/auth/forgot-password/route.ts",
+    "src/app/api/auth/reset-password/route.ts",
+    "src/app/api/courses/[id]/enrollments/route.ts",
+    "src/app/api/courses/[id]/roster/route.ts",
+    "src/app/api/courses/[id]/route.ts",
+    "src/app/api/courses/route.ts",
+    "src/app/api/enrollments/[id]/route.ts",
+    "src/app/api/health/route.ts",
+    "src/app/api/internal/email/dispatch/route.ts",
+    "src/app/api/me/children/route.ts",
+    "src/app/api/me/courses/route.ts",
+    "src/app/api/me/notification-preferences/route.ts",
+    "src/app/api/me/profile/route.ts",
+    "src/app/api/me/timetable/route.ts",
+    "src/app/api/notifications/[id]/read/route.ts",
+    "src/app/api/notifications/[id]/unread/route.ts",
+    "src/app/api/notifications/read-all/route.ts",
+    "src/app/api/notifications/route.ts",
+    "src/app/api/notifications/unread-count/route.ts",
+    "src/app/api/periods/[id]/route.ts",
+    "src/app/api/periods/reorder/route.ts",
+    "src/app/api/periods/route.ts",
+    "src/app/api/school-days/route.ts",
+    "src/app/api/sections/[id]/core-courses/route.ts",
+    "src/app/api/sections/[id]/members/[studentId]/route.ts",
+    "src/app/api/sections/[id]/members/route.ts",
+    "src/app/api/sections/[id]/route.ts",
+    "src/app/api/sections/copy-to-year/route.ts",
+    "src/app/api/sections/route.ts",
+    "src/app/api/students/[id]/move-section/route.ts",
+    "src/app/api/students/[id]/parents/[parentId]/route.ts",
+    "src/app/api/students/[id]/parents/route.ts",
+    "src/app/api/students/[id]/route.ts",
+    "src/app/api/timetable/availability/route.ts",
+    "src/app/api/timetable/free-rooms/route.ts",
+    "src/app/api/timetable/route.ts",
+    "src/app/api/timetable/slots/[id]/route.ts",
+    "src/app/api/timetable/slots/route.ts",
+    "src/app/api/users/[id]/archive/route.ts",
+    "src/app/api/users/[id]/invite/route.ts",
+    "src/app/api/users/[id]/restore/route.ts",
+    "src/app/api/users/[id]/route.ts",
+    "src/app/api/users/[id]/status/route.ts",
+    "src/app/api/users/[id]/unlock/route.ts",
+    "src/app/api/users/export/route.ts",
+    "src/app/api/users/import/route.ts",
+    "src/app/api/users/route.ts",
+    "src/app/api/users/search/route.ts",
+    "src/app/error.tsx",
+    "src/app/forbidden/page.tsx",
+    "src/app/global-error.tsx",
+    "src/app/layout.tsx",
+    "src/app/not-found.tsx",
+    "src/components/ConfirmDialog/ConfirmDialog.tsx",
+    "src/components/DataTable/DataTable.tsx",
+    "src/components/DateDisplay/DateDisplay.tsx",
+    "src/components/EmptyState/EmptyState.tsx",
+    "src/components/FormField/FormField.tsx",
+    "src/components/LoadingSkeleton/LoadingSkeleton.tsx",
+    "src/components/NotificationBell/NotificationBell.tsx",
+    "src/components/PageHeader/PageHeader.tsx",
+    "src/components/PasswordChecklist/SetPasswordForm.tsx",
+    "src/components/PasswordChecklist/index.ts",
+    "src/components/StatCard/StatCard.tsx",
+    "src/components/Toast/ToastProvider.tsx",
+    "src/components/UserAvatar/UserAvatar.tsx",
+    "src/components/UserPicker/UserPicker.tsx",
+    "src/config/course-tabs.ts",
+    "src/config/public-routes.ts",
+    "src/config/student-tabs.ts",
+    "src/lib/dates.ts",
+    "src/lib/env.ts",
+    "src/lib/validators/auth.ts",
+    "src/lib/validators/courses.ts",
+    "src/lib/validators/notifications.ts",
+    "src/lib/validators/sections.ts",
+    "src/lib/validators/timetable.ts",
+    "src/lib/validators/users.ts",
+    "src/middleware.ts",
+    "src/server/audit.ts",
+    "src/server/auth/auth.config.ts",
+    "src/server/auth/auth.ts",
+    "src/server/auth/course-access.ts",
+    "src/server/auth/credentials.ts",
+    "src/server/auth/password-policy.ts",
+    "src/server/auth/requireRole.ts",
+    "src/server/auth/student-access.ts",
+    "src/server/auth/tokens.ts",
+    "src/server/courses/courses-service.ts",
+    "src/server/csv.ts",
+    "src/server/email/admin.ts",
+    "src/server/email/dispatch.ts",
+    "src/server/email/outbox.ts",
+    "src/server/email/render.ts",
+    "src/server/enrollment/roster-engine.ts",
+    "src/server/http.ts",
+    "src/server/notifications/notify.ts",
+    "src/server/notifications/purge.ts",
+    "src/server/notifications/service.ts",
+    "src/server/rate-limit.ts",
+    "src/server/sections/sections-service.ts",
+    "src/server/services/academicYears.ts",
+    "src/server/services/auth.ts",
+    "src/server/services/gradeLevels.ts",
+    "src/server/services/rooms.ts",
+    "src/server/services/subjects.ts",
+    "src/server/services/terms.ts",
+    "src/server/services/userImport.ts",
+    "src/server/services/userLinks.ts",
+    "src/server/timetable/timetable-service.ts",
+    "src/theme/theme.ts",
+    "src/types/next-auth.d.ts",
+    "tests/e2e/auth-qa.spec.ts",
+    "tests/e2e/auth.spec.ts",
+    "tests/e2e/dashboard.spec.ts",
+    "tests/e2e/landing.spec.ts",
+    "tests/e2e/notifications.spec.ts",
+    "tests/integration/auth.test.ts",
+    "tests/integration/email-dispatch.test.ts",
+    "tests/integration/timetable-concurrency.test.ts",
+    "tests/unit/ConfirmDialog.test.tsx",
+    "tests/unit/DataTable.test.tsx",
+    "tests/unit/auth-forms.test.tsx",
+    "tests/unit/auth-validators.test.ts",
+    "tests/unit/dates.test.ts",
+    "tests/unit/env.test.ts",
+    "tests/unit/eslint-no-restricted-imports.test.ts",
+    "tests/unit/http.test.ts",
+    "tests/unit/lockout.test.ts",
+    "tests/unit/login-error-message.test.ts",
+    "tests/unit/notifications.test.ts",
+    "tests/unit/password-policy.test.ts",
+    "tests/unit/public-routes.test.ts",
+    "tests/unit/rate-limit.test.ts",
+    "tests/unit/roster-engine.test.ts",
+    "tests/unit/timetable-clash.test.ts",
+    "tests/unit/timetable-time.test.ts",
+    "tests/unit/tokens.test.ts",
+    "tests/unit/useToast.test.tsx",
+    "vitest.config.ts",
+    "vitest.tmp.config.ts"
+  ],
+  "cycles": []
+}

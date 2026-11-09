@@ -1,0 +1,958 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+  ARCHIVED
+}
+
+enum AuthTokenType {
+  INVITE
+  PASSWORD_RESET
+}
+
+enum Gender {
+  FEMALE
+  MALE
+  OTHER
+  UNDISCLOSED
+}
+
+enum GuardianRelationship {
+  MOTHER
+  FATHER
+  GUARDIAN
+  GRANDPARENT
+  OTHER
+}
+
+enum EmailStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+/// Every authenticated person. passwordHash is nullable because an INVITED
+/// user has no password until they accept their invite (TASK-8's
+/// acceptInvite step sets both passwordHash and status=ACTIVE together).
+/// phone and archivedAt are added here (PRD-03/TASK-1) because they are the
+/// only task in this PRD that owns schema.prisma: phone is FR-3's common
+/// field shared by every role, archivedAt backs FR-13's archive/restore
+/// (separate from status so a DISABLED-but-not-archived user stays distinct
+/// from an archived one).
+model User {
+  id                      String                   @id @default(cuid())
+  email                   String                   @unique
+  passwordHash            String?
+  firstName               String
+  lastName                String
+  phone                   String?
+  role                    Role
+  status                  UserStatus               @default(INVITED)
+  failedLoginCount        Int                      @default(0)
+  lockedUntil             DateTime?
+  lastLoginAt             DateTime?
+  passwordChangedAt       DateTime?
+  archivedAt              DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  authTokens              AuthToken[]
+  auditLogs               AuditLog[]
+  studentProfile          StudentProfile?
+  teacherProfile          TeacherProfile?
+  parentProfile           ParentProfile?
+  parentLinks             ParentStudentLink[]      @relation("ParentLinks")
+  studentLinks            ParentStudentLink[]      @relation("StudentLinks")
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  homeroomSections        Section[]                @relation("HomeroomTeacher")
+  sectionMemberships      SectionMember[]
+  taughtCourses           Course[]                 @relation("CourseTeacher")
+  enrollments             Enrollment[]
+  attendanceTaken         AttendanceSession[]      @relation("AttendanceTakenBy")
+  attendanceUpdated       AttendanceSession[]      @relation("AttendanceUpdatedBy")
+  attendanceRecords       AttendanceRecord[]
+  files                   FileObject[]
+  submissions             Submission[]             @relation("SubmissionStudent")
+  gradedSubmissions       Submission[]             @relation("SubmissionGrader")
+  quizzesCreated          Quiz[]                   @relation("QuizCreatedBy")
+  quizAttempts            QuizAttempt[]
+  quizAccommodations      QuizAccommodation[]
+  quizAnswersGraded       QuizAnswer[]             @relation("QuizAnswerGradedBy")
+
+  @@index([lastName, firstName, email])
+  @@index([role, status])
+}
+
+/// Student-specific fields (FR-1). medicalNotes is visible to ADMIN/TEACHER
+/// only -- enforced in the service layer (src/server/services/users.ts,
+/// src/app/api/students/[id]/route.ts), never by hiding it client-side.
+model StudentProfile {
+  userId           String     @id
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admissionNumber  String     @unique
+  dateOfBirth      DateTime   @db.Date
+  gender           Gender     @default(UNDISCLOSED)
+  gradeLevelId     String
+  gradeLevel       GradeLevel @relation(fields: [gradeLevelId], references: [id])
+  enrollmentDate   DateTime   @db.Date
+  addressLine1     String?
+  city             String?
+  medicalNotes     String?
+  emergencyContact String?
+  emergencyPhone   String?
+}
+
+/// Teacher-specific fields (FR-1).
+model TeacherProfile {
+  userId         String    @id
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeNumber String    @unique
+  title          String?
+  qualifications String?
+  hireDate       DateTime? @db.Date
+}
+
+/// Parent-specific fields (FR-1).
+model ParentProfile {
+  userId     String  @id
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  occupation String?
+  address    String?
+}
+
+/// Parent<->student link (FR-15/FR-16). isPrimary is the primary contact for
+/// emails; src/server/services/userLinks.ts is the only writer, enforcing
+/// "max 4 parents per student" and "exactly one isPrimary per student" as
+/// transaction invariants rather than DB constraints.
+model ParentStudentLink {
+  id           String               @id @default(cuid())
+  parentId     String
+  parent       User                 @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      User                 @relation("StudentLinks", fields: [studentId], references: [id], onDelete: Cascade)
+  relationship GuardianRelationship
+  isPrimary    Boolean              @default(false)
+  createdAt    DateTime             @default(now())
+
+  @@unique([parentId, studentId])
+  @@index([studentId])
+}
+
+/// Invite + password-reset tokens. Only the SHA-256 hash is ever stored
+/// (NFR-1) — the raw token exists only in the link emailed/logged to the
+/// user. One shared shape for both token types; src/server/auth/tokens.ts
+/// is the single producer/consumer.
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+}
+
+/// Insert-only audit trail written exclusively through src/server/audit.ts's
+/// audit() helper. actorId is nullable so a failed sign-in attempt against a
+/// non-existent email can still be recorded.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+}
+
+/// Singleton row (fixed id "singleton") holding school-wide branding/contact
+/// info. Later PRDs read this for top-bar branding and public footer; no
+/// other PRD should add a second row or a second settings model.
+model SchoolSettings {
+  id                       String         @id @default("singleton")
+  name                     String         @default("SchoolHub Academy")
+  shortName                String         @default("SchoolHub")
+  logoUrl                  String?
+  timezone                 String         @default("UTC")
+  addressLine1             String?
+  addressLine2             String?
+  city                     String?
+  country                  String?
+  phone                    String?
+  email                    String?
+  website                  String?
+  /// PRD-07 FR-4
+  attendanceMode           AttendanceMode @default(PER_PERIOD)
+  attendanceAlertThreshold Int            @default(90)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+}
+
+/// One school year, e.g. "2026-2027". Exactly one row has isCurrent = true
+/// at a time -- enforced in src/server/services/academicYears.ts's
+/// setCurrentAcademicYear(), never by a DB constraint (Postgres can't
+/// express "exactly one true" as a simple unique index).
+model AcademicYear {
+  id             String          @id @default(cuid())
+  name           String          @unique
+  startDate      DateTime        @db.Date
+  endDate        DateTime        @db.Date
+  isCurrent      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  terms          Term[]
+  sections       Section[]
+  courses        Course[]
+  timetableSlots TimetableSlot[]
+}
+
+/// A term (semester/trimester/quarter) inside one academic year. onDelete:
+/// Restrict means the year can't be deleted while it still has terms --
+/// the service layer checks this first to return a friendly 409 instead of
+/// a raw FK error.
+model Term {
+  id             String       @id @default(cuid())
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  name           String
+  startDate      DateTime     @db.Date
+  endDate        DateTime     @db.Date
+  order          Int
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([academicYearId, name])
+  @@unique([academicYearId, order])
+}
+
+/// "Grade 7" etc. archivedAt is a soft-delete: later PRDs (enrollment)
+/// reference grade levels, so they're archived instead of deleted.
+model GradeLevel {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  shortName       String           @unique
+  order           Int              @unique
+  archivedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  studentProfiles StudentProfile[]
+  sections        Section[]
+}
+
+/// "Mathematics" / "MATH". code is always stored upper-case (normalised in
+/// the service layer, not the DB) so the unique constraint catches
+/// case-insensitive duplicates like "math" vs "MATH".
+model Subject {
+  id          String    @id @default(cuid())
+  name        String
+  code        String    @unique
+  description String?
+  color       String    @default("#4F46E5")
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  courses     Course[]
+}
+
+/// A physical room classes are scheduled in.
+model Room {
+  id             String          @id @default(cuid())
+  name           String          @unique
+  building       String?
+  capacity       Int?
+  archivedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sections       Section[]
+  timetableSlots TimetableSlot[]
+}
+
+/// In-app notification (PRD-04 FR-1). type is a key from the compile-time
+/// registry (src/server/notifications/types.ts) rather than an enum/FK, so
+/// later PRDs register new keys without a migration. category is resolved
+/// from the registry at read time (src/server/notifications/list.ts), not
+/// stored here. The composite index backs both getUnreadCount() (NFR-3,
+/// <50ms) and listNotifications()'s own-rows-newest-first query.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, readAt, createdAt])
+}
+
+/// Per-user, per-type override of the registry's defaultEmail/mandatoryInApp
+/// defaults (PRD-04 FR-3). Composite PK instead of a surrogate id/unique
+/// index -- there is exactly one row per (userId, type) by construction
+/// (notify.ts and the preferences PUT route both upsert on it).
+model NotificationPreference {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  inApp     Boolean  @default(true)
+  email     Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, type])
+}
+
+/// Durable outbox row the dispatcher claims and sends (PRD-04 FR-1/FR-5).
+/// No FK to User -- toEmail/toName are a point-in-time snapshot (matches
+/// the PRD's schema block exactly) so a later email change or user deletion
+/// never blocks a queued send. updatedAt doubles as the "flipped to
+/// SENDING" timestamp the >10-minute stuck-row recovery checks (NFR-4) --
+/// Prisma's @updatedAt already bumps it on that status-flip UPDATE, so no
+/// separate column is needed.
+model EmailOutbox {
+  id            String      @id @default(cuid())
+  toEmail       String
+  toName        String?
+  subject       String
+  html          String
+  text          String
+  status        EmailStatus @default(PENDING)
+  attempts      Int         @default(0)
+  lastError     String?
+  nextAttemptAt DateTime    @default(now())
+  sentAt        DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([status, nextAttemptAt])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-05 Classes & Enrollment (FR-1). Shapes match the PRD schema block
+// exactly; business rules (capacity, CORE auto-enroll, homeroom-once-per-year)
+// live in src/server/enrollment/roster-engine.ts and the sections/courses
+// services, not here.
+// ---------------------------------------------------------------------------
+
+enum CourseKind {
+  CORE
+  ELECTIVE
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  DROPPED
+}
+
+/// Homeroom group, e.g. "7A". capacity is 1-60 (validated in zod).
+model Section {
+  id                 String              @id @default(cuid())
+  academicYearId     String
+  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id])
+  gradeLevelId       String
+  gradeLevel         GradeLevel          @relation(fields: [gradeLevelId], references: [id])
+  name               String
+  homeroomTeacherId  String?
+  homeroomTeacher    User?               @relation("HomeroomTeacher", fields: [homeroomTeacherId], references: [id])
+  roomId             String?
+  room               Room?               @relation(fields: [roomId], references: [id])
+  capacity           Int                 @default(30)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  members            SectionMember[]
+  courses            Course[]
+  attendanceSessions AttendanceSession[]
+
+  @@unique([academicYearId, name])
+}
+
+/// academicYearId is denormalised so the DB enforces one section per
+/// student per year (NFR-2).
+model SectionMember {
+  id             String   @id @default(cuid())
+  sectionId      String
+  section        Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        User     @relation(fields: [studentId], references: [id])
+  joinedAt       DateTime @default(now())
+  academicYearId String
+
+  @@unique([studentId, academicYearId])
+}
+
+/// sectionId is null for cross-section electives. coTeacherIds is a plain
+/// String[] exactly per FR-1 (queried with `has`), max 3 enforced in zod.
+model Course {
+  id                 String              @id @default(cuid())
+  academicYearId     String
+  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id])
+  subjectId          String
+  subject            Subject             @relation(fields: [subjectId], references: [id])
+  sectionId          String?
+  section            Section?            @relation(fields: [sectionId], references: [id])
+  teacherId          String
+  teacher            User                @relation("CourseTeacher", fields: [teacherId], references: [id])
+  coTeacherIds       String[]            @default([])
+  name               String
+  code               String
+  kind               CourseKind          @default(CORE)
+  description        String?
+  capacity           Int?
+  archivedAt         DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  enrollments        Enrollment[]
+  timetableSlots     TimetableSlot[]
+  attendanceSessions AttendanceSession[]
+  modules            Module[]
+  assignments        Assignment[]
+  quizzes            Quiz[]
+
+  @@unique([academicYearId, code])
+}
+
+/// DROPPED rows are kept (never deleted) so later PRDs' attendance/grades
+/// history stays attached (FR-12).
+model Enrollment {
+  id         String           @id @default(cuid())
+  courseId   String
+  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    User             @relation(fields: [studentId], references: [id])
+  status     EnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime         @default(now())
+  droppedAt  DateTime?
+
+  @@unique([courseId, studentId])
+  @@index([studentId, status])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-06 Bell Schedule & Timetable (FR-1..FR-4). One repeating week (NFR-15).
+// Clash rules live in src/server/timetable/, not in the DB.
+// ---------------------------------------------------------------------------
+
+enum PeriodKind {
+  CLASS
+  BREAK
+  LUNCH
+  ASSEMBLY
+}
+
+/// startTime/endTime are 'HH:MM' in SchoolSettings.timezone. order is display order only.
+model Period {
+  id                 String              @id @default(cuid())
+  name               String
+  startTime          String
+  endTime            String
+  kind               PeriodKind          @default(CLASS)
+  order              Int                 @unique
+  slots              TimetableSlot[]
+  attendanceSessions AttendanceSession[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+/// ISO weekday 1=Mon … 7=Sun; seeded with all 7 rows.
+model SchoolDay {
+  dayOfWeek  Int     @id
+  isTeaching Boolean @default(true)
+}
+
+/// period is Restrict: deletePeriod refuses with 409 while slots exist (FR-8).
+model TimetableSlot {
+  id             String       @id @default(cuid())
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  courseId       String
+  course         Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  dayOfWeek      Int
+  periodId       String
+  period         Period       @relation(fields: [periodId], references: [id])
+  roomId         String?
+  room           Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([courseId, dayOfWeek, periodId])
+  @@index([academicYearId, dayOfWeek, periodId])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-07 Attendance (FR-1..FR-4). Exactly-one-of(courseId, sectionId) and the
+// two partial unique indexes live in the migration SQL (ADR-2) -- Prisma
+// can't express them.
+// ---------------------------------------------------------------------------
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum AttendanceMode {
+  PER_PERIOD
+  DAILY_HOMEROOM
+  BOTH
+}
+
+/// Course session (courseId + periodId) or daily homeroom register (sectionId).
+model AttendanceSession {
+  id          String             @id @default(cuid())
+  courseId    String?
+  course      Course?            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sectionId   String?
+  section     Section?           @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  periodId    String?
+  period      Period?            @relation(fields: [periodId], references: [id])
+  date        DateTime           @db.Date
+  takenById   String
+  takenBy     User               @relation("AttendanceTakenBy", fields: [takenById], references: [id])
+  updatedById String
+  updatedBy   User               @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  records     AttendanceRecord[]
+
+  @@index([date])
+}
+
+/// minutesLate is 1..240 iff LATE; note <= 500 (zod, FR-12).
+model AttendanceRecord {
+  id          String            @id @default(cuid())
+  sessionId   String
+  session     AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     User              @relation(fields: [studentId], references: [id])
+  status      AttendanceStatus
+  minutesLate Int?
+  note        String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([sessionId, studentId])
+  @@index([studentId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-08 File storage & course content (SH-8)
+// ---------------------------------------------------------------------------
+
+/// Generic uploaded file (FR-1). Bytes live under UPLOAD_DIR; access goes
+/// through src/server/files/access.ts. contextId null = unattached (purged after 24 h).
+model FileObject {
+  id                    String                 @id @default(cuid())
+  ownerId               String
+  owner                 User                   @relation(fields: [ownerId], references: [id])
+  originalName          String
+  mimeType              String
+  sizeBytes             Int
+  storageKey            String                 @unique
+  sha256                String
+  context               String
+  contextId             String?
+  createdAt             DateTime               @default(now())
+  lessonAttachments     LessonAttachment[]
+  assignmentAttachments AssignmentAttachment[]
+  submissionFiles       SubmissionFile[]
+
+  @@index([context, contextId])
+}
+
+enum ContentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
+model Module {
+  id          String        @id @default(cuid())
+  courseId    String
+  course      Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  order       Int
+  status      ContentStatus @default(DRAFT)
+  publishAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  lessons     Lesson[]
+
+  @@index([courseId, order])
+}
+
+model Lesson {
+  id               String             @id @default(cuid())
+  moduleId         String
+  module           Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title            String
+  contentMarkdown  String             @default("")
+  videoUrl         String?
+  estimatedMinutes Int?
+  order            Int
+  status           ContentStatus      @default(DRAFT)
+  publishAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  attachments      LessonAttachment[]
+  links            LessonLink[]
+  progress         LessonProgress[]
+
+  @@index([moduleId, order])
+}
+
+/// file has no onDelete -> Restrict: an attached file can't be hard-deleted (FR-11).
+model LessonAttachment {
+  id       String     @id @default(cuid())
+  lessonId String
+  lesson   Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  fileId   String
+  file     FileObject @relation(fields: [fileId], references: [id])
+  order    Int
+}
+
+model LessonLink {
+  id       String @id @default(cuid())
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title    String
+  url      String
+  order    Int
+}
+
+model LessonProgress {
+  lessonId      String
+  lesson        Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentId     String
+  firstViewedAt DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@id([lessonId, studentId])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-09 assignments & submissions (SH-9, system-design §2.1)
+// ---------------------------------------------------------------------------
+
+enum SubmissionType {
+  ONLINE_TEXT
+  FILE_UPLOAD
+  TEXT_AND_FILE
+  NO_SUBMISSION
+}
+
+enum AssignmentStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  RETURNED
+}
+
+model Assignment {
+  id                       String                 @id @default(cuid())
+  courseId                 String
+  course                   Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title                    String
+  instructions             String                 @default("") @db.Text
+  submissionType           SubmissionType
+  maxPoints                Decimal                @db.Decimal(6, 2)
+  dueAt                    DateTime
+  availableFrom            DateTime?
+  allowLate                Boolean                @default(false)
+  lateCutoffAt             DateTime?
+  latePenaltyPercentPerDay Decimal                @default(0) @db.Decimal(5, 2)
+  maxLatePenaltyPercent    Decimal                @default(0) @db.Decimal(5, 2)
+  maxFileCount             Int                    @default(3)
+  allowExtraCredit         Boolean                @default(false)
+  status                   AssignmentStatus       @default(DRAFT)
+  rubricId                 String?                @unique
+  rubric                   Rubric?                @relation(fields: [rubricId], references: [id], onDelete: SetNull)
+  notifiedAt               DateTime?
+  archivedAt               DateTime?
+  createdById              String
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  attachments              AssignmentAttachment[]
+  submissions              Submission[]
+  exemptions               GradeExemption[]
+  reminders                AssignmentReminder[]
+
+  @@index([courseId, dueAt])
+}
+
+/// file has no onDelete -> Restrict: an attached file can't be hard-deleted.
+model AssignmentAttachment {
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         FileObject @relation(fields: [fileId], references: [id])
+
+  @@id([assignmentId, fileId])
+}
+
+model Rubric {
+  id         String            @id @default(cuid())
+  criteria   RubricCriterion[]
+  assignment Assignment?
+}
+
+model RubricCriterion {
+  id          String  @id @default(cuid())
+  rubricId    String
+  rubric      Rubric  @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  maxPoints   Decimal @db.Decimal(6, 2)
+  order       Int
+  /// [{label, points, description}]
+  levels      Json
+
+  @@index([rubricId, order])
+}
+
+/// One row per (assignment, student); earlier attempts live in SubmissionHistory.
+/// attemptNumber 0 = offline grade (FR-8).
+model Submission {
+  id             String              @id @default(cuid())
+  assignmentId   String
+  assignment     Assignment          @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        User                @relation("SubmissionStudent", fields: [studentId], references: [id])
+  status         SubmissionStatus    @default(SUBMITTED)
+  text           String?             @db.Text
+  attemptNumber  Int
+  submittedAt    DateTime
+  isLate         Boolean             @default(false)
+  lateDays       Int                 @default(0)
+  rawScore       Decimal?            @db.Decimal(6, 2)
+  penaltyPercent Decimal?            @db.Decimal(5, 2)
+  finalScore     Decimal?            @db.Decimal(6, 2)
+  /// [{criterionId, points, comment}]
+  rubricScores   Json?
+  feedback       String?             @db.Text
+  gradedById     String?
+  gradedBy       User?               @relation("SubmissionGrader", fields: [gradedById], references: [id])
+  gradedAt       DateTime?
+  returnedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  files          SubmissionFile[]
+  history        SubmissionHistory[]
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId])
+}
+
+model SubmissionFile {
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         FileObject @relation(fields: [fileId], references: [id])
+
+  @@id([submissionId, fileId])
+}
+
+/// fileIds has no FK on purpose: old-attempt files stay attached to the submission (B1).
+model SubmissionHistory {
+  id            String     @id @default(cuid())
+  submissionId  String
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  attemptNumber Int
+  text          String?    @db.Text
+  fileIds       String[]
+  submittedAt   DateTime
+
+  @@index([submissionId, attemptNumber])
+}
+
+/// The row itself is the PRD-11 "exclude from gradebook" flag (FR-35).
+model GradeExemption {
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  reason       String?
+  createdAt    DateTime   @default(now())
+
+  @@id([assignmentId, studentId])
+}
+
+/// Idempotency key for due_soon / missing reminders (FR-6).
+model AssignmentReminder {
+  id           String     @id @default(cuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  kind         String
+  createdAt    DateTime   @default(now())
+
+  @@unique([assignmentId, studentId, kind])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-10 Quizzes (FR-1). Fields exactly per the PRD; only relations/indexes added.
+// ---------------------------------------------------------------------------
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  ESSAY
+}
+
+enum ResultsVisibility {
+  IMMEDIATELY
+  AFTER_CLOSE
+  MANUAL
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  NEEDS_GRADING
+  GRADED
+}
+
+enum ScoringPolicy {
+  HIGHEST
+  LATEST
+  AVERAGE
+}
+
+model Quiz {
+  id                 String              @id @default(cuid())
+  courseId           String
+  course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title              String
+  instructions       String              @default("") // Markdown
+  isPractice         Boolean             @default(false) // practice quizzes never reach the gradebook
+  availableFrom      DateTime
+  availableUntil     DateTime // > availableFrom
+  timeLimitMinutes   Int? // 1–300, null = untimed
+  maxAttempts        Int                 @default(1) // 1–10
+  scoringPolicy      ScoringPolicy       @default(HIGHEST)
+  shuffleQuestions   Boolean             @default(false)
+  shuffleOptions     Boolean             @default(false)
+  oneQuestionPerPage Boolean             @default(false)
+  resultsVisibility  ResultsVisibility   @default(AFTER_CLOSE)
+  showCorrectAnswers Boolean             @default(true) // when results are visible
+  resultsReleasedAt  DateTime? // MANUAL release; also the AFTER_CLOSE "notified once" claim (A6)
+  status             QuizStatus          @default(DRAFT)
+  createdById        String
+  createdBy          User                @relation("QuizCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  questions          Question[]
+  attempts           QuizAttempt[]
+  accommodations     QuizAccommodation[]
+
+  @@index([courseId, status])
+}
+
+model Question {
+  id            String       @id @default(cuid())
+  quizId        String
+  quiz          Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  type          QuestionType
+  prompt        String // Markdown, may include an uploaded image
+  points        Decimal      @db.Decimal(5, 2) // 0.5–100
+  order         Int
+  options       Json? // choice types: [{ id, text }]
+  correct       Json // see FR-2
+  explanation   String? // shown with correct answers
+  caseSensitive Boolean      @default(false) // SHORT_ANSWER
+  answers       QuizAnswer[]
+
+  @@index([quizId, order])
+}
+
+/// Only one IN_PROGRESS attempt per (quizId, studentId): partial unique index
+/// "quiz_attempt_one_in_progress_uq" lives in migration 20261110000000_add_quizzes (FR-19, ADR-2).
+/// Prisma can't express it — never use `prisma db push`.
+model QuizAttempt {
+  id            String        @id @default(cuid())
+  quizId        String
+  quiz          Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       User          @relation(fields: [studentId], references: [id])
+  attemptNumber Int
+  status        AttemptStatus @default(IN_PROGRESS)
+  startedAt     DateTime      @default(now())
+  deadlineAt    DateTime? // min(startedAt + limit + extraTime, availableUntil)
+  submittedAt   DateTime?
+  autoSubmitted Boolean       @default(false)
+  questionOrder String[] // frozen order for this attempt
+  score         Decimal?      @db.Decimal(7, 2)
+  maxScore      Decimal       @db.Decimal(7, 2)
+  answers       QuizAnswer[]
+
+  @@unique([quizId, studentId, attemptNumber])
+  @@index([quizId, status])
+  @@index([status, deadlineAt])
+}
+
+model QuizAnswer {
+  attemptId     String
+  attempt       QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  response      Json?
+  pointsAwarded Decimal?    @db.Decimal(5, 2)
+  isCorrect     Boolean?
+  feedback      String?
+  gradedById    String?
+  gradedBy      User?       @relation("QuizAnswerGradedBy", fields: [gradedById], references: [id])
+  updatedAt     DateTime    @updatedAt
+
+  @@id([attemptId, questionId])
+}
+
+model QuizAccommodation {
+  quizId           String
+  quiz             Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId        String
+  student          User   @relation(fields: [studentId], references: [id])
+  extraTimeMinutes Int    @default(0) // 0–300
+  extraAttempts    Int    @default(0) // 0–5
+
+  @@id([quizId, studentId])
+}

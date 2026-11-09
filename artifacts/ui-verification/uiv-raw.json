@@ -1,0 +1,314 @@
+{
+ "today": "2026-11-09T08:06:05.259Z",
+ "results": {
+  "teacher-course-quizzes-tab": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes",
+   "quizzesTab": 1,
+   "headers": [
+    "Title",
+    "Status",
+    "Window",
+    "Attempts",
+    "Average",
+    "Needs grading",
+    ""
+   ],
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\nNEW QUIZ\n​\n​\nTitle\nStatus\nWindow\nAttempts\nAverage\nNeeds grading\nUIV Unit 1 test\nPUBLISHED\n11 Nov 2026, 03:06 – 12 Nov 2026, 03:06\n0\n—\n0\nUIV Draft quiz\nDRAFT\n10 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n0\n—\n0\nUIV Fractions check\nPUBLISHED\n8 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n1\n58.3%\n0\nAnalytics\nUIV Manual-release quiz\nPUBLISHED\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n1\n100%\n0\nAnalytics\nUIV Practice sprint\nPUBLISHED\nPractice\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n0\n—\n0\nUIV Decimals quick check\nCLOSED\n4 Nov 2026, 03:06 – 8 Nov 2026, 03:06\n1\n28.6%\n0\nAnalytics\n\nRows per page:\n\n20\n\n1–6 of 6",
+   "axe": [
+    "empty-table-header (minor) x1"
+   ]
+  },
+  "teacher-new-quiz": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8rdw00037g3ud3zelbum/edit",
+   "redirectedTo": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8rdw00037g3ud3zelbum/edit",
+   "createdStatus": "DRAFT",
+   "createdTitle": "Untitled quiz"
+  },
+  "teacher-builder-add-questions": {
+   "ok": true,
+   "emptyHasChecklist": true,
+   "previewDisabledWhenEmpty": null,
+   "counts": [
+    "Multiple choice: 2",
+    "True / false: 3",
+    "Short answer: 4",
+    "Essay: 5"
+   ],
+   "header": "5 questions · 5 points total",
+   "problems": [],
+   "publishDisabled": false,
+   "perQuestion": {
+    "drag": 5,
+    "duplicate": 5,
+    "delete": 5,
+    "move": 10
+   }
+  },
+  "teacher-builder-duplicate-delete": {
+   "ok": true,
+   "before": "5 questions · 5 points total",
+   "afterDuplicate": "6 questions",
+   "deleteDialog": "Delete question 2?\nCANCEL\nDELETE",
+   "afterDelete": "5 questions"
+  },
+  "teacher-builder-editor": {
+   "ok": true,
+   "editorsFound": 0,
+   "radios": 6,
+   "checkboxes": 1,
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\n\nUntitled quiz\n\nUntitled quiz\nDRAFT\n\n5 questions · 5 points total\n\nPREVIEW AS STUDENT\nPUBLISH\nDELETE\nQUESTIONS\nSETTINGS\nQuestion 1\nSingle choice\n1 pts\nWRITE\nPREVIEW\nQuestion 1 text\nQuestion 1 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nOptions — mark the correct one\n\nOption 1\nOption 1\nOption 2\nOption 2\nADD OPTION\nExplanation (shown with correct answers)\nExplanation (shown with correct answers)\nSAVE QUESTION\nDISCARD CHANGES\nQuestion 2\nTrue / false\n1 pts\nWRITE\nPREVIEW\nQuestion 2 text\nQuestion 2 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nTrue is correct\nFalse is correct\nExplanation (shown with correct answers)\nExplanation (shown with correct answers)\nSAVE QUESTION\nDISCARD CHANGES\nQuestion 3\nShort answer\n1 pts\nWRITE\nPREVIEW\nQuestion 3 text\nQuestion 3 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nAccepted answers (spaces are trimmed; teacher can override)\n\nAccepted answer 1\nAccepted answer 1\nADD ACCEPTED ANSWER\nCase sensitive\nExplanation (shown with correct answers)\nExplanation (shown with correct answers)\nSAVE QUESTION\nDISCARD CHANGES\nQuestion 4\nEssay\n1 pts\nWRITE\nPREVIEW\nQuestion 4 text\nQuestion 4 text\n\n12 / 20,000 · Markdown supported\n\nADD IMAGE0 / 1\nPoints\nPoints\n\n0.5–100, steps of 0.5\n\nGrading guidance (teachers only)\nGrading guidance"
+  },
+  "teacher-builder-settings": {
+   "ok": true,
+   "labels": {
+    "Title": 1,
+    "Instructions": 2,
+    "Opens": 2,
+    "Closes": 2,
+    "Time limit (minutes)": 1,
+    "Attempts allowed": 1,
+    "Scoring policy": 1,
+    "Results visible": 1,
+    "Practice quiz (not in gradebook)": 1,
+    "Shuffle questions": 1,
+    "Shuffle options": 1,
+    "One question per page": 1,
+    "Show correct answers with results": 1
+   },
+   "accommodationsTable": 1,
+   "accomText": "Student\tExtra minutes (0–300)\tExtra attempts (0–5)\t\nAlex Aardvark\t\n​\n\t\n​\n\tSAVE\nBlake Bell\t\n​\n\t\n​\n\tSAVE\nMorgan Missing\t\n​\n\t\n​\n\tSAVE",
+   "timeLimitErrors": [
+    "Extra time and attempts apply to attempts started after you save — an attempt already in progress keeps its deadline.",
+    "Question duplicated"
+   ]
+  },
+  "teacher-builder-preview": {
+   "ok": true,
+   "lockedAlert": [
+    "1 attempt exist. You can still edit question text, explanations and accepted answers; adding, removing, reordering or re-scoring questions is blocked. Use Regrade after editing accepted answers.\nREGRADE"
+   ],
+   "addDisabled": true,
+   "links": {
+    "grade": 1,
+    "analytics": 1
+   },
+   "attemptsBefore": 1,
+   "attemptsAfterPreview": 1,
+   "previewHasNotRecorded": true,
+   "previewText": "Preview as student — nothing is recorded\nUIV Fractions check\nPreview\n\n20:00\n\nNot recorded\nSUBMIT\nQuestion 1 (2 points)\n\nWhich fraction is largest?\n\n1/2\n2/3\n3/4\n2/4\nFLAG FOR REVIEW\nQuestion 2 (4 points)\n\nSelect every fraction equal to one half.\n\n1/2\n2/3\n3/4\n2/4\nFLAG FOR REVIEW\nQuestion 3 (1 point)\n\n5/5 equals 1.\n\nTrue\nFalse\nFLAG FOR REVIEW\nQuestion 4 (1 point)\n\nName the bottom number of a fraction.\n\n​\nFLAG FOR REVIEW\nQuestion 5 (4 points)\n\nExplain how you compare two fractions.\n\n​\n\n0 / 10000\n\nFLAG FOR REVIEW"
+  },
+  "teacher-draft-publish-checklist": {
+   "ok": true,
+   "problems": [
+    "Before you can publish\nQuestion 1 needs a correct answer."
+   ],
+   "publishDisabled": true
+  },
+  "student-course-quizzes-list": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes",
+   "groups": [
+    "Available now",
+    "Upcoming",
+    "Missed"
+   ],
+   "draftHidden": true,
+   "startButtons": 3,
+   "overflowX": false,
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nQuizzes\nAvailable now\nUIV Fractions check\n\nCloses 11 Nov 2026, 03:06 · 5 questions · 12 points · 20 min · attempts 0/2\n\nSTART\nUIV Manual-release quiz\n\nCloses 10 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1\n\nSTART\nUIV Practice sprint\nPractice\n\nCloses 10 Nov 2026, 03:06 · 4 questions · 8 points · 1 min · attempts 0/3\n\nSTART\nUpcoming\nUIV Unit 1 test\n\nOpens 11 Nov 2026, 03:06 · 3 questions · 7 points · 45 min · attempts 0/1\n\nMissed\nUIV Decimals quick check\n\nCloses 8 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1"
+  },
+  "student-start-screen": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/quizzes/cmw8z8o64000dhusdoqmgih6t/take",
+   "text": "Quizzes\n/\n\nUIV Fractions check\n\nUIV Fractions check\n\nAnswer all questions. Calculators allowed.\n\nQuestions\n5\nTotal points\n12\nTime limit\n20 minutes\nAttempts\n0 used of 2\nCloses\nWed 11 Nov 2026, 03:06\nSTART ATTEMPT",
+   "dialog": "Start this attempt?\n\nThe 20-minute timer starts as soon as you start and keeps running if you leave the page.\n\nCANCEL\nSTART",
+   "overflowX": false
+  },
+  "student-player-answer-autosave": {
+   "ok": true,
+   "timer": "Time remaining 19:59",
+   "pillDuring": [
+    "Saving…"
+   ],
+   "progress": "4 of 5 answered",
+   "radios": 6,
+   "checkboxes": 4,
+   "savedAnswersInDb": 4,
+   "axe": [],
+   "overflowX": false
+  },
+  "student-player-offline-pill": {
+   "ok": true,
+   "localStorageKeys": [
+    "quiz-attempt:cmw8zahflcff8caf75e8a0be0"
+   ],
+   "recoveredPill": "All answers saved",
+   "answersInDbAfterReconnect": 5
+  },
+  "student-player-reload-resume": {
+   "ok": true,
+   "singleChoiceStillChecked": true,
+   "multiChoiceStillChecked": true,
+   "essayValue": "Offline draft of my essay.",
+   "inProgressAttempts": 1
+  },
+  "student-submit": {
+   "ok": true,
+   "confirmDialog": "Submit your answers?\n\nYou have 1 unanswered question. You can't change answers after submitting.\n\nCANCEL\nSUBMIT",
+   "landedOn": "/quizzes/cmw8z8o64000dhusdoqmgih6t/attempts/cmw8zahflcff8caf75e8a0be0",
+   "dbStatus": "NEEDS_GRADING",
+   "dbScore": "8",
+   "text": "UIV Fractions check — attempt 1\n\nSubmitted Mon 9 Nov 2026, 03:07\n\nSome answers are awaiting grading by your teacher. Your final score will appear here.\nQuestion 1\nCorrect\n\n2 / 2\n\nWhich fraction is largest?\n\nYour answer: 3/4\n\nCorrect answer: 3/4\n\nExplanation\n\n3/4 = 0.75.\n\nQuestion 2\nCorrect\n\n4 / 4\n\nSelect every fraction equal to one half.\n\nYour answer: 1/2, 2/4\n\nCorrect answer: 1/2, 2/4\n\nExplanation\n\n2/4 simplifies to 1/2.\n\nQuestion 3\nCorrect\n\n1 / 1\n\n5/5 equals 1.\n\nYour answer: True\n\nCorrect answer: True\n\nQuestion 4\nCorrect\n\n1 / 1\n\nName the bottom number of a fraction.\n\nYour answer: Denominator\n\nCorrect answer: denominator\n\nQuestion 5\nAwaiting grading\n\n— / 4\n\nExplain how you compare two fractions.\n\nYour answer: Find a common denominator, then compare the numerators.\n\nCorrect answer: Common denominator or decimals.\n\nBACK TO QUIZ"
+  },
+  "teacher-grade-by-student": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8o64000dhusdoqmgih6t/grade",
+   "modes": 2,
+   "needsGradingCards": 1,
+   "saved": "Grade saved",
+   "dbStatusAfter": "GRADED",
+   "dbScoreAfter": "11.5",
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\nUIV Fractions check\n/\n\nGrade\n\nGrade: UIV Fractions check\n1 attempt need grading.\nBY STUDENT\nBY QUESTION\nAttempt\nAlex Aardvark — attempt 1 • needs grading\nAttempt\nNEEDS_GRADING\n\nScore: 8 / 12\n\nWhich fraction is largest?\n\nQuestion 1 · Single choice\nAuto-graded\n\n2 / 2\n\nAnswer: 3/4\n\nPoints\nPoints\n\n0 – 2, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\nSelect every fraction equal to one half.\n\nQuestion 2 · Multiple choice\nAuto-graded\n\n4 / 4\n\nAnswer: 1/2, 2/4\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\n5/5 equals 1.\n\nQuestion 3 · True / false\nAuto-graded\n\n1 / 1\n\nAnswer: True\n\nPoints\nPoints\n\n0 – 1, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\nName the bottom number of a fraction.\n\nQuestion 4 · Short answer\nAuto-graded\n\n1 / 1\n\nAnswer: Denominator\n\nPoints\nPoints\n\n0 – 1, steps of 0.5\n\nFeedback\nFeedback\nSAVE\n\nExplain how you compare two fractions.\n\nQuestion 5 · Essay\nNeeds grading\n\n— / 4\n\nAnswer: Find a common denominator, then compare the numerators.\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE"
+  },
+  "teacher-grade-invalid-points": {
+   "ok": true,
+   "helper": "At most 2",
+   "saveDisabled": true,
+   "helperStep": "Points must be a multiple of 0.5"
+  },
+  "teacher-grade-by-question": {
+   "ok": true,
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\nUIV Fractions check\n/\n\nGrade\n\nGrade: UIV Fractions check\nEverything is graded.\nBY STUDENT\nBY QUESTION\nQuestion\nQuestion 5 · Essay\nQuestion\n\nExplain how you compare two fractions.\n\nGuidance: Common denominator or decimals.\nAlex Aardvark — attempt 1\nGraded by teacher\n\n3.50 / 4\n\nAnswer: Find a common denominator, then compare the numerators.\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE\nBlake Bell — attempt 1\nGraded by teacher\n\n3 / 4\n\nAnswer: I turn them into decimals.\n\nPoints\nPoints\n\n0 – 4, steps of 0.5\n\nFeedback\nFeedback\nSAVE"
+  },
+  "teacher-analytics": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes/cmw8z8o64000dhusdoqmgih6t/analytics",
+   "svgBars": 12,
+   "perQuestionTable": 1,
+   "csvControl": 1,
+   "csvStatus": 200,
+   "csvHead": [
+    "Student,Attempt,Score,Q1 (2.00),Q2 (4.00),Q3 (1.00),Q4 (1.00),Q5 (4.00)\r",
+    "Alex Aardvark,1,11.50,2.00,4.00,1.00,1.00,3.50\r",
+    "Blake Bell,1,7.00,0.00,2.00,1.00,1.00,3.00"
+   ],
+   "axe": [
+    "heading-order (moderate) x1",
+    "role-img-alt (serious) x2"
+   ],
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\n/\nUIV Fractions check\n/\n\nAnalytics\n\nAnalytics: UIV Fractions check\nEXPORT CSV\n\nAttempts\n\n2\n\nAverage\n\n9.25\n\nMedian\n\n9.25\n\nHighest\n\n11.50\n\nLowest\n\n7\n\nAvg. time\n\n6m 06s\nScore distribution\nAttempts\n0–10%\n10–20%\n20–30%\n30–40%\n40–50%\n50–60%\n60–70%\n70–80%\n80–90%\n90–100%\nScore (%)\n0\n1\nAttempts\nQuestions\n#\tQuestion\tType\t% correct\tAvg points\tSelected options\n1\tWhich fraction is largest?\tSingle choice\t50%\t1 / 2\t\n1/2: 0\n2/3: 1\n3/4: 1\n2/4: 0\n\n2\tSelect every fraction equal to one half.\tMultiple choice\t50%\t3 / 4\t\n1/2: 2\n2/3: 0\n3/4: 0\n2/4: 1\n\n3\t5/5 equals 1.\tTrue / false\t100%\t1 / 1\t—\n4\tName the bottom number of a fraction.\tShort answer\t100%\t1 / 1\t—\n5\tExplain how you compare two fractions.\tEssay\t0%\t3.25 / 4\t—\nGreen = correct option · red = most chosen wrong option."
+  },
+  "teacher-list-after": {
+   "ok": true,
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nATTENDANCE\nQuizzes\nNEW QUIZ\n​\n​\nTitle\nStatus\nWindow\nAttempts\nAverage\nNeeds grading\nUIV Unit 1 test\nPUBLISHED\n11 Nov 2026, 03:06 – 12 Nov 2026, 03:06\n0\n—\n0\nUntitled quiz\nDRAFT\n10 Nov 2026, 04:00 – 17 Nov 2026, 04:00\n0\n—\n0\nUIV Draft quiz\nDRAFT\n10 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n0\n—\n0\nUIV Fractions check\nPUBLISHED\n8 Nov 2026, 03:06 – 11 Nov 2026, 03:06\n2\n77.1%\n0\nAnalytics\nUIV Manual-release quiz\nPUBLISHED\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n1\n100%\n0\nAnalytics\nUIV Practice sprint\nPUBLISHED\nPractice\n8 Nov 2026, 03:06 – 10 Nov 2026, 03:06\n0\n—\n0\nUIV Decimals quick check\nCLOSED\n4 Nov 2026, 03:06 – 8 Nov 2026, 03:06\n1\n28.6%\n0\nAnalytics\n\nRows per page:\n\n20\n\n1–7 of 7"
+  },
+  "teacher-release-manual": {
+   "ok": true,
+   "releaseButton": 1
+  },
+  "student-result-graded": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/quizzes/cmw8z8o64000dhusdoqmgih6t/attempts/cmw8zahflcff8caf75e8a0be0",
+   "hasCorrectAnswer": true,
+   "hasFeedback": true,
+   "overflowX": false,
+   "text": "UIV Fractions check — attempt 1\n\nSubmitted Mon 9 Nov 2026, 03:07\n\n11.50 / 12\n\n95.8%\n\nQuestion 1\nCorrect\n\n2 / 2\n\nWhich fraction is largest?\n\nYour answer: 3/4\n\nCorrect answer: 3/4\n\nExplanation\n\n3/4 = 0.75.\n\nQuestion 2\nCorrect\n\n4 / 4\n\nSelect every fraction equal to one half.\n\nYour answer: 1/2, 2/4\n\nCorrect answer: 1/2, 2/4\n\nExplanation\n\n2/4 simplifies to 1/2.\n\nQuestion 3\nCorrect\n\n1 / 1\n\n5/5 equals 1.\n\nYour answer: True\n\nCorrect answer: True\n\nQuestion 4\nCorrect\n\n1 / 1\n\nName the bottom number of a fraction.\n\nYour answer: Denominator\n\nCorrect answer: denominator\n\nQuestion 5\nPartly correct\n\n3.50 / 4\n\nExplain how you compare two fractions.\n\nYour answer: Find a common denominator, then compare the numerators.\n\nCorrect answer: Common denominator or decimals.\n\nClear method.\nBACK TO QUIZ"
+  },
+  "student-list-after": {
+   "ok": true,
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nQuizzes\nAvailable now\nUIV Fractions check\n\nCloses 11 Nov 2026, 03:06 · 5 questions · 12 points · 20 min · attempts 1/2\n\nScore: 11.50 / 12.00 (95.8%)\n\nSTART\nVIEW RESULT\nUIV Manual-release quiz\n\nCloses 10 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1\n\nSTART\nUIV Practice sprint\nPractice\n\nCloses 10 Nov 2026, 03:06 · 4 questions · 8 points · 1 min · attempts 0/3\n\nSTART\nUpcoming\nUIV Unit 1 test\n\nOpens 11 Nov 2026, 03:06 · 3 questions · 7 points · 45 min · attempts 0/1\n\nMissed\nUIV Decimals quick check\n\nCloses 8 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1"
+  },
+  "student-s3-list": {
+   "ok": true,
+   "hasMissed": true,
+   "pendingText": true,
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nROSTER\nASSIGNMENTS\nQUIZZES\nQuizzes\nAvailable now\nUIV Fractions check\n\nCloses 11 Nov 2026, 03:06 · 5 questions · 12 points · 20 min · attempts 0/2\n\nSTART\nUIV Practice sprint\nPractice\n\nCloses 10 Nov 2026, 03:06 · 4 questions · 8 points · 1 min · attempts 0/3\n\nSTART\nUpcoming\nUIV Unit 1 test\n\nOpens 11 Nov 2026, 03:06 · 3 questions · 7 points · 45 min · attempts 0/1\n\nCompleted\nUIV Manual-release quiz\n\nCloses 10 Nov 2026, 03:06 · 3 questions · 7 points · attempts 1/1\n\nSubmitted — results will be available later.\n\nVIEW RESULT\nMissed\nUIV Decimals quick check\n\nCloses 8 Nov 2026, 03:06 · 3 questions · 7 points · attempts 0/1"
+  },
+  "student-manual-pending-result": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/quizzes/cmw8z8o6y001dhusdx0beiciu/attempts/cmw8z8o70001lhusdxzx2yw25",
+   "pending": true,
+   "leaksScore": false,
+   "text": "UIV Manual-release quiz — attempt 1\n\nSubmitted Sat 7 Nov 2026, 03:18\n\nSubmitted — results will be available later.\nBACK TO QUIZ"
+  },
+  "student-pending-api-no-correct": {
+   "ok": true,
+   "attemptStatus": 200,
+   "attemptHasCorrect": false,
+   "quizStatus": 200,
+   "quizHasCorrect": false,
+   "quizHasExplanation": false
+  },
+  "student-one-per-page-timer": {
+   "ok": true,
+   "dialog": "Start this attempt?\n\nThe 1-minute timer starts as soon as you start and keeps running if you leave the page.\n\nCANCEL\nSTART",
+   "timer": "Time remaining 00:59",
+   "timerColor": "rgb(185, 28, 28)",
+   "navLabels": [
+    "Question 1, answered, flagged",
+    "Question 2, unanswered",
+    "Question 3, unanswered",
+    "Question 4, unanswered"
+   ],
+   "visibleQuestions": 1,
+   "page2": "Question 2 (4 points)\n\nSelect every fraction equal to one half.\n\n1/2\n2/3\n3/4\n2/4",
+   "overflowX": false
+  },
+  "parent-course-quizzes": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/courses/cmw8z8o5w0008husdxehg7shf/quizzes",
+   "text": "UIV Maths\n\nuiv-sh10\n\nTeachers: Terry Teach\n\nOVERVIEW\nASSIGNMENTS\nQUIZZES\nQuizzes\nUIV Fractions check — Blake Bell\n\nAttempt 1: 7.00 / 12.00 (58.3%)\n\nUIV Decimals quick check — Blake Bell\n\nAttempt 1: 2.00 / 7.00 (28.6%)",
+   "startResumeLinks": 0,
+   "overflowX": false
+  },
+  "parent-result-view": {
+   "ok": true,
+   "status": 200,
+   "finalUrl": "/quizzes/cmw8z8o6n000zhusd4njhu5q2/attempts/cmw8z8o6r0017husdxh0ap7r3",
+   "inputs": 0,
+   "hidesCorrectAnswers": true,
+   "text": "UIV Decimals quick check — attempt 1\n\nSubmitted Sat 7 Nov 2026, 03:18\n\n2 / 7\n\n28.6%\n\nQuestion 1\nCorrect\n\n2 / 2\n\nWhich fraction is largest?\n\nYour answer: 3/4\n\nQuestion 2\nIncorrect\n\n0 / 4\n\nSelect every fraction equal to one half.\n\nYour answer: 1/2, 2/3\n\nQuestion 3\nIncorrect\n\n0 / 1\n\n5/5 equals 1.\n\nYour answer: False\n\nBACK TO QUIZ"
+  },
+  "student-result-graded-1280": {
+   "ok": true
+  }
+ },
+ "consoleErrors": {
+  "teacher": [],
+  "s1": [
+   "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+  ],
+  "s3": [],
+  "parent": []
+ },
+ "fixtures": {
+  "t": "cmw8z8o5n0000husdyk7z4dav",
+  "s1": "cmw8z8o5q0001husdf6elbal7",
+  "s2": "cmw8z8o5r0002husd1busbqwj",
+  "s3": "cmw8z8o5s0003husdz7bffs77",
+  "p": "cmw8z8o5t0004husdah6fl9gn",
+  "c1": "cmw8z8o5w0008husdxehg7shf",
+  "qA": "cmw8z8o64000dhusdoqmgih6t",
+  "qB": "cmw8z8o6j000rhusdbtm56fkv",
+  "qC": "cmw8z8o6n000zhusd4njhu5q2",
+  "qD": "cmw8z8o6u0019husdx2ruv1e4",
+  "qE": "cmw8z8o6y001dhusdx0beiciu",
+  "qF": "cmw8z8o73001nhusd1vs1ur7z",
+  "cAtt": "cmw8z8o6r0017husdxh0ap7r3",
+  "eAtt": "cmw8z8o70001lhusdxzx2yw25",
+  "qNew": "cmw8z8rdw00037g3ud3zelbum",
+  "s1Att": "cmw8zahflcff8caf75e8a0be0"
+ },
+ "cleanedUp": true
+}

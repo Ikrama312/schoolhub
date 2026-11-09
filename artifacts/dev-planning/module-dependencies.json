@@ -1,0 +1,162 @@
+{
+  "ticketId": "SH-10",
+  "timestamp": "2026-11-09T13:30:00Z",
+  "phase": "dev-planning",
+  "version": "1.0",
+  "modules": [
+    {
+      "name": "prisma/schema.prisma",
+      "dependsOn": []
+    },
+    {
+      "name": "src/lib/validators/quiz.ts",
+      "dependsOn": []
+    },
+    {
+      "name": "src/server/quiz/grading.ts",
+      "dependsOn": [
+        "src/server/assignments/grading-math.ts"
+      ]
+    },
+    {
+      "name": "src/server/quiz/serializers.ts",
+      "dependsOn": [
+        "src/server/quiz/grading.ts"
+      ]
+    },
+    {
+      "name": "src/server/quiz/access.ts",
+      "dependsOn": [
+        "src/server/auth/course-access.ts",
+        "src/server/quiz/grading.ts",
+        "prisma/schema.prisma"
+      ]
+    },
+    {
+      "name": "src/server/quiz/attempt-service.ts",
+      "dependsOn": [
+        "prisma/schema.prisma",
+        "src/lib/validators/quiz.ts",
+        "src/server/quiz/grading.ts",
+        "src/server/quiz/serializers.ts",
+        "src/server/quiz/access.ts",
+        "src/server/http.ts",
+        "src/server/audit.ts",
+        "src/server/assignments/grading-math.ts"
+      ]
+    },
+    {
+      "name": "src/server/quiz/quiz-service.ts",
+      "dependsOn": [
+        "prisma/schema.prisma",
+        "src/lib/validators/quiz.ts",
+        "src/server/quiz/grading.ts",
+        "src/server/quiz/serializers.ts",
+        "src/server/quiz/attempt-service.ts",
+        "src/server/auth/course-access.ts",
+        "src/server/http.ts",
+        "src/server/notifications",
+        "src/server/audit.ts"
+      ]
+    },
+    {
+      "name": "src/server/quiz/analytics.ts",
+      "dependsOn": [
+        "prisma/schema.prisma",
+        "src/server/quiz/grading.ts",
+        "src/server/csv.ts",
+        "src/server/assignments/grading-math.ts"
+      ]
+    },
+    {
+      "name": "src/server/quiz/maintenance.ts",
+      "dependsOn": [
+        "src/server/quiz/attempt-service.ts",
+        "src/server/notifications"
+      ]
+    },
+    {
+      "name": "src/server/notifications/types.ts",
+      "dependsOn": []
+    },
+    {
+      "name": "src/server/files/contexts.ts",
+      "dependsOn": [
+        "prisma/schema.prisma",
+        "src/server/auth/course-access.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/internal/email/dispatch",
+      "dependsOn": [
+        "src/server/quiz/maintenance.ts",
+        "src/server/assignments/reminders.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/(quiz routes)",
+      "dependsOn": [
+        "src/server/http.ts",
+        "src/lib/validators/quiz.ts",
+        "src/server/quiz/quiz-service.ts",
+        "src/server/quiz/attempt-service.ts",
+        "src/server/quiz/analytics.ts"
+      ]
+    },
+    {
+      "name": "src/app/(app)/quizzes/[quizId]/take",
+      "dependsOn": [
+        "src/server/quiz/attempt-service.ts",
+        "src/server/quiz/serializers.ts",
+        "src/lib/validators/quiz.ts",
+        "src/components"
+      ]
+    },
+    {
+      "name": "src/app/(app)/quizzes/[quizId]/attempts/[attemptId]",
+      "dependsOn": [
+        "src/server/quiz/attempt-service.ts",
+        "src/server/quiz/access.ts",
+        "src/server/quiz/serializers.ts"
+      ]
+    },
+    {
+      "name": "src/app/(app)/courses/[courseId]/quizzes",
+      "dependsOn": [
+        "src/config/course-tabs.ts",
+        "src/server/quiz/quiz-service.ts",
+        "src/components"
+      ]
+    },
+    {
+      "name": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit",
+      "dependsOn": [
+        "src/server/quiz/quiz-service.ts",
+        "src/lib/validators/quiz.ts",
+        "src/app/(app)/quizzes/[quizId]/take",
+        "src/components"
+      ]
+    },
+    {
+      "name": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/grade",
+      "dependsOn": [
+        "src/server/quiz/attempt-service.ts",
+        "src/components"
+      ]
+    },
+    {
+      "name": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/analytics",
+      "dependsOn": [
+        "src/server/quiz/analytics.ts",
+        "src/components"
+      ]
+    },
+    {
+      "name": "prisma/seed.ts",
+      "dependsOn": [
+        "prisma/schema.prisma",
+        "src/server/quiz/grading.ts"
+      ]
+    }
+  ]
+}

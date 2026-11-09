@@ -1,0 +1,334 @@
+{
+  "ticketId": "SH-10",
+  "timestamp": "2026-11-09T12:00:00Z",
+  "phase": "intake",
+  "version": "1.0",
+  "prdTitle": "PRD-10: Quizzes & Online Exams",
+  "prdTicketRef": "SCH-010 (PRD header). The pipeline ticket is SH-10.",
+  "runMode": "--brownfield --tech-stack react",
+  "functionalRequirements": [
+    {
+      "id": "FR-1",
+      "description": "Add Prisma enums QuizStatus, QuestionType, ResultsVisibility, AttemptStatus and ScoringPolicy, and add the models Quiz, Question, QuizAttempt, QuizAnswer and QuizAccommodation exactly as listed in FR-1, in a new prisma migrate migration. Add the back-relations on Course and User.",
+      "confidence": "HIGH",
+      "source": "FR-1 Data model"
+    },
+    {
+      "id": "FR-2",
+      "description": "Enforce the field limits from FR-1 in Zod validators (src/lib/validators/quiz.ts): availableUntil > availableFrom, timeLimitMinutes 1–300 or null, maxAttempts 1–10, points 0.5–100, extraTimeMinutes 0–300, extraAttempts 0–5, choice questions have 2–8 options, SHORT_ANSWER accepts 1–10 answers, ESSAY responses are at most 10,000 characters.",
+      "confidence": "HIGH",
+      "source": "FR-1 field comments; FR-2 table; FR-3.1"
+    },
+    {
+      "id": "FR-3",
+      "description": "Add pure auto-grading in src/server/quiz/grading.ts. SINGLE_CHOICE and TRUE_FALSE score all or nothing. MULTIPLE_CHOICE gives partial credit: points × max(0, (correctSelected − incorrectSelected) / totalCorrect). For the FR-2 example (4 points, correct {A,C}), {A,B} scores 0 and {A} scores 2.",
+      "confidence": "HIGH",
+      "source": "FR-2 table and example; AC-4"
+    },
+    {
+      "id": "FR-4",
+      "description": "SHORT_ANSWER grading trims the text and collapses whitespace, then matches it against any accepted answer. Matching ignores case unless caseSensitive is set. A non-match scores 0, is flagged for review, and a teacher can override it. ' Photosynthesis ' matches 'photosynthesis'.",
+      "confidence": "HIGH",
+      "source": "FR-2 SHORT_ANSWER row; FR-5.6; AC-5"
+    },
+    {
+      "id": "FR-5",
+      "description": "ESSAY questions are never auto-graded. An optional guidance text is stored in `correct`.",
+      "confidence": "HIGH",
+      "source": "FR-2 ESSAY row"
+    },
+    {
+      "id": "FR-6",
+      "description": "Quiz builder page /courses/[courseId]/quizzes/[quizId]/edit. It has a settings panel for every Quiz field, with validation that the time limit is no longer than the availability window.",
+      "confidence": "HIGH",
+      "source": "FR-3.1"
+    },
+    {
+      "id": "FR-7",
+      "description": "The builder question list supports add (type picker), inline edit, duplicate, delete and drag reorder (@dnd-kit with MUI items). Each type has its own editor: option rows with a correct radio or checkbox, an accepted-answers list, and essay guidance.",
+      "confidence": "HIGH",
+      "source": "FR-3.2"
+    },
+    {
+      "id": "FR-8",
+      "description": "The builder shows a running points total. 'Preview as student' opens the player in a preview mode that records nothing.",
+      "confidence": "HIGH",
+      "source": "FR-3.3"
+    },
+    {
+      "id": "FR-9",
+      "description": "Publishing requires at least 1 question, a correct answer on every choice question, and points > 0 on every question.",
+      "confidence": "HIGH",
+      "source": "FR-3.4"
+    },
+    {
+      "id": "FR-10",
+      "description": "Once any attempt exists, only question text, explanation and accepted answers can be edited. Adding or removing questions and changing points or type are blocked with an explanation. A Regrade action (POST /api/quizzes/:id/regrade) recomputes auto-graded answers for all attempts.",
+      "confidence": "HIGH",
+      "source": "FR-3.5; AC-9; API regrade row"
+    },
+    {
+      "id": "FR-11",
+      "description": "Register a 'Quizzes' course tab in src/config/course-tabs.ts. Teachers see a list with status, window, attempt count, average score and 'Needs grading' count. Students see Upcoming, Available now (Start/Resume), Completed (score if visible) and Missed. Parents see completed results, read-only.",
+      "confidence": "HIGH",
+      "source": "FR-4.1"
+    },
+    {
+      "id": "FR-12",
+      "description": "Quiz player start screen at /quizzes/[quizId]/take. It shows instructions, question count, total points, time limit and attempts used/allowed. 'Start attempt' asks for confirmation because the timer starts immediately.",
+      "confidence": "HIGH",
+      "source": "FR-5.1"
+    },
+    {
+      "id": "FR-13",
+      "description": "Starting an attempt freezes questionOrder (shuffled when enabled) and the option order (deterministic shuffle seeded by attempt id). It sets deadlineAt = min(startedAt + timeLimit + extraTime, availableUntil).",
+      "confidence": "HIGH",
+      "source": "FR-5.2; FR-1 deadlineAt comment; AC-1"
+    },
+    {
+      "id": "FR-14",
+      "description": "Player layout uses MUI RadioGroup, FormGroup with Checkboxes or TextField per type, plus a LinearProgress for completion. It shows either all questions on one page or one per page with a navigator grid of MUI Buttons (answered, unanswered, flagged). A sticky header holds the title, an mm:ss timer that turns red under 2 minutes, and Submit.",
+      "confidence": "HIGH",
+      "source": "FR-5.3"
+    },
+    {
+      "id": "FR-15",
+      "description": "Autosave sends PUT /api/attempts/:id/answers/:questionId, debounced 800 ms. Failed saves are queued in localStorage and retried every 5 s. A status pill shows 'All answers saved', 'Saving…' or 'Offline — answers saved on this device'.",
+      "confidence": "HIGH",
+      "source": "FR-5.4; Goal 3; AC-2"
+    },
+    {
+      "id": "FR-16",
+      "description": "The timer is display-only. The server rejects answer writes after deadlineAt + 30 s grace with 409 CONFLICT and auto-submits the attempt.",
+      "confidence": "HIGH",
+      "source": "FR-5.5; API answers row"
+    },
+    {
+      "id": "FR-17",
+      "description": "Submit asks for confirmation and shows the unanswered count. On submit, the attempt is auto-graded. Its status becomes NEEDS_GRADING if it has any ESSAY or any unmatched SHORT_ANSWER flagged for review; otherwise it becomes GRADED.",
+      "confidence": "HIGH",
+      "source": "FR-5.6; AC-6"
+    },
+    {
+      "id": "FR-18",
+      "description": "An IN_PROGRESS attempt past deadlineAt is auto-submitted with autoSubmitted = true. This happens lazily when the student or teacher loads it, and in autoSubmitExpiredAttempts() during the maintenance run.",
+      "confidence": "HIGH",
+      "source": "FR-5.7; AC-3"
+    },
+    {
+      "id": "FR-19",
+      "description": "Each student can have only one IN_PROGRESS attempt per quiz. Opening the quiz in a second tab, or reopening it, resumes the same attempt with its saved answers.",
+      "confidence": "HIGH",
+      "source": "FR-5.8; AC-2"
+    },
+    {
+      "id": "FR-20",
+      "description": "Results visibility: IMMEDIATELY shows results after submit, AFTER_CLOSE after availableUntil, and MANUAL after 'Release results' (POST /api/quizzes/:id/release-results sets resultsReleasedAt). Until then, students see 'Submitted — results will be available later.'",
+      "confidence": "HIGH",
+      "source": "FR-6.1; API release-results row"
+    },
+    {
+      "id": "FR-21",
+      "description": "The result page shows the score, percentage, per-question correctness, the student's response and teacher feedback. It shows correct answers and explanations only when showCorrectAnswers is set.",
+      "confidence": "HIGH",
+      "source": "FR-6.2"
+    },
+    {
+      "id": "FR-22",
+      "description": "Export getStudentQuizScore(quizId, studentId). It applies the scoring policy (HIGHEST, LATEST or AVERAGE) across GRADED attempts, for use by PRD-11.",
+      "confidence": "HIGH",
+      "source": "FR-6.3; AC-8"
+    },
+    {
+      "id": "FR-23",
+      "description": "The attempt limit is maxAttempts + extraAttempts. Further starts are refused. Example: with maxAttempts=2, a 3rd attempt is refused, but allowed with 1 extra attempt.",
+      "confidence": "HIGH",
+      "source": "FR-9.1; AC-8"
+    },
+    {
+      "id": "FR-24",
+      "description": "Manual grading page /courses/[courseId]/quizzes/[quizId]/grade. It has 'By student' and 'By question' modes, with points input (0 to question points, step 0.5) and feedback. Teachers can override auto-graded answers. Saving uses PUT /api/attempts/:id/answers/:questionId/grade.",
+      "confidence": "HIGH",
+      "source": "FR-7.1; API grade row"
+    },
+    {
+      "id": "FR-25",
+      "description": "When every answer in an attempt is graded, the attempt becomes GRADED and its score is recomputed.",
+      "confidence": "HIGH",
+      "source": "FR-7.2; AC-6"
+    },
+    {
+      "id": "FR-26",
+      "description": "The teacher Analytics tab shows attempts, average, median, highest, lowest, average time taken, and a score histogram (10% buckets, MUI X BarChart).",
+      "confidence": "HIGH",
+      "source": "FR-8.1"
+    },
+    {
+      "id": "FR-27",
+      "description": "The analytics per-question table shows % correct and average points. For choice questions it also shows the option distribution, highlighting the most-chosen wrong option. GET /api/quizzes/:id/analytics?format=csv exports all attempts (student, attempt, score, per-question points).",
+      "confidence": "HIGH",
+      "source": "FR-8.2; API analytics row"
+    },
+    {
+      "id": "FR-28",
+      "description": "Teachers grant extra time and extra attempts per student on the quiz settings page (PUT /api/quizzes/:id/accommodations/:studentId). Both values feed the deadlineAt and attempt-limit checks.",
+      "confidence": "HIGH",
+      "source": "FR-9.1"
+    },
+    {
+      "id": "FR-29",
+      "description": "Register notification types quiz.published and quiz.results_released in src/server/notifications/types.ts. quiz.published goes to enrolled students on publish, with email off by default.",
+      "confidence": "HIGH",
+      "source": "FR-10.1"
+    },
+    {
+      "id": "FR-30",
+      "description": "quiz.results_released goes to the student and their parents when results become visible. For AFTER_CLOSE it is sent once by the maintenance run after close; for MANUAL it is sent on release; for IMMEDIATELY nothing is sent.",
+      "confidence": "HIGH",
+      "source": "FR-10.2"
+    },
+    {
+      "id": "FR-31",
+      "description": "Quiz and question CRUD REST endpoints follow the API table: GET/POST /api/courses/:id/quizzes (role-shaped list), GET/PATCH/DELETE /api/quizzes/:id (delete only without attempts), POST /api/quizzes/:id/questions, PATCH/DELETE /api/questions/:id, POST /api/quizzes/:id/questions/reorder.",
+      "confidence": "HIGH",
+      "source": "API table"
+    },
+    {
+      "id": "FR-32",
+      "description": "Attempt endpoints: POST /api/quizzes/:id/attempts (STUDENT, start or resume), GET /api/attempts/:id (owner or manager), PUT /api/attempts/:id/answers/:questionId (owner), POST /api/attempts/:id/submit (owner).",
+      "confidence": "HIGH",
+      "source": "API table"
+    },
+    {
+      "id": "FR-33",
+      "description": "Practice quizzes (isPractice=true) are ungraded and never reach the gradebook. getStudentQuizScore callers (PRD-11) must exclude them, so the service exposes the isPractice flag.",
+      "confidence": "MEDIUM",
+      "source": "Summary; FR-1 isPractice comment"
+    },
+    {
+      "id": "FR-34",
+      "description": "'manage' and 'view course' roles reuse the existing course-access checks in src/server/auth/course-access.ts: teacher of the course or ADMIN manage; enrolled students view; parents of enrolled students view read-only.",
+      "confidence": "MEDIUM",
+      "source": "API table Role column; Platform Context: Roles; existing src/server/auth/course-access.ts"
+    },
+    {
+      "id": "FR-35",
+      "description": "autoSubmitExpiredAttempts() and the AFTER_CLOSE results_released pass hook into the existing maintenance pass in /api/internal/email/dispatch, next to sendDueReminders(), and must be idempotent.",
+      "confidence": "MEDIUM",
+      "source": "FR-5.7; FR-10.2; existing src/app/api/internal/email/dispatch/route.ts"
+    },
+    {
+      "id": "FR-36",
+      "description": "Seed data. MATH-7A: 'Fractions Check' (8 objective questions, IMMEDIATELY, closed, all students attempted) and 'Unit 1 Test' (12 questions incl. 2 essays, AFTER_CLOSE, open for the next 3 days, no attempts). ENG-7A: practice quiz 'Parts of Speech' (5 questions, 3 attempts, HIGHEST).",
+      "confidence": "HIGH",
+      "source": "Seed Data"
+    },
+    {
+      "id": "FR-37",
+      "description": "Add a Quizzes entry (or a quiz-aware link) to navigation if needed. The PRD defines only course-tab and direct routes, so no sidebar entry is assumed.",
+      "confidence": "LOW",
+      "source": "Platform Context: Code layout (navigation.ts rule); FR-4.1 (course tab only)"
+    },
+    {
+      "id": "FR-38",
+      "description": "Teacher actions on another user's records (grading, overriding, regrade, release results, accommodations) write an AuditLog row through audit().",
+      "confidence": "MEDIUM",
+      "source": "Platform Context: Code layout (AuditLog rule); FR-7, FR-3.5, FR-6.1, FR-9"
+    },
+    {
+      "id": "FR-39",
+      "description": "Question prompts are Markdown and may include an uploaded image, using the existing MarkdownEditor/MarkdownView and file upload components.",
+      "confidence": "MEDIUM",
+      "source": "FR-1 Question.prompt comment; existing src/components/MarkdownEditor, FileUpload"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "id": "NFR-1",
+      "description": "Security: correct answers (`correct`, explanation) and scores are never sent to a student's browser before results are visible. A dedicated student serializer enforces this, with a unit test asserting the `correct` key is absent. The GET /api/quizzes/:id student view never includes `correct`.",
+      "confidence": "HIGH",
+      "source": "NFR-1; API GET /api/quizzes/:id and GET /api/attempts/:id rows; AC-7"
+    },
+    {
+      "id": "NFR-2",
+      "description": "Reliability/performance: answer autosave handles 300 concurrent students saving every few seconds. Each save is one upsert on QuizAnswer (attemptId, questionId), under 50 ms.",
+      "confidence": "HIGH",
+      "source": "NFR-2"
+    },
+    {
+      "id": "NFR-3",
+      "description": "Accessibility: the player is fully keyboard operable. Choice options are native radio/checkbox inputs (MUI Radio/Checkbox). Timer warnings use aria-live='assertive' and are announced at 5 and 1 minutes remaining.",
+      "confidence": "HIGH",
+      "source": "NFR-3; FR-5.3"
+    },
+    {
+      "id": "NFR-4",
+      "description": "UI component rule: Material UI only (@mui/material 9.5.0, icons, x-data-grid, x-date-pickers, x-charts). Every component is looked up through the mui-mcp server (useMuiDocs → fetchDocs) before use, and an unreachable MCP is a blocker. No banned libraries (Tailwind, shadcn, Radix, Recharts, notistack, etc.). Styling only via theme, sx and styled(). QA checks banned imports and that MUI imports resolve to documented components.",
+      "confidence": "HIGH",
+      "source": "Platform Context: UI component rule (items 1–6)"
+    },
+    {
+      "id": "NFR-5",
+      "description": "Server-side access control on every handler and server page via requireUser/requireRole/course access checks. Students can access only their own attempts, parents only their linked children's released results, and teachers only courses they teach.",
+      "confidence": "HIGH",
+      "source": "Platform Context: Code layout (requireRole) and Roles"
+    },
+    {
+      "id": "NFR-6",
+      "description": "API conventions: thin Zod-parsed handlers, { data } / list / { error } response shapes, standard error codes (409 after deadline), pagination ?page/?pageSize ≤ 100, cuid ids, UTC storage, and display in SchoolSettings.timezone.",
+      "confidence": "HIGH",
+      "source": "Platform Context: Code layout and conventions; API table"
+    },
+    {
+      "id": "NFR-7",
+      "description": "Brownfield constraints: new code goes in src/server/quiz/ (feature subdirectory per the PRD-05 precedent). Reuse existing helpers: grading-math Decimal helpers, DataTable, ConfirmDialog, Toast/useToast, MarkdownView, notify(), audit(), logger, and csv.ts. No re-scaffolding, no renaming, no new dependencies. No console.log.",
+      "confidence": "HIGH",
+      "source": "Platform Context: intro paragraph and Code layout; existing src/server/assignments/grading-math.ts, src/server/csv.ts, src/components/*"
+    },
+    {
+      "id": "NFR-8",
+      "description": "Tests: unit tests for every grading rule (partial credit, short-answer normalisation), deadline computation with accommodations, scoring policies, and the student serializer. Integration tests for autosave rejected after the deadline, auto-submit on load, and regrade. One Playwright e2e: teacher builds a 4-question quiz, student takes it with a mid-attempt reload, teacher grades the essay, student sees results. npm run lint && typecheck && test must stay green.",
+      "confidence": "HIGH",
+      "source": "Test Requirements; Assumptions and constraints"
+    },
+    {
+      "id": "NFR-9",
+      "description": "Usability goal: a teacher can build a 10-question multiple-choice quiz in under 10 minutes.",
+      "confidence": "HIGH",
+      "source": "Goals 1"
+    },
+    {
+      "id": "NFR-10",
+      "description": "Out of scope: lockdown browser, webcam proctoring, shared or random question banks, LaTeX formula input.",
+      "confidence": "HIGH",
+      "source": "Out of Scope"
+    }
+  ],
+  "overallConfidencePct": 96,
+  "clarificationLog": [
+    {
+      "round": 1,
+      "questions": [
+        "FR-37: does the quiz feature need a sidebar navigation entry, or only the course 'Quizzes' tab and direct routes?",
+        "FR-33: should practice quizzes count toward 'attempts used' and analytics like graded quizzes? (assumed yes; they are only excluded from the gradebook)",
+        "FR-35: is the existing /api/internal/email/dispatch maintenance pass the intended 'maintenance run' for autoSubmitExpiredAttempts and AFTER_CLOSE notifications?",
+        "Students see 'Missed' quizzes in FR-4. Is a quiz Missed when it closes with zero attempts by that student? (assumed yes)",
+        "Does editing accepted answers after attempts exist trigger an automatic regrade, or only the explicit 'Regrade' action? (assumed the explicit action only)"
+      ],
+      "unresolved": [
+        "Sidebar nav entry for quizzes. Defaulted to none (course tab only).",
+        "Missed = closed with zero attempts. Assumed.",
+        "Regrade runs only when explicitly triggered. Assumed.",
+        "No interactive user is available, so the assumptions above ship flagged as LOW/MEDIUM."
+      ]
+    }
+  ],
+  "existingCodebaseNotes": [
+    "No quiz code or models exist yet.",
+    "Course tabs are in src/config/course-tabs.ts. The maintenance pass is the dispatcher at src/app/api/internal/email/dispatch/route.ts, which calls sendDueReminders().",
+    "Shared components live in src/components/<Name> (not src/components/shared/): DataTable, ConfirmDialog, Toast, MarkdownEditor, MarkdownView, FileUpload, StatCard, EmptyState, PageHeader.",
+    "Decimal helpers are in src/server/assignments/grading-math.ts (dec, fixed2). Reuse or lift them instead of duplicating.",
+    "@dnd-kit/core 6.3.1 and @dnd-kit/sortable 10.0.0 are already installed for builder reorder."
+  ],
+  "status": "complete"
+}
