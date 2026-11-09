@@ -57,44 +57,53 @@ enum EmailStatus {
 /// (separate from status so a DISABLED-but-not-archived user stays distinct
 /// from an archived one).
 model User {
-  id                      String                   @id @default(cuid())
-  email                   String                   @unique
-  passwordHash            String?
-  firstName               String
-  lastName                String
-  phone                   String?
-  role                    Role
-  status                  UserStatus               @default(INVITED)
-  failedLoginCount        Int                      @default(0)
-  lockedUntil             DateTime?
-  lastLoginAt             DateTime?
-  passwordChangedAt       DateTime?
-  archivedAt              DateTime?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  authTokens              AuthToken[]
-  auditLogs               AuditLog[]
-  studentProfile          StudentProfile?
-  teacherProfile          TeacherProfile?
-  parentProfile           ParentProfile?
-  parentLinks             ParentStudentLink[]      @relation("ParentLinks")
-  studentLinks            ParentStudentLink[]      @relation("StudentLinks")
-  notifications           Notification[]
-  notificationPreferences NotificationPreference[]
-  homeroomSections        Section[]                @relation("HomeroomTeacher")
-  sectionMemberships      SectionMember[]
-  taughtCourses           Course[]                 @relation("CourseTeacher")
-  enrollments             Enrollment[]
-  attendanceTaken         AttendanceSession[]      @relation("AttendanceTakenBy")
-  attendanceUpdated       AttendanceSession[]      @relation("AttendanceUpdatedBy")
-  attendanceRecords       AttendanceRecord[]
-  files                   FileObject[]
-  submissions             Submission[]             @relation("SubmissionStudent")
-  gradedSubmissions       Submission[]             @relation("SubmissionGrader")
-  quizzesCreated          Quiz[]                   @relation("QuizCreatedBy")
-  quizAttempts            QuizAttempt[]
-  quizAccommodations      QuizAccommodation[]
-  quizAnswersGraded       QuizAnswer[]             @relation("QuizAnswerGradedBy")
+  id                       String                    @id @default(cuid())
+  email                    String                    @unique
+  passwordHash             String?
+  firstName                String
+  lastName                 String
+  phone                    String?
+  role                     Role
+  status                   UserStatus                @default(INVITED)
+  failedLoginCount         Int                       @default(0)
+  lockedUntil              DateTime?
+  lastLoginAt              DateTime?
+  passwordChangedAt        DateTime?
+  archivedAt               DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  authTokens               AuthToken[]
+  auditLogs                AuditLog[]
+  studentProfile           StudentProfile?
+  teacherProfile           TeacherProfile?
+  parentProfile            ParentProfile?
+  parentLinks              ParentStudentLink[]       @relation("ParentLinks")
+  studentLinks             ParentStudentLink[]       @relation("StudentLinks")
+  notifications            Notification[]
+  notificationPreferences  NotificationPreference[]
+  homeroomSections         Section[]                 @relation("HomeroomTeacher")
+  sectionMemberships       SectionMember[]
+  taughtCourses            Course[]                  @relation("CourseTeacher")
+  enrollments              Enrollment[]
+  attendanceTaken          AttendanceSession[]       @relation("AttendanceTakenBy")
+  attendanceUpdated        AttendanceSession[]       @relation("AttendanceUpdatedBy")
+  attendanceRecords        AttendanceRecord[]
+  files                    FileObject[]
+  submissions              Submission[]              @relation("SubmissionStudent")
+  gradedSubmissions        Submission[]              @relation("SubmissionGrader")
+  quizzesCreated           Quiz[]                    @relation("QuizCreatedBy")
+  quizAttempts             QuizAttempt[]
+  quizAccommodations       QuizAccommodation[]
+  quizAnswersGraded        QuizAnswer[]              @relation("QuizAnswerGradedBy")
+  /// PRD-13 FR-2: meaningful only for ADMIN (enforced in services/users.ts).
+  isSafeguardingLead       Boolean                   @default(false)
+  conversationsCreated     Conversation[]            @relation("ConversationCreator")
+  conversationParticipants ConversationParticipant[]
+  messagesSent             Message[]                 @relation("MessageSender")
+  messageReports           MessageReport[]           @relation("MessageReporter")
+  messageReportsReviewed   MessageReport[]           @relation("MessageReportReviewer")
+  messagingSettings        MessagingSettings?
+  pendingMessageEmails     PendingMessageEmail[]
 
   @@index([lastName, firstName, email])
   @@index([role, status])
@@ -590,6 +599,7 @@ model FileObject {
   lessonAttachments     LessonAttachment[]
   assignmentAttachments AssignmentAttachment[]
   submissionFiles       SubmissionFile[]
+  messageAttachments    MessageAttachment[]
 
   @@index([context, contextId])
 }
@@ -1079,4 +1089,136 @@ model ReportCard {
 
   @@unique([studentId, termId])
   @@index([termId, status])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-13 Direct Messaging (FR-1..FR-4). Contact rules live in
+// src/server/messaging/contact-rules.ts. Messages are never hard-deleted by
+// app code (NFR-3); cascades fire only on User/Conversation purge.
+// ---------------------------------------------------------------------------
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+}
+
+model Conversation {
+  id              String                    @id @default(cuid())
+  subject         String?
+  createdById     String
+  createdBy       User                      @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  /// FR-30: set at create, never changes.
+  involvesStudent Boolean                   @default(false)
+  lastMessageAt   DateTime                  @default(now())
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  participants    ConversationParticipant[]
+  messages        Message[]
+  pendingEmails   PendingMessageEmail[]
+
+  @@index([lastMessageAt])
+  @@index([involvesStudent, createdAt])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+  mutedAt        DateTime?
+  archivedAt     DateTime?
+  leftAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([conversationId, userId])
+  @@index([userId, archivedAt])
+}
+
+model Message {
+  id             String              @id @default(cuid())
+  conversationId String
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User                @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  attachments    MessageAttachment[]
+  revisions      MessageRevision[]
+  reports        MessageReport[]
+
+  @@index([conversationId, createdAt])
+}
+
+model MessageAttachment {
+  id        String     @id @default(cuid())
+  messageId String
+  message   Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileId    String     @unique
+  file      FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([messageId])
+}
+
+/// FR-3: the body as it was before each edit.
+model MessageRevision {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+}
+
+model MessageReport {
+  id           String       @id @default(cuid())
+  messageId    String
+  message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporterId   String
+  reporter     User         @relation("MessageReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reason       String
+  status       ReportStatus @default(OPEN)
+  reviewedById String?
+  reviewedBy   User?        @relation("MessageReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([status, createdAt])
+  @@index([messageId, reporterId])
+}
+
+/// FR-21: quiet hours as HH:mm in the school timezone; both set or both null.
+model MessagingSettings {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quietStart String?
+  quietEnd   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// FR-4/FR-20: one deferred email per (recipient, conversation); drained by the dispatch cron.
+model PendingMessageEmail {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  dueAt          DateTime
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, conversationId])
+  @@index([dueAt])
 }

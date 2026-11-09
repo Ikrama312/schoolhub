@@ -1,20 +1,14 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
 import { requirePageRole } from '@/server/auth/requireRole';
 import { getCourseRoster, type RosterEntry } from '@/server/courses/courses-service';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { ALL_ROLES } from '@/config/navigation';
+import { prisma } from '@/server/db';
+import { RosterTable, type RosterRow } from './RosterTable';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,32 +34,16 @@ export default async function CourseRosterPage({ params }: { params: { courseId:
     );
   }
 
-  return (
-    <TableContainer component={Paper} variant="outlined">
-      <Table size="small" aria-label="Course roster">
-        <TableHead>
-          <TableRow>
-            <TableCell>Student</TableCell>
-            <TableCell>Admission no.</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell>Enrolled</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {(rows as RosterEntry[]).map((r) => (
-            <TableRow key={r.enrollmentId}>
-              <TableCell>
-                <Link href={r.student.profileUrl}>{r.student.name}</Link>
-              </TableCell>
-              <TableCell>{r.student.admissionNumber ?? '—'}</TableCell>
-              <TableCell>
-                <Chip size="small" color={r.status === 'ACTIVE' ? 'success' : 'default'} label={r.status} />
-              </TableCell>
-              <TableCell>{r.enrolledAt.toLocaleDateString()}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
+  const course = await prisma.course.findUnique({ where: { id: params.courseId }, select: { code: true } });
+  const tableRows: RosterRow[] = (rows as RosterEntry[]).map((r) => ({
+    enrollmentId: r.enrollmentId,
+    studentId: r.student.id,
+    name: r.student.name,
+    profileUrl: r.student.profileUrl,
+    admissionNumber: r.student.admissionNumber,
+    status: r.status,
+    enrolled: r.enrolledAt.toLocaleDateString(),
+  }));
+  // PRD-13 FR-17: the staff table is a client component so students can be selected and messaged.
+  return <RosterTable rows={tableRows} courseCode={course?.code ?? ''} />;
 }

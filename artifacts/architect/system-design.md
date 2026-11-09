@@ -1,374 +1,380 @@
-# System Design: PRD-12 Announcements & News
+# System Design: PRD-13 Direct Messaging
 
-Ticket: **SH-12** · Phase: architect (`arch-design-system`) · Timestamp: 2026-11-09T19:00:00Z · Status: **complete**
+Ticket: **SH-13** · Phase: architect (`arch-design-system`) · Timestamp: 2026-11-09T22:30:00Z · Status: **complete**
 
-Inputs: `artifacts/intake/requirements.json` (36 FR, 11 NFR, 94% confidence), `artifacts/intake/handoff-to-architect.json`, `artifacts/architect/tech-stack-decisions.md` (ADR-1..7), `artifacts/architect/requirements-analysis-notes.md` (B1–B22, R1–R11, A1–A8), and the FR-1 Prisma block in `12-announcements.md`.
+Inputs read from disk: `artifacts/intake/requirements.json` (32 FR + 11 NFR), `artifacts/intake/handoff-to-architect.json`, `artifacts/intake/tech-stack.json`, `artifacts/architect/tech-stack-decisions.md` (ADR-1..12), `artifacts/architect/requirements-analysis-notes.md` (B1..B20, A1..A14).
 
-> This file replaces the SH-11 version that was here before.
+> This file replaces a stale SH-12 `system-design.md`. `api-contracts.json` and `handoff-to-dev-planning.json` in this folder are still stale (SH-12). `arch-api-contracts` must rewrite them from this document.
 
 ---
 
 ## 1. Overview
 
-Announcements is a brownfield feature inside the existing Next.js 14 App Router + Prisma/PostgreSQL + MUI 9 app. **No new dependencies** (ADR-1). The work is:
+SchoolHub gets 1:1 and small-group (≤25) messaging between staff, students and parents. It runs inside the existing Next.js 14 App Router monolith, with no new dependencies and no new infrastructure:
 
-- one Prisma migration (FR-1)
-- a generic **audience service** (FR-3..FR-8)
-- an **announcements service** with permissions, visibility, publishing, stats and reminders (FR-9..FR-31)
-- 12 thin route handlers (FR-34)
-- 6 pages plus a course tab, a nav badge and seed data (FR-13..FR-35)
+- **Storage:** 8 new Prisma models plus `User.isSafeguardingLead`, in one migration (ADR-2).
+- **Who may message whom:** one pure rules module, `contact-rules.ts`. Create, send and the contacts list all use it (ADR-3).
+- **Delivery:** HTTP polling. The open thread polls every 5 s; the inbox list and the sidebar badge poll every 30 s. There are no websockets (ADR-1, NFR-8, NFR-9).
+- **Notifications:** in-app notifications are collapsed to one unread row per conversation. Email is deferred through `PendingMessageEmail`, which the existing maintenance cron drains, and it respects quiet hours (ADR-5, ADR-6).
+- **Safeguarding:** the safeguarding area is server-gated on `ADMIN` plus `isSafeguardingLead`, read fresh from the database. Every view is audited. Deleted messages and edit history are retained and visible only to safeguarding leads (ADR-8, NFR-3).
+- **UI:** MUI-only and built from the existing shared components (ADR-7, NFR-5).
 
-The two design centres are:
+### Intake blockers and carried risks (Compliance Rule 5)
 
-1. **One set of audience rules, three consumers.** A per-user `AudienceKeys` set drives a pure matcher (`isUserInAudience`), a Prisma `where` fragment (feed, unread-count), and the inverse `resolveAudienceUserIds` expansion (preview, stats, notify). The read path never expands recipients (NFR-2).
-2. **Visibility is decided at read time.** One `visibleWhere(now)` predicate is used everywhere. The cron only sends the one notification, claiming `notifiedAt` atomically (FR-16, FR-27).
+**Intake blockers:** `handoff-to-architect.json.blockers` is **empty**. Intake confidence was 95%.
 
-### Blockers from intake
+**Carried risks and known gaps** (none of them blocks this phase):
 
-`handoff-to-architect.json` reports **`blockers: []`**. There are no blockers to surface.
+1. **PRD-12 is absent.** SH-12 Announcements failed. Messaging has no code dependency on it, so do not build announcements here (NFR-9).
+2. **No user-admin form exists.** `isSafeguardingLead` can be set only through `PATCH /api/users/:id` and the seed (ADR-11, FR-2). This is a documented gap. Building a user-admin UI is out of scope.
+3. **mui-mcp was unreachable during the architect phase.** The dev phase must connect to it and run `useMuiDocs`/`fetchDocs` before writing any UI (NFR-5).
+4. **The rate limiter is per-process.** It only holds on a single instance. This is accepted (ADR-4, NFR-4).
+5. **`/students/[id]` has no page or layout today.** The FR-16 actions need a new layout (§3.8).
 
-### Assumptions and decisions carried into the design
+### Resolved open decisions
 
-| # | Item | Decision | Req |
-|---|---|---|---|
-| A1 | Section membership scope | `SectionMember` rows of the targeted section. A section belongs to one academic year, so this is the current-year membership whenever the section is current. Composer pickers offer only current-year sections. | FR-5 |
-| A2 | Zero-recipient drafts | Allowed. The zero-recipient refusal (`VALIDATION_ERROR`) runs only on the transition to PUBLISHED or SCHEDULED. | FR-15 |
-| A3 | Parent expansion | Parents are reached only through ACTIVE, non-archived students. The ACTIVE/non-archived filter is applied to every final user. The matcher follows the same rule. | FR-3..FR-6 |
-| A4 | Pins beyond 3 | The 3 newest pinned items go on top of page 1. Any further pinned items fall into newest-first order. | FR-17 |
-| A5 | AC-8 fixture | The seed stays skip-if-missing. The integration/e2e fixture creates Pat's 6A child and the `ParentStudentLink`. | FR-22, FR-35, NFR-10 |
-| A6 | Archived courses | Courses with `archivedAt != null` are excluded from every teacher branch and from the COURSE student branch. Not stated in the PRD, so flagged here. | FR-4..FR-6 |
-| A7 | Archive is terminal | Archive is terminal for authors: PATCH on an ARCHIVED row by a non-admin returns 409 CONFLICT. Admins may still edit. | FR-12 |
-| A8 | Reminder throttle | Nullable `Announcement.lastRemindedAt` column. A refused reminder returns **429 RATE_LIMITED** with `details.retryAfter` (ADR-4). | FR-25 |
-| A9 | `mandatoryInApp` per instance | `NOTIFICATION_TYPES` is static (B9). Keep the **single type key `announcement.published`** with `mandatoryInApp: false`, and add an optional `mandatoryInApp?: boolean` override to `NotifyInput`. `notify()` passes `{ ...def, mandatoryInApp: input.mandatoryInApp ?? def.mandatoryInApp }` to `resolvePrefs`. Announcements set it to `requiresAck`. This is a one-line change to a shared function, and it keeps the type name exactly as FR-26 states. The rejected alternative was a second `announcement.published_ack` type. | FR-26 |
-| A10 | Non-member responses | Detail, ack, stats and remind return **404 NOT_FOUND** to callers who are not allowed to see the announcement, so its existence is not leaked. Targeting violations on create/update/preview return **403 FORBIDDEN** (AC-3). | NFR-3, NFR-6, FR-10 |
-| A11 | Publish timestamp | Publish-now sets `publishAt = now`, so one column orders the feed and drives visibility (R4). | FR-16, FR-17 |
-
-### Deliberate additions to the FR-1 schema
-
-FR-1 says "exactly as specified". These additions are the minimum the other requirements force, and each is listed with its reason:
-
-- `Announcement.lastRemindedAt DateTime?`: needed by FR-25 (A8). Intake pre-approved it.
-- Indexes: `AnnouncementAudience @@index([announcementId])` and `@@index([type, refId])`, `Announcement @@index([status, publishAt])`, `@@index([authorId])`, `@@index([isPublic, status])`, and `AnnouncementRead @@index([userId])`. These serve NFR-2.
-- Back-relations needed for Prisma to compile: `User.announcements Announcement[]`, `FileObject.announcementAttachments AnnouncementAttachment[]`. `AnnouncementRead.user` is a relation to `User` (`User.announcementReads`, cascade on user delete is not used; users are archived, not deleted) so the stats table can join names.
-
-Everything else matches the PRD block field for field. That includes `coverFileId` as a plain scalar with no FK relation, and `AnnouncementAudience` having no timestamps.
+| Decision | Resolution | Source |
+|---|---|---|
+| Do co-teachers manage a course? | Yes: `teacherId = me OR coTeacherIds has me`. | ADR-9, FR-32 |
+| `updatedAt` on new models | Added to Conversation, ConversationParticipant, Message, MessageAttachment, MessageReport and MessagingSettings. Not added to MessageRevision or PendingMessageEmail. | ADR-10 |
+| Where `isSafeguardingLead` is edited | API and validator only. Setting it to `true` on a non-ADMIN user is rejected with 422/VALIDATION, and the change is audited. | ADR-11 |
+| Who gets quiet hours | All roles. | ADR-12 |
+| Group send rule after a relationship ends | A non-staff sender may send only if `canMessage(sender, s)` holds for at least one staff participant who has not left. Staff can always send. | A4, FR-7 |
+| Homeroom reachability | Current academic year only: `section.academicYear.isCurrent`. Applies to messaging only. `student-access.ts` is not changed. | A5 |
+| Access after leaving | A participant with `leftAt` set is treated as a non-participant: 404 on the thread and denied on attachments. | A7 |
+| Leaving a 1:1 conversation | Not allowed. Archive covers 1:1. Leaving is possible only when a conversation has more than 2 participants. | A10 |
+| Effect of a new message on archive state | It clears `archivedAt` for the recipients. The unread count covers all conversations the user has not left. | A11 |
+| Reporting rules | Users can report others' messages only. Only one OPEN report per (message, reporter) is allowed; a repeat returns 409. | A12 |
+| Breakpoint | `theme.breakpoints.down(768)`, used locally. The theme is not changed. | A8, NFR-7 |
+| How pollers see edits and deletes | `?after=<lastId>&since=<iso>` returns `{ messages, changed }`. | A9, ADR-1 |
+| How email is sent without an in-app row | Add an optional `NotifyInput.inApp?: boolean` (default `true`). The worker calls `notify({ inApp:false, email })`, so preference and status filtering stay inside `notify()`. | ADR-5 |
+| Quiet-hours input | MUI `TextField type="time"`. Not `TimePicker`. | ADR-6 |
+| Nav entry for safeguarding | Add `NavItem.requires?: 'safeguardingLead'`. `(app)/layout.tsx` reads the flag and passes it to the shell. The page still enforces 403 itself. | A13, FR-23 |
 
 ---
 
-## 2. Component Breakdown
+## 2. Data Model (one migration: `20261112000000_add_direct_messaging`)
 
-### 2.1 Data layer: `prisma/schema.prisma` + `prisma/migrations/20261112000000_add_announcements/` (FR-1)
+The field names in the PRD's Prisma block are authoritative. The sketch below is the **minimum plus architect additions**, which are marked `// +`. All IDs are `cuid()`. All timestamps are stored in UTC.
 
 ```prisma
-enum AnnouncementStatus { DRAFT SCHEDULED PUBLISHED ARCHIVED }
-enum AudienceType { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }
+enum ReportStatus { OPEN REVIEWED DISMISSED }
 
-model Announcement {
-  // ...PRD fields verbatim...
-  lastRemindedAt DateTime?                       // FR-25 addition
-  @@index([status, publishAt])
-  @@index([authorId])
-  @@index([isPublic, status])
+model Conversation {
+  id              String   @id @default(cuid())
+  subject         String?  // ≤120 (FR-12)
+  createdById     String
+  involvesStudent Boolean  @default(false)       // FR-30, set at create, never changes
+  lastMessageAt   DateTime @default(now())       // FR-31
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt            // + ADR-10
+  createdBy       User     @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  participants    ConversationParticipant[]
+  messages        Message[]
+  pendingEmails   PendingMessageEmail[]
+  @@index([lastMessageAt])
+  @@index([involvesStudent, createdAt])          // FR-24
 }
-model AnnouncementAudience { /* PRD verbatim */ @@index([announcementId]) @@index([type, refId]) }
-model AnnouncementAttachment { /* PRD verbatim */ @@index([announcementId]) }
-model AnnouncementRead {
-  /* PRD verbatim */
-  user User @relation(fields: [userId], references: [id])
-  @@index([userId])
+
+model ConversationParticipant {
+  id             String    @id @default(cuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  mutedAt        DateTime?
+  archivedAt     DateTime?
+  leftAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt          // + ADR-10
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([conversationId, userId])
+  @@index([userId, archivedAt])
 }
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String    // 1..5000 (FR-11)
+  editedAt       DateTime?
+  deletedAt      DateTime? // soft delete only (NFR-3)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt          // + ADR-10, gives polling its "changed since" signal
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User                @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  attachments    MessageAttachment[]
+  revisions      MessageRevision[]
+  reports        MessageReport[]
+  @@index([conversationId, createdAt])        // NFR-2
+}
+
+model MessageAttachment { id, messageId, fileId @unique, createdAt, updatedAt(+)
+  // Cascade on Message and on FileObject. Back-relation FileObject.messageAttachments.
+}
+model MessageRevision   { id, messageId, body, createdAt   @@index([messageId]) }               // FR-3
+model MessageReport     { id, messageId, reporterId, reason (≤1000), status ReportStatus @default(OPEN),
+                          reviewedById?, reviewedAt?, reviewNote?, createdAt, updatedAt(+)
+                          @@index([status, createdAt])  @@index([messageId, reporterId]) }      // FR-22/23
+model MessagingSettings { id, userId @unique, quietStart String?, quietEnd String?, createdAt, updatedAt } // FR-21
+model PendingMessageEmail { id, userId, conversationId, dueAt, createdAt
+                          @@unique([userId, conversationId])  @@index([dueAt]) }                // FR-4/20
+// User: + isSafeguardingLead Boolean @default(false)  (FR-2), plus back-relations for every model above.
 ```
 
-### 2.2 Validation: `src/lib/validators/announcements.ts` (FR-2, FR-34)
+Transactions (all use `prisma.$transaction`):
 
-This module is isomorphic: it is used by both the composer form (react-hook-form + zodResolver) and the handlers.
+- **Send.** Insert the Message. Link the attachments (`FileObject.contextId = messageId`). Update `Conversation.lastMessageAt`. Set the sender's `lastReadAt` to now. Clear `archivedAt` for the other participants. (FR-11, FR-27, FR-31, A11)
+- **Create.** Insert the Conversation (with `involvesStudent` computed), the participants, and the first message using the same send logic. (FR-6, FR-30)
+- **Edit.** Insert a MessageRevision holding the *old* body. Update `body` and `editedAt`. (FR-3, FR-15)
 
-- `audienceRowSchema`: `{ type, refId?, includeStudents, includeParents, includeTeachers }`, with these refinements:
-  - `refId` is required unless the type is SCHOOL or STAFF.
-  - For ROLE, `refId` must be a `Role` value.
-  - For GRADE_LEVEL, SECTION and COURSE, at least one include flag must be true.
-- `announcementInputSchema`, with these fields:
-  - `title`: trimmed, 1..150 characters
-  - `body`: 1..20,000 characters
-  - `audiences`: 0..20 rows of `audienceRowSchema`
-  - `pinned`, `requiresAck`, `isPublic`
-  - `coverFileId?`, `attachmentFileIds` (0..10)
-  - `mode`: `'draft' | 'publish' | 'schedule'`
-  - `publishAt?` (ISO), `expiresAt?` (ISO)
+No code path issues `prisma.message.delete*`. Cascades fire only when an admin purges a User or a Conversation.
 
-  Refinements on `announcementInputSchema`:
-  - `mode === 'schedule'` requires `publishAt > now`.
-  - `expiresAt` must be later than `publishAt ?? now`.
-- `announcementPatchSchema`: `announcementInputSchema.partial()`.
-- `feedQuerySchema`: `{ tab: 'all' | 'unread' | 'ack', courseId?, page, pageSize }`.
-- `statsQuerySchema`: `{ filter?: 'unread' | 'unacked', format?: 'csv' }`.
-- `previewAudienceSchema`: `{ audiences }`.
+---
 
-### 2.3 Audience service: `src/server/announcements/audience.ts` (FR-3..FR-8, NFR-2)
+## 3. Component Breakdown
 
-This module is generic. It never imports Announcement models (FR-8), and its input type is `AudienceRow = { type: AudienceType; refId: string | null; includeStudents: boolean; includeParents: boolean; includeTeachers: boolean }`. PRD-14 imports it unchanged.
+All new server code lives in `src/server/messaging/` (NFR-6). Route handlers are thin: `withHandler`, then auth, then `parseBody`/`parseQuery` with schemas from `src/lib/validators/messaging.ts`, then a service call, then `ok`/`paginated`.
 
-**`getAudienceKeys(userId) → AudienceKeys`** loads one user's keys with at most about 4 indexed queries. The keys are:
+### 3.1 Server modules
 
-```ts
-type AudienceKeys = {
-  userId: string;
-  role: Role;
-  active: boolean;
-  // As a STUDENT (own) or PARENT (per linked ACTIVE child)
-  gradeLevelIds: Set<string>;
-  sectionIds: Set<string>;   // SectionMember rows
-  courseIds: Set<string>;    // ACTIVE enrollment, non-archived course
-  // As a TEACHER
-  teachCourseIds: Set<string>;   // teacherId or coTeacherIds has, non-archived
-  teachSectionIds: Set<string>;  // homeroom ∪ Course.sectionId of taught courses
-  teachGradeLevelIds: Set<string>; // Section.gradeLevelId of taught current-year courses
-  // Parent only: which child produced each key (FR-22)
-  childByKey: Map<string, { id: string; firstName: string }[]>; // key = `${type}:${refId}`
-};
-```
-
-All the functions below use these keys.
-
-- **`matchesAudience(row, keys) → boolean`** is a pure function and the single source of the rules (R1). For an inactive user it returns false. Otherwise it matches by type:
-
-  | Type | Matches when |
-  |---|---|
-  | SCHOOL | always |
-  | STAFF | role is ADMIN or TEACHER |
-  | ROLE | role equals `refId` |
-  | GRADE_LEVEL | (`includeStudents` and the user is a STUDENT and `gradeLevelIds` has `refId`) or (`includeParents` and the user is a PARENT and `gradeLevelIds` has `refId`) or (`includeTeachers` and `teachGradeLevelIds` has `refId`) |
-  | SECTION | the same pattern with `sectionIds` and `teachSectionIds` |
-  | COURSE | the same pattern with `courseIds` and `teachCourseIds` |
-
-- **`isUserInAudience(user, rows)`** returns `rows.some(r => matchesAudience(r, keys))`. Keys are passed in when the caller already has them (FR-7).
-- **`audienceWhere(keys) → Prisma.AnnouncementAudienceWhereInput`** builds the SQL form of the same table: an `OR` of `{ type, refId: { in: [...] }, include<Flag>: true }` branches, built only for the non-empty key sets. The feed uses it as `audiences: { some: audienceWhere(keys) }`, which compiles to `EXISTS` (ADR-2).
-- **`resolveAudienceUserIds(rows) → string[]`** expands recipients. It runs one `user.findMany({ select: { id } })` per row/flag branch, takes the union in a `Set`, and then applies one final `status: ACTIVE, archivedAt: null` filter. Students that feed the parent branches are filtered to ACTIVE first (A3).
-- **`countAudienceByRole(rows)`** runs `resolveAudienceUserIds` and then `user.groupBy(role)`. It serves the preview and reach figures.
-- **`audienceLabels(rows) → string[]`** batch-loads GradeLevel, Section and Course names and produces chips such as "Grade 7 · Parents" or "MATH-7A · Students, Parents" (FR-18).
-
-Agreement between the matcher and `resolveAudienceUserIds` is not assumed. NFR-10's property test checks `isUserInAudience(u, rows) === resolveAudienceUserIds(rows).includes(u.id)` for every seed user and every seed row.
-
-### 2.4 Announcements service: `src/server/announcements/announcements-service.ts` (FR-9..FR-31, FR-36)
-
-| Function | Responsibility | Req |
+| Module | Responsibility | Requirements |
 |---|---|---|
-| `visibleWhere(now)` | `status IN (SCHEDULED, PUBLISHED) AND publishAt <= now AND (expiresAt IS NULL OR expiresAt > now)`. Used by the feed, detail, ack, unread-count, files and public news. | FR-16, FR-17, NFR-6 |
-| `isVisible(a, now)` | The same predicate in JS, for single rows. | FR-16 |
-| `displayStatus(a, now)` | Derives SCHEDULED, PUBLISHED, EXPIRED, ARCHIVED or DRAFT for the manage view, so the status is correct between cron ticks (R5). | FR-23 |
-| `assertCanTarget(user, rows, isPublic)` | ADMIN may target anything. TEACHER may target only COURSE rows for courses where they are `teacherId` or in `coTeacherIds` (the same test as `course-access.ts`), and SECTION rows where `homeroomTeacherId = user.id`. Every other case, including `isPublic`, throws 403 FORBIDDEN. | FR-9, FR-10, NFR-3 |
-| `createAnnouncement(user, input)` | `requireRole(ADMIN, TEACHER)` at the route, then `assertCanTarget`, then the zero-recipient check if the mode is not draft (FR-15). A transaction creates the announcement, audience rows and attachment rows and calls `attachFiles(tx, 'announcement', id, [cover, ...attachments])`. Files are attached even for drafts (R9, B7). After commit, `mode = publish` calls `claimAndNotify(id, now)`. | FR-11, FR-13, FR-15, FR-16, FR-27 |
-| `updateAnnouncement(user, id, patch)` | Allowed for the author or ADMIN, otherwise 404. ARCHIVED rows edited by a non-admin return 409 (A7). If `audiences` or `isPublic` is in the patch, it re-runs `assertCanTarget` on the **resulting** values (R8). The audience is replaced wholesale inside the transaction, and attachments are re-synced (attach new, detach removed). A transition to publish or schedule re-checks for zero recipients. It never clears `notifiedAt` (FR-29). An admin editing someone else's row triggers `audit('announcement.update')`. | FR-12, FR-29 |
-| `archiveAnnouncement(user, id)` | Allowed for the author or ADMIN. Sets `status = ARCHIVED`. An admin archiving someone else's row triggers `audit('announcement.archive')`. | FR-12 |
-| `listFeed(user, { tab, courseId, page })` | Loads the keys, then queries `visibleWhere ∧ audiences.some(audienceWhere(keys))`, adding the `courseId` filter when present (`audiences.some{type: COURSE, refId}` after `assertCanViewCourse`). The `tab` filter: `unread` → `reads.none{userId}`; `ack` → `requiresAck ∧ reads.none{userId, acknowledgedAt not null}`. Page 1 prepends up to 3 pinned items (`take 3`, ordered by `publishAt desc`) and excludes them from the main list (A4). The main list is ordered by `publishAt desc, id desc`. Each row includes `reads where userId`, `_count.attachments` and the author name and role. DTOs add `excerpt`, `labels` and, for parents, `forChildren`. | FR-17, FR-18, FR-21, FR-22, NFR-2 |
-| `unreadCount(user)` | `count` over the same `where` as the feed plus `reads.none{userId}`. | FR-32 |
-| `getForViewer(user, id)` | Visible to ADMIN, the author, or a user for whom `isVisible ∧ isUserInAudience` holds. Everyone else gets 404. For audience members only, it upserts `AnnouncementRead { readAt }` and keeps the existing `readAt`. Returns the body (rendered client-side with `MarkdownView`), attachments, the viewer's read row and `canEdit`. | FR-19, NFR-6 |
-| `acknowledge(user, id)` | Requires `isVisible ∧ isUserInAudience`, otherwise 404. A row with `!requiresAck` returns 409 CONFLICT. Upserts with `acknowledgedAt` set once; repeat calls are idempotent and return the original time. | FR-20 |
-| `previewAudience(user, rows)` | `assertCanTarget(user, rows, false)` first, so teachers cannot probe the sizes of other audiences. Then `countAudienceByRole`. Returns `{ total, byRole }`. | FR-14 |
-| `listManage(user, page)` | No visibility filter. TEACHER sees `authorId = me`; ADMIN sees everything. For each row on the page it computes `reach = resolveAudienceUserIds(rows).length`, `read% = reads(readAt) ∩ recipients / reach`, and `ack%` when `requiresAck`. `ponytail:` live reach is computed per page row (pageSize ≤ 50). Snapshot a `recipientCount` if this gets slow. | FR-23 |
-| `getStats(user, id, filter)` | Allowed for the author or ADMIN, otherwise 404. Recipients come from the live `resolveAudienceUserIds`, left-joined to reads. Returns the counts `{ recipients, read, acknowledged, readPct, ackPct }` and the rows `{ name, role, readAt, acknowledgedAt }`, filtered by unread or unacked. Reads from users who have left the audience are excluded (R11). | FR-24 |
-| `statsCsv(rows)` | `toCsv` from `src/server/csv.ts` with the columns Name, Role, Read at and Acknowledged at, formatted in the school timezone. | FR-24, NFR-7 |
-| `sendReminder(user, id, now)` | Allowed for the author or ADMIN, otherwise 404. Requires `requiresAck ∧ isVisible`, otherwise 409. Claims atomically with `updateMany({ where: { id, OR: [{ lastRemindedAt: null }, { lastRemindedAt: { lte: now − 24h } }] }, data: { lastRemindedAt: now } })`. A count of 0 throws 429 RATE_LIMITED with `{ retryAfter }`. Otherwise it notifies `recipients − acknowledged` with `announcement.reminder` and returns `{ notified }`. | FR-25, AC-5 |
-| `claimAndNotify(id, now)` | `updateMany({ where: { id, notifiedAt: null, ...visibleWhere(now) }, data: { notifiedAt: now, status: PUBLISHED } })`. If the count is 1, it resolves recipients and calls `notify()` in chunks of 1,000 (R7). This is the only code path that sends `announcement.published`. | FR-27, FR-29 |
-| `getPublicNews({ page })` | `isPublic ∧ visibleWhere(now)`. The DTO is `{ id, title, excerpt, body, publishAt, coverFileId, attachments[{ id, name }] }`, with no author email and no audience. | FR-31 |
+| `contact-rules.ts` | `canMessageWith(sender, recipient, rel)` is pure. `loadRelations(senderId, candidateIds)` loads in one batch: ACTIVE enrollments in courses the teacher manages (`teacherId` or `coTeacherIds has`), current-year homeroom `SectionMember`, `ParentStudentLink`, and recipient role and status. `canMessage(sender, recipient)` and `messageableIds(sender, ids)` are thin async wrappers. Non-ACTIVE recipients → false. `validateNewConversation(creator, participants)` checks the 2..25 participant count, `canMessage` for each participant, and that any group with a STUDENT also has a TEACHER or ADMIN. `canSendIn(sender, participants)` implements the A4 rule. | FR-5, FR-6, FR-7, FR-32, NFR-1 |
+| `contacts.ts` | `listContacts(user, q)` builds labelled groups forward from the same relation queries: "My teachers", "My child's teachers (<child>)", "Students in <course>", "Parents of students in <course>", "Homeroom <section>", "Staff" (TEACHER) and "School office" (ADMINs). Each group is filtered by `q` (case-insensitive name match) and capped at 50. | FR-8 |
+| `access.ts` | `getParticipation(userId, conversationId)` returns the participant row only if `leftAt` is null; otherwise it throws `NOT_FOUND`. `requireSafeguardingLead()` calls `requireUser` and `requireRole('ADMIN')`, then reads `isSafeguardingLead` from the database and throws `FORBIDDEN` if it is false. `requirePageSafeguardingLead()` redirects to `/forbidden`. | NFR-1, FR-23, FR-24 |
+| `conversations.ts` | `listConversations(user, {archived, q, page})` returns rows ordered by `lastMessageAt desc` with the participants, a preview (`"<first name>: <body ≤80>"`, or "This message was deleted") and `unreadCount`. Per-row unread counts come from one raw SQL `LATERAL COUNT` over the page, capped at 99. `createConversation`, `getConversation` (returns `canSend`, `canLeave` and the participants), `markRead`, `setMuted`, `setArchived`, `leave`. `leave` is refused with 403 when the conversation has 2 or fewer participants, or when the user is the creator and `involvesStudent` is true. | FR-6, FR-9, FR-12, FR-14, FR-30, FR-31 |
+| `messages.ts` | `listMessages(user, id, {before \| after+since, limit=30})` uses a keyset on `(createdAt, id)`. Deleted messages go to normal users as `{deleted:true, body:null, attachments:[]}`. `sendMessage` checks the rate limit, the participation, `canSendIn`, and attachment ownership (owner = sender, unattached, context `'message'`, at most 5), then runs the send transaction and, after commit, `onMessageSent`. `editMessage` and `deleteMessage` require: the caller is the sender, `now − createdAt ≤ 15 min`, and the message is not already deleted. Otherwise they throw 403 with `details.reason = 'EDIT_WINDOW_EXPIRED'`. | FR-7, FR-10, FR-11, FR-13, FR-15, FR-27, FR-31, NFR-2, NFR-3, NFR-4 |
+| `notifications.ts` | `onMessageSent(conversationId, message)` handles each other participant who has not muted or left the conversation. It runs `notification.deleteMany({ userId in, type:'message.received', readAt:null, link })`, then `notify({ type:'message.received', link, title, body })` **without email**. It then upserts `PendingMessageEmail` with `create: { dueAt: now+10m }, update: {}`, so the first unread message starts the 10-minute clock. `conversationLink(id)` is the single link builder, shared with `markRead`. `onMessageReported(report)` notifies ACTIVE safeguarding leads with `message.reported` and email, without the message text. | FR-19, FR-20, FR-26 |
+| `quiet-hours.ts` | Pure functions `isInQuietHours(hhmm, start, end)` (handles ranges that wrap midnight) and `quietHoursEnd(now, tz, settings)`, which converts the end time to a UTC instant with date-fns-tz. `getSettings` and `putSettings` require start and end to be both set or both null, and reject `start == end`. | FR-20, FR-21 |
+| `email.ts` | `processPendingMessageEmails(now)`, run from `POST /api/internal/email/dispatch` in its own try/catch. It processes `dueAt ≤ now`, at most 200 rows per run. For each row: claim it with `deleteMany({id})` and continue only if `count === 1`. If `lastReadAt ≥ row.createdAt`, or the user is muted or has left, drop the row. If the user is in quiet hours, re-insert the row with `dueAt = quietHoursEnd`. Otherwise call `notify({ inApp:false, email:{ template:'generic-notification' } })`. | FR-4, FR-20 |
+| `reports.ts` | `reportMessage(user, messageId, reason)` requires a participant who is not the sender. A second OPEN report from the same user on the same message returns 409. After commit it calls `onMessageReported`. | FR-22, FR-26 |
+| `safeguarding.ts` | Each function starts with `requireSafeguardingLead()`. `listReports({status})` returns OPEN reports first, then the rest by `createdAt desc`. `getReport(id)` returns the message, 5 messages before and 5 after (including deleted messages and revisions) and the participants, and writes an audit row. `reviewReport(id, {action:'review'\|'dismiss', note?})` sets `status`, `reviewedById`, `reviewedAt` and `reviewNote`, then writes an audit row. `searchConversations({participantId, from, to, page})` filters on `involvesStudent: true`. `getConversationForSafeguarding(id)` returns the full thread, including deleted bodies and `revisions[]`, and calls `audit({action:'safeguarding.conversation.view', entityType:'Conversation', entityId})` on **every** call. | FR-23, FR-24, FR-25, NFR-1, NFR-3, NFR-11 |
+| `files/contexts.ts` (edit) | `register('message', resolver)` with `contextId = messageId`. The resolver allows a participant who has not left the message's conversation, or an ADMIN with `isSafeguardingLead` (read from the database). It denies on any error. | FR-27 |
+| `notifications/types.ts` (edit) | Add `message.received` {COMMUNICATION, defaultEmail:true, roles: all} and `message.reported` {COMMUNICATION, mandatoryInApp:true, defaultEmail:true, roles:['ADMIN']}. | FR-19, FR-26 |
+| `notifications/notify.ts` (edit) | Add an optional `inApp?: boolean`, default `true`. When it is `false`, skip the `Notification` insert. All existing callers keep their current behaviour. | FR-20 |
+| `users` validator and service (edit) | Add `isSafeguardingLead: z.boolean().optional()`. Reject `true` unless the target user is ADMIN. Audit the change in the existing `user.update` metadata. | FR-2, NFR-11 |
+| `prisma/seed.ts` (edit) | Set Alice as a safeguarding lead. Upsert the Pat↔Sam `ParentStudentLink` if it is missing. Seed four threads: Pat↔Tom about Sam's homework (6 messages); Tom and 4 ACTIVE MATH-7A students (3 messages); Tina↔Tom (4 messages); and one student↔teacher thread with one OPEN report. Each block is idempotent: it looks up the thread by subject and skips if it exists. A block is skipped with a `logger.warn` if its prerequisites are missing. All seeded data must satisfy `canMessage`. | FR-29 |
 
-Helpers that live beside the service:
+### 3.2 Validators: `src/lib/validators/messaging.ts`
 
-- **`src/server/announcements/excerpt.ts`**: `toPlainText(md, max)`, a regex strip plus truncation (ADR-5). Its output is only ever rendered as escaped text (NFR-4). It produces the 200-character card excerpt (FR-18) and the 300-character email body (FR-28).
-- **`src/server/announcements/maintenance.ts`**: `publishDueAnnouncements(now)`. It does `findMany({ where: { status: SCHEDULED, notifiedAt: null, publishAt: { lte: now } }, take: 50, select: { id } })`, then runs `claimAndNotify` for each id and logs `{ claimed }`. It copies the claim pattern in `quiz/maintenance.ts` (FR-27, NFR-11).
-- **`src/server/announcements/files.ts`**: `announcementFileResolver(user, file)`. It loads the announcement by `file.contextId`. If `isPublic ∧ isVisible`, it allows access (including when `user` is null). Otherwise:
-  - no user: deny
-  - ADMIN or author: allow
-  - `isVisible ∧ isUserInAudience`: allow
-  - anything else: deny
-
-  It is registered in `registerBuiltInContexts` in `src/server/files/contexts.ts` (FR-30, B8).
-
-### 2.5 Existing modules touched (NFR-8)
-
-| File | Change | Req |
-|---|---|---|
-| `src/server/notifications/types.ts` | Add `'announcement.published'` (COMMUNICATION, `defaultEmail: true`, `mandatoryInApp: false`, roles ALL) and `'announcement.reminder'` (COMMUNICATION, `defaultEmail: true`, `mandatoryInApp: true`, roles ALL). | FR-26 |
-| `src/server/notifications/notify.ts` | Optional `NotifyInput.mandatoryInApp` override (A9). | FR-26 |
-| `src/app/api/internal/email/dispatch/route.ts` | Add an isolated `try { await publishDueAnnouncements(now) } catch (e) { logger.error }` block alongside the existing passes. | FR-27 |
-| `src/server/files/contexts.ts` | `register('announcement', announcementFileResolver)`. | FR-30 |
-| `src/config/public-routes.ts` | Add `'/api/public/news'` to `PUBLIC_API_PATHS`. | FR-31 |
-| `src/config/navigation.ts` + sidebar component | Add an optional `badgeEndpoint?: string` to `NavItem`, and an Announcements entry for all roles with `badgeEndpoint: '/api/announcements/unread-count'`. The sidebar wraps the icon in MUI `Badge` and polls every 30 s, gated by visibility, copying `NotificationBell`. | FR-32 |
-| `src/config/course-tabs.ts` | `{ key: 'announcements', label: 'Announcements', href: id => '/courses/' + id + '/announcements', roles: ALL_ROLES }`. | FR-21 |
-| `prisma/seed.ts` | Six announcements, idempotent by `(title, authorId)`. MATH-7A and Grade 7 targets are skipped when missing. Already-published seeds get `notifiedAt = now`, so seeding never sends notifications. | FR-35 |
-
-### 2.6 API layer: `src/app/api/**` (FR-34)
-
-Every handler is `withHandler` → `requireUser` or `requireRole` → `parseQuery` or `parseBody` (Zod) → one service call → `ok` or `paginated`. No business logic lives in routes.
-
-| Route file | Methods | Role gate |
-|---|---|---|
-| `announcements/route.ts` | GET (feed), POST (create) | any / ADMIN, TEACHER |
-| `announcements/unread-count/route.ts` | GET | any |
-| `announcements/preview-audience/route.ts` | POST | ADMIN, TEACHER |
-| `announcements/manage/route.ts` | GET | ADMIN, TEACHER |
-| `announcements/[id]/route.ts` | GET, PATCH | any (service gates) / ADMIN, TEACHER |
-| `announcements/[id]/archive/route.ts` | POST | ADMIN, TEACHER |
-| `announcements/[id]/ack/route.ts` | POST | any (service gates) |
-| `announcements/[id]/stats/route.ts` | GET (`?format=csv` → `text/csv` + `Content-Disposition`) | ADMIN, TEACHER |
-| `announcements/[id]/remind/route.ts` | POST | ADMIN, TEACHER |
-| `public/news/route.ts` | GET (no auth, `rateLimit` by IP, `parsePagination` clamp) | public |
-
-STUDENT and PARENT callers hitting the ADMIN/TEACHER routes get 403 from `requireRole` (FR-11). The exact request and response shapes are owned by `arch-api-contracts`.
-
-### 2.7 UI layer: `src/app/(app)/announcements/**` (FR-13..FR-24, FR-32, FR-33, NFR-1, NFR-5)
-
-Each page is a server component that enforces access through the same service calls (NFR-3) and renders client components. All UI uses MUI only, and every component is looked up through mui-mcp before use.
-
-| Route | Components |
+| Schema | Fields |
 |---|---|
-| `/announcements` | `PageHeader` with a "New announcement" button for ADMIN and TEACHER (FR-33). MUI `Tabs` for All, Unread and Requires acknowledgement. A list of `AnnouncementCard` (`Card`, `CardMedia` cover thumbnail via `/api/files/:id`, title, author and role, date in the school timezone, `Chip` labels, excerpt, attachment count, a "For Sam" `Chip` for parents, and an unread dot with `visuallyHidden` "Unread"). `Pagination` and `EmptyState`. |
-| `/announcements/[id]` | Title and metadata, then `MarkdownView` for the body (NFR-4) and `FileList` for attachments. When `requiresAck`, a `Button` reading "I acknowledge" that becomes a disabled "Acknowledged on 14 Sep" (`formatInSchoolTz`, NFR-7). Edit and Stats links for the author and admins. |
-| `/announcements/new`, `/announcements/[id]/edit` | `AnnouncementComposer` (react-hook-form + zodResolver): `TextField` title, `MarkdownEditor`, `FileUpload` (cover, context `announcement`), `FileUpload` + `FileList` (attachments), and `AudienceBuilder`. `AudienceBuilder` has rows of `Select` type → `Autocomplete` entity (grade levels, sections, courses, roles; teachers see only their own courses and homeroom) → three `Checkbox`es, plus a debounced (400 ms) preview line "Will reach N people: …". Further fields: `Switch`es for pinned, requires acknowledgement and public (admins only), a `RadioGroup` for Publish now / Schedule / Save draft, and `DateTimePicker`s for publishAt and expiresAt, converted from the school timezone to UTC on submit. Server errors surface through `useToast()`. |
-| `/announcements/manage` | `DataTable` with the columns status chip (`displayStatus`), title, audience summary, reach, read % and ack %. Row actions are Edit, Stats and Archive (`ConfirmDialog`). |
-| `/announcements/[id]/stats` | `StatCard`s for recipients, read % and ack %. A `DataTable` of recipients with an Unread / Not acknowledged `ToggleButtonGroup`, an "Export CSV" link (`?format=csv`) and "Send reminder" (`ConfirmDialog`; a 429 response is shown as a toast with the retry time). |
-| `/courses/[id]/announcements` | The feed list component with `courseId`, behind `assertCanViewCourse`. |
+| `createConversationSchema` | `{participantIds: cuid[] 1..24, subject?: ≤120, body: trim 1..5000, fileIds?: ≤5}` |
+| `sendMessageSchema` | `{body, fileIds?}` |
+| `editMessageSchema` | `{body}` |
+| `listMessagesQuery` | `{before?}` or `{after, since?}`, which are mutually exclusive, plus `limit ≤ 30` |
+| `listConversationsQuery` | `{archived?: bool, q?, page, pageSize}` |
+| `archiveSchema` | `{archived: bool}` |
+| `muteSchema` | `{muted: bool}` |
+| `reportSchema` | `{reason: trim 1..1000}` |
+| `reviewReportSchema` | `{action: 'review'\|'dismiss', note?: ≤1000}` |
+| `safeguardingConversationsQuery` | `{participantId?, from?, to?, page}` |
+| `messagingSettingsSchema` | `{quietStart: HH:mm\|null, quietEnd: HH:mm\|null}` |
+| `contactsQuery` | `{q?: ≤100}` |
 
----
+The client composer imports the same limits from `src/lib/messaging/constants.ts`: `BODY_MAX=5000`, `COUNTER_FROM=4500`, `MAX_FILES=5`, `MAX_PARTICIPANTS=25`, `EDIT_WINDOW_MS=15*60_000`, `THREAD_POLL_MS=5000`, `LIST_POLL_MS=30000`, `PAGE_SIZE=30`. (FR-11, FR-13, FR-15, NFR-6)
 
-## 3. Data Flow
+### 3.3 API route handlers (surface for `arch-api-contracts`)
 
-### 3.1 Create and publish now (FR-10, FR-13..FR-15, FR-27, FR-28)
+| Method and path | Auth | Service | Requirements |
+|---|---|---|---|
+| GET `/api/conversations` | any user | listConversations | FR-9, FR-28 |
+| POST `/api/conversations` | any user + rate limit | createConversation | FR-6, FR-12, FR-30, NFR-4 |
+| GET `/api/conversations/:id` | participant | getConversation | FR-7, FR-14, NFR-1 |
+| GET `/api/conversations/:id/messages?before=\|after=&since=` | participant | listMessages | FR-10, FR-13, NFR-2 |
+| POST `/api/conversations/:id/messages` | participant + rate limit (30/min) | sendMessage | FR-7, FR-11, FR-19, FR-20, FR-31, NFR-4 |
+| POST `/api/conversations/:id/read` | participant | markRead | FR-14 |
+| POST `/api/conversations/:id/mute` | participant | setMuted | FR-14 |
+| POST `/api/conversations/:id/archive` | participant | setArchived | FR-14 |
+| POST `/api/conversations/:id/leave` | participant | leave | FR-14 |
+| PATCH `/api/messages/:id` | sender, within 15 min | editMessage | FR-3, FR-15 |
+| DELETE `/api/messages/:id` | sender, within 15 min (soft delete) | deleteMessage | FR-15, NFR-3 |
+| POST `/api/messages/:id/report` | participant, not the sender | reportMessage | FR-22, FR-26 |
+| GET `/api/messaging/unread-count` | any user | one `$queryRaw` COUNT of the user's conversations not left with `lastMessageAt > coalesce(lastReadAt, 'epoch')` | FR-18, NFR-2 |
+| GET `/api/messaging/contacts?q=` | any user | listContacts | FR-8 |
+| GET `/api/me/messaging-settings` | any user | getSettings | FR-21 |
+| PUT `/api/me/messaging-settings` | any user | putSettings | FR-21 |
+| GET `/api/safeguarding/reports?status=` | safeguarding lead | listReports | FR-23 |
+| GET `/api/safeguarding/reports/:id` | safeguarding lead | getReport (audited) | FR-23, FR-25 |
+| PATCH `/api/safeguarding/reports/:id` | safeguarding lead | reviewReport (audited) | FR-23, NFR-11 |
+| GET `/api/safeguarding/conversations` | safeguarding lead | searchConversations | FR-24 |
+| GET `/api/safeguarding/conversations/:id` | safeguarding lead | getConversationForSafeguarding (audited) | FR-24, FR-25 |
+| PATCH `/api/users/:id` (existing) | ADMIN | adds `isSafeguardingLead` | FR-2 |
+| POST `/api/internal/email/dispatch` (existing) | CRON_SECRET | adds processPendingMessageEmails | FR-20 |
 
-```
-Composer ──POST /api/announcements──► withHandler → requireRole(ADMIN,TEACHER) → parseBody(announcementInputSchema)
-  → assertCanTarget(user, audiences, isPublic)          ── 403 on violation (AC-3)
-  → countAudienceByRole(audiences).total === 0 ?        ── 400 VALIDATION_ERROR (not for drafts)
-  → $transaction: create Announcement{status:PUBLISHED, publishAt:now} + audiences + attachments; attachFiles(...)
-  → (after commit) claimAndNotify(id, now)
-       updateMany(id, notifiedAt null, visible) → count 1
-       → resolveAudienceUserIds → notify({type:'announcement.published', userIds (chunks of 1k), title,
-           body: toPlainText(body,300), link:/announcements/id, mandatoryInApp: requiresAck,
-           email:{template:'generic-notification', data:{title, body, link, ctaLabel:'Read announcement'}}})
-  → 201 { announcement }
-```
+**Error codes:**
 
-### 3.2 Scheduled publish (FR-16, FR-27, AC-4)
+| Case | Response |
+|---|---|
+| Non-participant, or a participant who has left | 404 NOT_FOUND. The cuid is never treated as authorisation (NFR-1). |
+| Contact-rule violation on create | 403 FORBIDDEN, and nothing is created (FR-6). |
+| Send after the relationship has ended | 403 FORBIDDEN with `details.reason:'RELATIONSHIP_ENDED'` (FR-7). |
+| Edit or delete after 15 minutes | 403 FORBIDDEN with `details.reason:'EDIT_WINDOW_EXPIRED'` (FR-15). |
+| Duplicate OPEN report | 409 CONFLICT. |
+| Rate limit exceeded | 429 RATE_LIMITED with `details.retryAfterMs`. |
+| Not a safeguarding lead | 403 FORBIDDEN. |
 
-```
-Create with mode=schedule → status SCHEDULED, publishAt=T, notifiedAt null   (no notify)
-Before T: visibleWhere excludes it (publishAt > now)  → absent from feed, detail 404 for non-authors
-At/after T: visibleWhere includes it immediately on read (no cron needed)
-Cron  POST /api/internal/email/dispatch (CRON_SECRET) → publishDueAnnouncements(now)
-       → findMany(SCHEDULED, notifiedAt null, publishAt<=now, take 50)
-       → claimAndNotify(id) per row; concurrent runs: only one updateMany gets count 1 → exactly one send
-```
+### 3.4 Pages
 
-### 3.3 Feed read (FR-17, FR-22, NFR-2)
+| Route | Kind | Contents | Requirements |
+|---|---|---|---|
+| `src/app/(app)/messages/layout.tsx` + `page.tsx` + `[conversationId]/page.tsx` | Server shell calling `requirePageUser`. The client renders `MessagesLayout`. | Two panes: the list on the left and the thread on the right. Below 768 px only one pane shows: the list on `/messages`, the thread on `/messages/[id]` with a back `IconButton`. | FR-9, FR-10, NFR-7 |
+| `src/app/(app)/admin/safeguarding/page.tsx` | Server, calls `requirePageSafeguardingLead()` | MUI `Tabs`: Reports and Conversations. `?report=<id>` opens the report detail drawer. | FR-23, FR-24 |
+| `src/app/(app)/admin/safeguarding/conversations/[id]/page.tsx` | Server, calls the service so the audit is written | Read-only thread showing deleted bodies, each marked as deleted, and edit revisions. | FR-24, FR-25 |
+| `src/app/(app)/account/notifications/page.tsx` (edit) | Add `QuietHoursSection` | Two `TextField type="time"` inputs, a Save button and a Clear button. | FR-21 |
+| `src/app/(app)/students/[id]/layout.tsx` (**new**) | Server layout that keeps the `[id]` segment name | Loads the viewer's role and the student's linked parents. Renders `StudentMessageActions`, a compact right-aligned action row with no duplicated title, above `children`. | FR-16 |
+| `src/app/(app)/courses/[courseId]/roster/page.tsx` (edit) | The TEACHER/ADMIN table moves into a client `RosterTable` with `Checkbox` selection | The toolbar button "Message selected students" opens `NewConversationDialog` prefilled with the selection. `RosterEntry.student.id` already exists. | FR-17 |
 
-```
-GET /api/announcements?tab=&courseId=&page=
-  → getAudienceKeys(user)            ~4 indexed queries (parent: children → profiles, section members, enrollments)
-  → findMany(visibleWhere(now) ∧ audiences.some(audienceWhere(keys)) ∧ tab filter)
-       EXISTS over AnnouncementAudience(type, refId) index; Announcement(status, publishAt) index
-  → page 1: pinned take 3 first, then the rest newest-first
-  → DTO: excerpt (toPlainText 200), labels (audienceLabels, batched), unread flag, forChildren (keys.childByKey)
-```
+### 3.5 Client components: `src/components/messaging/`
 
-The target is under 200 ms for a parent with 3 children and 2,000 announcements. NFR-10 includes an optional timing check in the integration suite.
+This follows the lowercase feature-folder precedent of `gradebook/` and `report-cards/`.
 
-### 3.4 Detail, read and acknowledge (FR-19, FR-20)
-
-```
-GET /:id → admin|author|(visible ∧ member) else 404 → member: upsert AnnouncementRead{readAt}
-POST /:id/ack → visible ∧ member else 404; !requiresAck → 409 → upsert {acknowledgedAt: existing ?? now}
-```
-
-### 3.5 Stats and reminder (FR-24, FR-25, AC-5)
-
-```
-GET /:id/stats → author|admin else 404 → recipients = resolveAudienceUserIds; join reads
-   50 recipients, 30 acked → ackPct 60
-POST /:id/remind → claim lastRemindedAt (≤ now−24h) → 0 rows → 429 {retryAfter}
-   → notify('announcement.reminder', recipients − acked)  → { notified: 20 }
-```
-
-### 3.6 Files and public news (FR-30, FR-31, AC-7)
-
-```
-GET /api/files/:id (already public route) → access registry → announcementFileResolver(user|null, file)
-GET /api/public/news?page= (no session) → getPublicNews → isPublic ∧ visible → public DTO
-```
-
----
-
-## 4. Cross-cutting Rules
-
-- **Security (NFR-3, NFR-6).** Every handler and server page calls `requireUser` or `requireRole`. Ownership, membership and targeting checks live in the service, so pages and routes share them. Non-members get 404; targeting violations get 403.
-- **Sanitisation (NFR-4).** The body renders only through `MarkdownView` (react-markdown + rehype-sanitize). Excerpts and email bodies are plain text from `toPlainText`, rendered as escaped text and never through `dangerouslySetInnerHTML`.
-- **Timezones (NFR-7).** All columns are UTC. Composer inputs are interpreted in `getSchoolTimezone()` (imported from `assignments-service.ts`, B15) and converted with `date-fns-tz`. All dates are displayed with `formatInSchoolTz`.
-- **Logging (NFR-11).** All new server code logs through `logger` from `src/lib/logger.ts`. `console.*` is used only in the existing seed style.
-- **UI rule (NFR-1).** MUI only. Toasts go through `useToast`, confirmations through `ConfirmDialog`, pickers through `Autocomplete` and `DateTimePicker`. The existing `eslint-no-restricted-imports` unit test guards against banned libraries. If mui-mcp is unreachable during development, report a blocker.
-- **Scope (NFR-9).** No comments, reactions, translation, SMS or public website pages. Only `getPublicNews` and `/api/public/news` are exposed.
-
-## 5. Test Plan Mapping (NFR-10)
-
-| Layer | File | Covers |
+| Component | Built from | Requirements |
 |---|---|---|
-| Unit | `tests/unit/announcements/audience-match.test.ts` | `matchesAudience` for every type × flag combination × role, using hand-built keys and no DB (FR-3..FR-6). |
-| Unit | `tests/unit/announcements/permissions.test.ts` | `assertCanTarget` for admin, teacher course, co-teacher, homeroom, foreign course, SCHOOL, STAFF, ROLE, GRADE_LEVEL and `isPublic` (FR-9, FR-10). |
-| Unit | `tests/unit/announcements/excerpt.test.ts` | `toPlainText` stripping and truncation (FR-18, FR-28). |
-| Unit | `tests/unit/validators/announcements.test.ts` | Zod limits and refinements (FR-2). |
-| Integration | `tests/integration/announcements/audience-agreement.test.ts` | For every seed and fixture user × every audience row, `isUserInAudience` equals membership in `resolveAudienceUserIds` (FR-7). |
-| Integration | `tests/integration/announcements/publish.test.ts` | `publishDueAnnouncements` run twice and concurrently produces one notification set; FR-29 no re-notify on PATCH; AC-4. |
-| Integration | `tests/integration/announcements/api.test.ts` | AC-1, AC-2, AC-3 (403), AC-5 (60%, 20 notified, 429), AC-6, AC-7, AC-8 (the fixture creates Pat's 6A child). |
-| E2E | `tests/e2e/announcements.spec.ts` | Admin composes a Grade 7 parents announcement with ack, Pat reads and acknowledges, admin opens stats. |
+| `usePolling(fn, ms)` | `setInterval`. Pauses while `document.hidden` and fires immediately on `visibilitychange`. The NotificationBell pattern is copied; NotificationBell itself is not refactored. | FR-13, NFR-8 |
+| `ConversationList` | `List`, `ListItemButton`, `UserAvatar`, `Badge`, `Tabs` (Inbox/Archived) and a search `TextField`. Polls every 30 s. | FR-9 |
+| `MessageThread` | Day dividers come from `formatInSchoolTz`. Uses `FileList`, an "edited" `Typography`, and "This message was deleted". An `IntersectionObserver` sentinel at the top loads `?before=` and keeps the scroll position stable. Polls `?after=&since=` every 5 s. When new messages arrive and the tab is visible, it posts `/read`. A per-message `Menu` offers edit and delete (own messages within 15 minutes) and report (others' messages); reporting shows the toast "Reported — the school will review this.". | FR-10, FR-13, FR-14, FR-15, FR-22 |
+| `Composer` | Multiline `TextField`. Enter sends and Shift+Enter inserts a newline. `FileUpload` with context `'message'`, up to 5 files. A character counter appears above 4,500 characters. When `canSend` is false, the composer is disabled and shows "You can no longer send messages in this conversation." | FR-7, FR-11 |
+| `NewConversationDialog` | `Dialog` with `Autocomplete multiple` and `groupBy` over `/api/messaging/contacts` (not `UserPicker`, which ignores contact rules), a subject field (≤120) and the first message. Accepts `initialRecipients`. | FR-12, FR-16, FR-17 |
+| `ConversationMenu` | `Menu` with Mute, Archive/Unarchive, View participants (`Dialog`) and Leave group (`ConfirmDialog`). Leave is hidden when `canLeave` is false. | FR-14 |
+| `StudentMessageActions` | TEACHER/ADMIN get "Message parents", which opens the dialog prefilled with the linked parents. The button is hidden when the student has no linked parents. PARENT gets "Message teacher", which opens the dialog restricted to the "My child's teachers (<child>)" group. | FR-16 |
+| `MessagesNavBadge` | Used by the shell for nav items with `badge: 'messages'`. Polls `/api/messaging/unread-count` every 30 s and renders a `Badge`. | FR-18 |
+| `QuietHoursSection` | Inputs as described in §3.4. | FR-21 |
+| `SafeguardingReports`, `SafeguardingConversations` | `DataTable` (MUI X DataGrid) plus a detail `Drawer` with Mark reviewed (requires a note) and Dismiss. | FR-23, FR-24 |
+
+### 3.6 Config and shell
+
+- `src/config/navigation.ts`:
+  - Add `{ label:'Messages', href:'/messages', icon: ChatBubbleOutline, roles: ALL_ROLES, badge:'messages' }`.
+  - Add `{ label:'Safeguarding', href:'/admin/safeguarding', roles:['ADMIN'], requires:'safeguardingLead', group:'Admin' }`.
+  - Add `badge?` and `requires?` to `NavItem`.
+  - `navigationForRole(role, flags?)` filters out items whose `requires` flag is not set. (FR-18, FR-23)
+- `src/app/(app)/layout.tsx` reads `isSafeguardingLead` alongside the existing settings query and passes it to `AppShell`.
+- `shell.tsx` renders `MessagesNavBadge` for `badge:'messages'`.
+
+---
+
+## 4. Data Flow
+
+### 4.1 Create conversation (FR-6, FR-12, FR-30)
+
+1. The dialog sends `POST /api/conversations` with `{participantIds, subject, body, fileIds}`.
+2. The handler checks `rateLimit('msg:'+uid)` and then calls `validateNewConversation`, which runs one `loadRelations` batch.
+3. Any violation returns 403 and nothing is written.
+4. Otherwise, one transaction creates the Conversation (`involvesStudent` = any participant is a STUDENT), the participants and the first message, which follows the send steps in §4.2.
+5. The response returns `{conversation}`, and the client navigates to `/messages/<id>`.
+
+### 4.2 Send (FR-7, FR-11, FR-19, FR-20, FR-27, FR-31, NFR-4)
+
+1. The composer sends `POST /api/conversations/:id/messages`.
+2. The handler checks the rate limit, which may return 429.
+3. It loads the participation; a missing participation returns 404.
+4. It runs `canSendIn`, which may return 403 RELATIONSHIP_ENDED.
+5. It verifies the attachments.
+6. The send transaction inserts the message, links the attachments, bumps `lastMessageAt`, sets the sender's `lastReadAt`, and unarchives the conversation for the other participants.
+7. The handler returns 201 with `{message}`.
+8. After commit, `onMessageSent` runs for each recipient who has not muted or left: delete the old unread `message.received` notification, call `notify` in-app only, and upsert `PendingMessageEmail` (create-only).
+
+### 4.3 Poll and read (FR-13, FR-14, FR-18, NFR-2, NFR-8)
+
+- **Thread.** Every 5 s the thread calls `GET …/messages?after=<lastId>&since=<lastPollIso>`.
+  1. The handler does a participant lookup on the unique index.
+  2. It loads the cursor message's `createdAt`.
+  3. It queries `Message where conversationId AND (createdAt,id) > cursor` on `@@index([conversationId, createdAt])`, with `take 100`.
+  4. It queries `changed` = messages with `updatedAt > since` and `createdAt ≤ cursor`, with `take 100`.
+  5. When nothing has changed it returns `{messages:[],changed:[]}`. Target: under 100 ms.
+- **Mark read.** When messages arrive while the thread is visible, and when a thread is opened, the client sends `POST …/read`. This sets `lastReadAt`, marks that conversation's unread `message.received` notification read, and deletes the `PendingMessageEmail` row.
+- **List and badge.** Every 30 s the client calls `GET /api/conversations` and `GET /api/messaging/unread-count`.
+
+### 4.4 Deferred email (FR-20, FR-21)
+
+1. Cron calls `POST /api/internal/email/dispatch`, which runs `processPendingMessageEmails(now)`.
+2. For each due row, claim it by deleting it.
+3. If the user has read the conversation, muted it or left it, stop there.
+4. If the user is in quiet hours (school timezone, ranges may wrap midnight), re-insert the row with `dueAt` = the end of quiet hours.
+5. Otherwise call `notify({inApp:false, email})`. `notify()` applies the user's email preference and filters out DISABLED and ARCHIVED users.
+
+### 4.5 Report and safeguarding (FR-22..FR-26, NFR-11)
+
+1. A participant sends `POST /api/messages/:id/report` with `{reason}`. A duplicate OPEN report returns 409.
+2. After commit, `notify` sends `message.reported` to the ACTIVE safeguarding leads (mandatory in-app, plus email), linking to `/admin/safeguarding?report=<id>`.
+3. A lead opens the report. `requireSafeguardingLead` runs (non-leads get 403), the report detail with ±5 messages loads, and `audit('safeguarding.conversation.view')` is written.
+4. Review or dismiss calls `PATCH`, which updates the report and writes `audit('safeguarding.report.review'|'…dismiss')`.
+5. Conversation search filters on `involvesStudent=true`. Every view of a conversation writes an audit row.
+
+### 4.6 Attachments (FR-11, FR-27)
+
+1. `FileUpload` with context `'message'` uploads the file, unattached.
+2. The send transaction sets `contextId` to the messageId. Files left unattached are purged after 24 h by the existing job.
+3. Downloads go through `registerFileAccess('message')`, which allows participants who have not left and safeguarding leads.
+
+---
+
+## 5. Key patterns and constraints
+
+- **Server-side authorisation everywhere (NFR-1).** Every service function takes the `SessionUser` and starts with `getParticipation` or `requireSafeguardingLead`. Nothing trusts IDs sent by the client.
+- **One source of truth for contact rules (ADR-3).** Create, send, contacts and the student/roster actions all go through `contact-rules.ts`.
+- **After-commit side effects.** `notify()` never throws and is called only after the transaction commits, which matches the platform convention.
+- **Scope guard (NFR-9).** Do not add reactions, typing indicators, websockets/SSE, broadcast messaging, E2E encryption or announcements. Leave the behaviour of `student-access.ts` and `UserPicker` unchanged.
+- **Logging and time (NFR-6).** Use `logger` only. Store everything in UTC and display it in the school timezone through `src/lib/dates.ts`.
+
+### Tests (NFR-10)
+
+| Kind | File | What it covers |
+|---|---|---|
+| Unit | `tests/unit/messaging/contact-rules.test.ts` | The full role×role matrix, co-teacher, homeroom in the current year and in a previous year, DROPPED enrollment, a group with a student and no staff, 26 participants, and `canSendIn` after a relationship has ended. |
+| Unit | `tests/unit/messaging/quiet-hours.test.ts` | Ranges that wrap midnight, edge minutes, and DST. |
+| Integration | `tests/integration/messaging/*.test.ts` | Notification collapsing to one unread row; muted participants skipped; quiet-hours deferral and the read short-circuit in `processPendingMessageEmails`; revision capture on edit; the 15-minute window; rate limit 429; non-participant 404; safeguarding 403 for non-leads; the audit row on view; and 409 on a duplicate report. |
+| E2E | `tests/e2e/messaging.spec.ts` | Parent→teacher round trip in two browser contexts, with the message appearing in under 6 s. Student→student is absent from the picker and `POST` returns 403. |
+| Suite | — | The existing lint, typecheck and test suites must stay green. |
 
 ---
 
 ## 6. Requirements Traceability
 
-| Req | Design element(s) |
+| Req | Design element |
 |---|---|
-| FR-1 | §2.1 schema and migration `20261112000000_add_announcements`; additions listed in §1 |
-| FR-2 | §2.2 `src/lib/validators/announcements.ts` |
-| FR-3 | §2.3 `resolveAudienceUserIds`, `matchesAudience` (SCHOOL, STAFF, ROLE); ACTIVE filter (A3) |
-| FR-4 | §2.3 GRADE_LEVEL branches, `teachGradeLevelIds` (current year, non-archived, A6) |
-| FR-5 | §2.3 SECTION branches, SectionMember plus homeroom plus section courses (A1) |
-| FR-6 | §2.3 COURSE branches, ACTIVE enrollment, `teacherId` ∪ `coTeacherIds` |
-| FR-7 | §2.3 `isUserInAudience` on `AudienceKeys`; §5 agreement test |
-| FR-8 | §2.3 generic `AudienceRow` input, no Announcement imports |
-| FR-9 | §2.4 `assertCanTarget` ADMIN branch |
-| FR-10 | §2.4 `assertCanTarget` TEACHER branch on create, PATCH and preview; A10 |
-| FR-11 | §2.6 `requireRole(ADMIN, TEACHER)` on write routes |
-| FR-12 | §2.4 `updateAnnouncement`, `archiveAnnouncement`, `audit()`; A7 |
-| FR-13 | §2.7 `AnnouncementComposer`, `AudienceBuilder` |
-| FR-14 | §2.4 `previewAudience`, §2.3 `countAudienceByRole`; §2.7 debounced preview line |
-| FR-15 | §2.4 zero-recipient check on publish or schedule only (A2) |
-| FR-16 | §2.4 `visibleWhere`, `isVisible`; §3.2 |
-| FR-17 | §2.4 `listFeed` (tabs, pinned 3, newest first, pagination); A4, A11 |
-| FR-18 | §2.4 feed DTO, `excerpt.ts`, `audienceLabels`; §2.7 `AnnouncementCard` |
-| FR-19 | §2.4 `getForViewer` with read upsert; §2.7 detail page with `MarkdownView` |
-| FR-20 | §2.4 `acknowledge`; §2.7 ack button with `formatInSchoolTz` |
-| FR-21 | §2.5 course-tabs entry; §2.4 `listFeed` `courseId` filter with `assertCanViewCourse`; §2.7 course tab page |
-| FR-22 | §2.3 `childByKey`; §2.4 `forChildren` in the DTO; §2.7 "For Sam" chip |
-| FR-23 | §2.4 `listManage`, `displayStatus`; §2.7 manage page |
-| FR-24 | §2.4 `getStats`, `statsCsv`; §2.6 `?format=csv`; §2.7 stats page |
-| FR-25 | §2.4 `sendReminder`, `lastRemindedAt` claim, 429 (A8) |
-| FR-26 | §2.5 `types.ts` entries plus the `notify` `mandatoryInApp` override (A9) |
-| FR-27 | §2.4 `claimAndNotify`, `maintenance.ts` `publishDueAnnouncements`; §2.5 dispatch route hook; §3.1, §3.2 |
-| FR-28 | §3.1 notify email data (`generic-notification`, `toPlainText` 300, "Read announcement") |
-| FR-29 | §2.4 `updateAnnouncement` never touches `notifiedAt`; the `claimAndNotify` claim |
-| FR-30 | §2.4 `files.ts` `announcementFileResolver`; §2.5 `contexts.ts` registration |
-| FR-31 | §2.4 `getPublicNews`; §2.6 `public/news/route.ts`; §2.5 `public-routes.ts` |
-| FR-32 | §2.5 `NavItem.badgeEndpoint` plus sidebar `Badge`; §2.4 `unreadCount` |
-| FR-33 | §2.7 feed `PageHeader` button for ADMIN and TEACHER |
-| FR-34 | §2.6 route table, `withHandler` and Zod |
-| FR-35 | §2.5 `prisma/seed.ts` (6 announcements, skip-if-missing, `notifiedAt` preset) |
-| FR-36 | §2.3 and §2.4 files under `src/server/announcements/` |
-| NFR-1 | §2.7 MUI-only components; §4 UI rule |
-| NFR-2 | §2.1 indexes; §2.3 `audienceWhere` `EXISTS`; §3.3 |
-| NFR-3 | §2.4 `assertCanTarget`; §2.6 role gates; §4 security |
-| NFR-4 | §2.4 `excerpt.ts`; §2.7 `MarkdownView`; §4 sanitisation |
-| NFR-5 | §2.7 unread dot with `visuallyHidden` "Unread" |
-| NFR-6 | §2.4 `visibleWhere`, 404 for non-members; A10 |
-| NFR-7 | §2.7 `DateTimePicker` in the school timezone; §4 timezones |
-| NFR-8 | §2.5 existing modules reused; ADR-1 |
-| NFR-9 | §4 scope |
-| NFR-10 | §5 test plan |
-| NFR-11 | §2.4 `maintenance.ts` logging; §4 logging |
+| FR-1 | §2 models Conversation, ConversationParticipant, Message, MessageAttachment, MessageReport + ReportStatus, MessagingSettings; migration `20261112000000_add_direct_messaging` |
+| FR-2 | §2 `User.isSafeguardingLead`; §3.1 users validator/service edit; ADR-11 |
+| FR-3 | §2 MessageRevision; edit transaction in `messages.ts` |
+| FR-4 | §2 PendingMessageEmail; `email.ts` |
+| FR-5 | `contact-rules.ts` `canMessageWith` / `canMessage` |
+| FR-6 | `validateNewConversation`; §4.1 |
+| FR-7 | `canSendIn`; `getConversation.canSend`; Composer disabled state; §4.2 |
+| FR-8 | `contacts.ts`; GET `/api/messaging/contacts` |
+| FR-9 | `/messages` pages; `ConversationList`; `listConversations` |
+| FR-10 | `MessageThread`; `listMessages?before=`; day grouping in the school timezone |
+| FR-11 | `Composer`; `sendMessageSchema`; `constants.ts` |
+| FR-12 | `NewConversationDialog`; POST `/api/conversations` |
+| FR-13 | `usePolling`; `?after=&since=` (5 s); list and badge (30 s); §4.3 |
+| FR-14 | read/mute/archive/leave routes; `ConversationMenu`; leave rules in `conversations.ts` |
+| FR-15 | `editMessage`/`deleteMessage` with the 15-minute window; PATCH/DELETE `/api/messages/:id` |
+| FR-16 | `students/[id]/layout.tsx` + `StudentMessageActions` |
+| FR-17 | Roster `RosterTable` selection + "Message selected students" |
+| FR-18 | `navigation.ts` Messages item + `MessagesNavBadge`; GET `/api/messaging/unread-count` |
+| FR-19 | `message.received` type; `onMessageSent` collapse + in-app `notify` |
+| FR-20 | PendingMessageEmail upsert; `processPendingMessageEmails`; `notify({inApp:false})`; §4.4 |
+| FR-21 | MessagingSettings; `/api/me/messaging-settings`; `QuietHoursSection`; `quiet-hours.ts` |
+| FR-22 | `reports.ts`; POST `/api/messages/:id/report`; toast copy |
+| FR-23 | `/admin/safeguarding` Reports tab; `listReports`/`getReport`/`reviewReport`; `requireSafeguardingLead` |
+| FR-24 | Conversations tab; `searchConversations`; `getConversationForSafeguarding`; read-only view page |
+| FR-25 | `audit('safeguarding.conversation.view')` in `getReport` and `getConversationForSafeguarding` |
+| FR-26 | `message.reported` type; `onMessageReported` |
+| FR-27 | `files/contexts.ts` `'message'` resolver; attachment linking in the send transaction |
+| FR-28 | §3.3 route table; validators; standard response shapes |
+| FR-29 | `prisma/seed.ts` edits (§3.1) |
+| FR-30 | `involvesStudent` computed in the create transaction |
+| FR-31 | `lastMessageAt` bumped in the send transaction |
+| FR-32 | `loadRelations`: `teacherId OR coTeacherIds has` |
+| NFR-1 | `access.ts` `getParticipation` (404) / `requireSafeguardingLead` (DB flag); file resolver |
+| NFR-2 | `@@index([conversationId, createdAt])`; keyset `after` poll; raw COUNT for unread |
+| NFR-3 | Soft delete only; MessageRevision; deleted content visible only through `safeguarding.ts` |
+| NFR-4 | `rateLimit('msg:'+uid, 30, 60_000)` on send and create → 429 |
+| NFR-5 | §3.5 MUI-only components; mui-mcp lookups required in dev |
+| NFR-6 | `src/server/messaging/*`, `src/lib/validators/messaging.ts`, logger, UTC, cuid |
+| NFR-7 | `MessagesLayout` single pane below 768 px with back button |
+| NFR-8 | 5 s thread poll (≤ ~5 s + request latency < 6 s); no websockets |
+| NFR-9 | §5 scope guard |
+| NFR-10 | §5 Tests |
+| NFR-11 | `audit()` on report review/dismiss and on `isSafeguardingLead` changes |

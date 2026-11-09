@@ -94,6 +94,19 @@
       "ticketId": "SH-12",
       "startedAt": "2026-11-09T16:26:19.893Z",
       "completedAt": "2026-11-09T16:40:31.635Z"
+    },
+    {
+      "ticketId": "SH-13",
+      "startedAt": "2026-11-09T17:14:49.141Z"
+    },
+    {
+      "startedAt": "2026-11-09T17:52:35.498Z",
+      "completedAt": "2026-11-09T17:52:35.505Z"
+    },
+    {
+      "ticketId": "SH-13",
+      "startedAt": "2026-11-09T17:52:51.927Z",
+      "completedAt": "2026-11-09T18:27:37.722Z"
     }
   ]
 }

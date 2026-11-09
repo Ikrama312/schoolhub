@@ -1,10 +1,10 @@
 {
-  "ticketId": "SH-12",
-  "timestamp": "2026-11-09T18:00:00Z",
+  "ticketId": "SH-13",
+  "timestamp": "2026-11-09T19:00:00Z",
   "phase": "intake",
   "version": "1.0",
   "techStack": "react",
   "confidencePct": 100,
-  "detectionNotes": "The PRD declares '--brownfield --tech-stack react', and package.json confirms it: Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict, Prisma 5.20.0 on PostgreSQL 16, and MUI 9.5.0 (material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts). react-markdown 10.1.0 and papaparse are installed. PRD-12 needs no new dependencies. The existing MarkdownEditor/MarkdownView, FileUpload/FileList, DataTable, UserPicker, NotificationBell (badge-and-poll pattern), src/server/csv.ts, notify(), audit() and registerFileAccess cover the feature. The mui-mcp server is available for component lookup. Styling goes only through the MUI theme, sx and styled().",
+  "detectionNotes": "The PRD declares '--brownfield --tech-stack react'. The workspace is Next.js 14 App Router with React 18, TypeScript strict, Prisma on PostgreSQL 16, MUI 9.5.0 and MUI X. No new dependencies are needed. Reuse src/server/rate-limit.ts, registerFileAccess (src/server/files/access.ts), notify() and the notification types registry, audit(), and requireUser/requireRole. Reuse the components FileUpload, FileList, UserAvatar, ConfirmDialog, Toast/useToast and the NotificationBell badge-and-poll pattern, which live in src/components/<Name>/. Hook the maintenance work into /api/internal/email/dispatch. The mui-mcp server is available for component lookup. Styling goes only through the theme, sx and styled().",
   "cssPreprocessor": "css"
 }

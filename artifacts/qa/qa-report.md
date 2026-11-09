@@ -1,126 +1,104 @@
-# QA Report — SH-11 (PRD-11 Gradebook, Grading Scales & Report Cards)
+# QA Report — SH-13 (PRD-13 Direct Messaging)
 
 ## QA Summary
 
-- ticketId: SH-11
-- timestamp: 2026-11-09T14:29:37Z
-- overallStatus: FAIL
-- requirementsChecked: 55
-- requirementsPassed: 54
+- ticketId: SH-13
+- timestamp: 2026-11-09T18:05:00Z
+- overallStatus: PARTIAL
+- requirementsChecked: 43
+- requirementsPassed: 42
 - requirementsFailed: 1
 
-> This file replaces the stale SH-10 QA report.
-> **All 42 functional requirements PASS. All 48 SH-11 tests pass (unit, integration on Postgres, Playwright on a fresh prod build).**
-> One non-functional requirement fails:
-> - **NFR-12 (quality gate):** `npm run test` is not green. 10 tests fail in the full run. Nine are pre-existing auth/attendance/toast failures or contention flakes, and none import gradebook code. **One is new and caused by SH-11:** `qa-sh9` "SCHEDULED … notified once" is now flaky (Headline 1).
+> This file replaces the stale SH-11 QA report.
 >
-> The fix is small (move one line in `publishOnce`). After that, the remaining failures are the known pre-SH-11 set.
-
-## Headline findings
-
-### 1. SH-11 made `qa-sh9.test.ts` FR-13/FR-42 flaky (regression in the suite)
-- **Observed:** failed in the full run, and failed 1 of 3 isolated runs (`expected +0 to be 1`, `tests/integration/assignments/qa-sh9.test.ts:141`). It is not in the SH-10 failure list.
-- **Cause:** `publishOnce` (`src/server/assignments/assignments-service.ts:306-314`) claims `notifiedAt`, then **awaits `upsertItemFromAssignment` (≥4 queries) before `notify()`**. The student read path fires `publishOnce` fire-and-forget. The test's own awaited `publishOnce` calls then return early, because the claim is already taken, and it counts notifications before the background call has reached `notify()`. SH-11 widened that window.
-- **Product risk (minor):** if the gradebook upsert throws after the claim, the `assignment.published` notification is lost permanently, because `notifiedAt` is already set.
-- **Recommended fix:** call `upsertItemFromAssignment` **after** `notify()`, or wrap it in try/log so it can never block the notification. The test could also wait with `vi.waitFor`, but the ordering fix is the root cause. QA did not change product code.
-
-### 2. Remaining full-suite failures are outside SH-11
-| Failing test | Status |
-|---|---|
-| `attendance-qa.test.ts` FR-22, FR-10/FR-19 | Pre-existing (SH-9/SH-10 lists) |
-| `auth.test.ts` rate limit | Pre-existing (flaky) |
-| `auth.test.ts` password reset | Contention only: passes when the file is run alone |
-| `auth-forms.test.tsx` ForgotPasswordForm | Pre-existing (fails alone too) |
-| `auth-forms.test.tsx` ChangePasswordForm ×3 | Contention only: pass when the file is run alone |
-| `useToast.test.tsx` auto-hide | Pre-existing |
-| `lockout.test.ts` (file fails to load) | Pre-existing (next-auth ESM) |
-
-Full run: **399/409 pass**. SH-11 changed no auth, attendance or toast code (`git diff --stat`).
-
-### 3. Environment note (not a defect)
-The dev DB's current academic year (2026-2027) has **no terms**, so both SH-11 Playwright specs crash in `beforeAll` (`terms[0].id`). QA inserted a temporary term, ran both specs (**2/2 pass**), and then deleted the term. No rows referenced it.
-
-## Gates run by QA
-| Check | Result |
-|---|---|
-| `npm run lint` | ✅ no warnings or errors |
-| `npm run typecheck` | ✅ clean (including the QA test files) |
-| `next build` | ✅ |
-| `prisma migrate status` | ✅ up to date (12 migrations). `grading_scale_one_default` index present |
-| SH-11 unit (25) + integration (21) | ✅ 46/46 |
-| SH-11 Playwright (prod build :3100) | ✅ 2/2 |
-| Full `vitest run` | ❌ 399/409 (Headlines 1–2) |
-| Static: banned UI imports / Pro grid features / `console.*` in new code | ✅ none |
-
-## Tests added by QA
-- `tests/integration/gradebook/qa-sh11.test.ts` (7 tests, Postgres). Covers FR-40 weights, FR-15 end to end in both the gradebook and the student view, FR-18 sort, FR-38 + NFR-4 grade.posted once with audit old→new, FR-9 synced comment-only, FR-42/NFR-5 hidden and unreturned exclusion for student and parent, NFR-6 refusals, FR-24 mark-missing due gate, FR-14 letter-only override + audit, and the **NFR-2 perf check (35×80 < 800 ms)**. Self-cleaning; verified 3/3 runs with zero leftovers.
-- `tests/unit/gradebook/validators.test.ts` (4 tests). Covers FR-16 band rules, weight sum, unique category names, the 1,000-character comment cap.
-
-## Dev completion check
-All 33 tasks in `task-completion-markers.json` were checked. All 77 files in `file-ownership-matrix.json` exist and contain real implementations. No `TODO`/`FIXME`/stub markers were found in the new code.
+> **All 32 functional requirements pass, and 10 of 11 non-functional requirements pass. All 92 SH-13 tests pass:** 71 by Dev, re-run by QA, plus 21 new QA tests. That covers unit tests, integration tests on real Postgres, and the Playwright E2E, which QA re-ran on a fresh dev server.
+>
+> **One failure: NFR-10, "the existing test suite stays green."** The full `vitest run` is **505/510**: 5 tests fail and 1 file does not load. **All six were already failing before SH-13.** They are the same items recorded in the SH-11 QA report, and none of those test files import messaging code. **SH-13 did not cause any regression.** The suite was already red before this ticket.
 
 ## Requirement Results
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| FR-1 | PASS | `prisma/migrations/20261111000000_add_gradebook/migration.sql` and `prisma/schema.prisma`. `migrate status` up to date. All integration tests write these models |
-| FR-2 | PASS | `schema.prisma` (Course.gradingScaleId, Assignment/Quiz.categoryId). Category select in `AssignmentForm.tsx:285-288` and `QuizSettingsPanel.tsx:123`. `assertCategoryInCourse` in `gradebook-sync.ts:92` |
-| FR-3 | PASS | `gradebook-sync.test.ts` "publishing an assignment creates its item in the containing term". `term-placement.test.ts` |
-| FR-4 | PASS | `gradebook-sync.test.ts` "FR-4: archive hides, hard delete removes". Practice/delete quiz test |
-| FR-5 | PASS | `gradebook-sync.test.ts` "AC-3: return syncs the score; saving without returning does not" |
-| FR-6 | PASS | `gradebook-sync.test.ts` "FR-6 / A1: exemption sets excused; removing it re-derives" |
-| FR-7 | PASS | `gradebook-sync.test.ts` FR-7 IMMEDIATELY / MANUAL / AFTER_CLOSE tests (scaled to maxPoints) |
-| FR-8 | PASS | `backfill.test.ts` "a second run changes nothing". `package.json` `gradebook:backfill`. `scripts/gradebook-backfill.ts`. `seed.ts:590` |
-| FR-9 | PASS | `qa-sh11.test.ts` "FR-9: synced grades accept a comment only" (score/excused/maxPoints → VALIDATION_ERROR). Manual grades are edited in the same file and in the e2e |
-| FR-10 | PASS | `grade-calc.test.ts` AC-5, hidden-items, strict-due-boundary and nothing-counted cases |
-| FR-11 | PASS | `grade-calc.test.ts` "AC-2: dropLowest 1" and "never drops every counted item" |
-| FR-12 | PASS | `grade-calc.test.ts` no-categories, empty-categories renormalised, A8 Uncategorised |
-| FR-13 | PASS | `grade-calc.test.ts` "89.95 → 90.0 → A-", 76.95→77.0 C+, 76.94→76.9 C |
-| FR-14 | PASS | `grade-calc.test.ts` AC-6 / A12. `qa-sh11.test.ts` letter-only override via service (78.0 B, computed C+) |
-| FR-15 | PASS | `grade-calc.test.ts` golden case. `qa-sh11.test.ts` 78.0 C+ in both `getGradebook` and `getStudentGrades`. `gradebook.spec.ts` e2e |
-| FR-16 | PASS | `validators.test.ts` FR-16. `scales-service.ts` default swap / no un-default. DB partial unique index `grading_scale_one_default`. `admin/grading-scales/*`. (The service has no runtime test, see coverage report) |
-| FR-17 | PASS | `qa-sh11.test.ts` weights≠100 rejected. `GradebookSettingsClient.tsx` (live sum via `weightSum`, scale select) |
-| FR-18 | PASS | `GradebookGrid.tsx:380` `columnGroupingModel`, no pinned columns. `qa-sh11.test.ts` last-name sort + NFR-2 35×80. `gradebook.spec.ts` |
-| FR-19 | PASS | `GradebookGrid.tsx:112-115` (EX / M / —), `:226` M in red, `:230` late clock icon |
-| FR-20 | PASS | `gradebook.spec.ts` (digits+Enter, E, M, Delete → 78.0% C+, 6 audit rows). `GradebookGrid.tsx:303-317` |
-| FR-21 | PASS | `GradebookGrid.tsx:343-344`. The target routes `assignments/[assignmentId]/grade` and `quizzes/[quizId]/attempts/[attemptId]` exist |
-| FR-22 | PASS | `AddManualItemDialog.tsx`. `api/courses/[id]/grade-items/route.ts`. `qa-sh11.test.ts` `createManualItem` |
-| FR-23 | PASS | `TermOverrideDialog.tsx`. `api/courses/[id]/term-overrides/[studentId]/route.ts`. `validators.test.ts` 1,000-character cap. `qa-sh11.test.ts` override |
-| FR-24 | PASS | `qa-sh11.test.ts` mark-missing refused before due and applied after. Hide via `updateItem`. `ItemStatsDialog.tsx:19` (avg/median/high/low) |
-| FR-25 | PASS | `gradebook-service.ts` `exportGradebookCsv` uses `toCsv` from `@/server/csv`. Export button in `GradebookGrid.tsx:365` (no runtime test) |
-| FR-26 | PASS | `student-tabs.ts:17`. `StudentGradesView.tsx`. `grade-calc.test.ts` gradeColour. `qa-sh11.test.ts` colour `warning` at 78.0 |
-| FR-27 | PASS | `src/app/(app)/grades/page.tsx` + `GradesClient.tsx`. Nav entry `navigation.ts:39` (STUDENT, PARENT) |
-| FR-28 | PASS | `course-tabs.ts:22`. `courses/[courseId]/grades/page.tsx`. `qa-sh11.test.ts` course-filtered `getStudentGrades` |
-| FR-29 | PASS | `report-cards.test.ts` "roster shows status and warnings". `ReportCardsAdminClient.tsx` |
-| FR-30 | PASS | `report-cards.test.ts` "generates a draft snapshot". `snapshot.ts` |
-| FR-31 | PASS | `report-cards.test.ts` "AC-8 … regeneration skips PUBLISHED". `report-card-service.ts` `updateMany where status DRAFT` |
-| FR-32 | PASS | `report-cards.test.ts` "comments follow field-level rules". `access.ts:25` `canEditHomeroomComment`. `report-cards/[id]/*` |
-| FR-33 | PASS | `src/app/(app)/report-cards/page.tsx`. Nav `navigation.ts:41` (TEACHER) |
-| FR-34 | PASS | `report-cards.test.ts` "AC-7: publish notifies Sam and Pat" and "unpublish … audited reason". `report-cards.spec.ts` |
-| FR-35 | PASS | `report-cards.spec.ts` (print view hides sidebar / app bar / button under `print` media). `ReportCardDocument.tsx:24-31` (A4, page breaks). `PrintButton.tsx` `window.print()`. `report-cards/print/page.tsx` bulk |
-| FR-36 | PASS | `student-tabs.ts:18`. `students/[id]/report-cards/page.tsx` |
-| FR-37 | PASS | `report-cards.test.ts` "a 7B student gets NOT_FOUND", drafts hidden from family. `access.ts:13-18` |
-| FR-38 | PASS | `notifications/types.ts:153,161` (defaultEmail false/true). `qa-sh11.test.ts` grade.posted once per student per item, including parent. `report-cards.test.ts` report_card.published |
-| FR-39 | PASS | All 17 route files are thin (`requireUser`/`requireRole('ADMIN')` → validator → service). Services call `assertCanManageCourse` / `assertCanViewStudent`. `qa-sh11.test.ts` FORBIDDEN cases |
-| FR-40 | PASS | `qa-sh11.test.ts` 40+50 → VALIDATION_ERROR, 40+60 OK. `categories-service.ts` full replace in a transaction |
-| FR-41 | PASS | `prisma/seed.ts:548-604` (Standard A–F bands, 7A Homework 30/drop 1, Quizzes 30, Exams 40, Oral presentation, S1 drafts). "Standard A–F" is the default in the dev DB. The 7A block was verified by Dev on temp fixtures; QA did not re-run it (no 7A courses in the dev DB) |
-| FR-42 | PASS | `qa-sh11.test.ts` "student view hides hidden items and unreturned scores" (student + parent) and refusal of other student / unlinked parent |
-| NFR-1 | PASS | `grade-calc.ts` is pure (no Prisma, `now` injected) and uses Decimal helpers from `grading-math`. `grade-calc.test.ts` matrix (17) |
-| NFR-2 | PASS | `qa-sh11.test.ts` "NFR-2: 35 students × 80 items loads in under 800 ms" (`getGradebook`, warm), 3/3 runs |
-| NFR-3 | PASS | `report-card-service.ts` generate uses a fixed set of `findMany` calls plus one `loadCourseTermData` for all students/courses, and chunked `createMany`/`updateMany` (no N+1). The 600×8 < 30 s timing was **not load-tested** (Dev also skipped the optional perf test) |
-| NFR-4 | PASS | `qa-sh11.test.ts` grade.update audit old 7.00 → new 8.00, termOverride.upsert audit old/new. `report-cards.test.ts` unpublish audit with reason |
-| NFR-5 | PASS | `qa-sh11.test.ts` (hidden / unreturned). `report-cards.test.ts` (draft hidden). `gradebook-sync.test.ts` MANUAL quiz syncs only on release |
-| NFR-6 | PASS | `qa-sh11.test.ts` other teacher FORBIDDEN on gradebook and putGrade, student FORBIDDEN on putGrade, other student / unlinked parent refused. `report-cards.test.ts` 7B NOT_FOUND |
-| NFR-7 | PASS | Static scan: new UI imports only `@mui/material`, `@mui/icons-material`, `@mui/x-data-grid`, `@mui/x-date-pickers`, `react`, `next`. No banned libraries. Minor: two raw `<span>`s (`GradingScalesClient.tsx:68` is the MUI-documented Tooltip-on-disabled wrapper; `StudentGradesView.tsx:117` could be `Typography`) |
-| NFR-8 | PASS | Repo-wide grep: no `pinnedColumns`, `DataGridPro`/`Premium`, row grouping or aggregation. `columnGroupingModel` + `processRowUpdate` only |
-| NFR-9 | PASS | Reuses `csv.ts`, `grading-math`, `student-access`, `course-access`, `notify`, `audit`, `logger`, quiz `resultsVisible`. New code in `src/server/gradebook/` and `src/server/report-cards/`. No `console.*` in new code or in the seed diff. (DataGrid used instead of `DataTable` for 2 lists. The deviation is justified in dev-log) |
-| NFR-10 | PASS | `term-placement.ts:21-22` uses `schoolToday(date, tz)`. `term-placement.test.ts` "uses the school-local date at day boundaries". Past-due is a strict instant compare (`grade-calc.test.ts` boundary) |
-| NFR-11 | PASS | `report-cards.spec.ts` print media check. `ReportCardDocument.tsx:24` `@page { size: A4 portrait; margin: 12mm }`, one card per page |
-| NFR-12 | **FAIL** | lint ✅, typecheck ✅, all required SH-11 tests exist and pass. **But `npm run test` is 399/409**: 1 SH-11-induced flake (`qa-sh9` FR-13/FR-42, Headline 1) plus pre-existing failures (Headline 2) |
-| NFR-13 | PASS | `grade-calc.ts` never reads `gpa`. GPA is only stored in band JSON (`validators/gradebook.ts:42`). No rank or transcript code |
+| FR-1 | PASS | `prisma/schema.prisma` (Conversation, ConversationParticipant, Message with `@@index([conversationId, createdAt])`, MessageAttachment, MessageReport, MessagingSettings, enum ReportStatus; cascades). Migration `20261112000000_add_direct_messaging` is applied. All integration suites run on it. |
+| FR-2 | PASS | `src/lib/validators/users.ts` and `src/server/services/users.ts`. `safeguarding.test.ts` "FR-2: isSafeguardingLead can only be set on an ADMIN, and the change is audited". The flag can be edited through `PATCH /api/users/:id` only. No admin user form exists (ADR-11, accepted at intake). |
+| FR-3 | PASS | `messages.ts` `editMessage` (revision written in a transaction). `messaging.test.ts` "FR-3/FR-15: edit stores a revision…" |
+| FR-4 | PASS | `PendingMessageEmail` with `@@unique([userId, conversationId])`. `messaging.test.ts` FR-19/FR-20 (one pending row). `email.test.ts` (4 tests). |
+| FR-5 | PASS | `contact-rules.ts` `canMessageWith`/`canMessage`. `contact-rules.test.ts`: 43-case role×role matrix. `qa-sh13.test.ts` "FR-6: parent→parent and student→parent are refused". |
+| FR-6 | PASS | `validateNewConversation`. `messaging.test.ts` "student↔student is 403". `qa-sh13.test.ts` "nothing is created", ">25 participants rejected", "students in a staff-created group can reply". E2E "student → student… returns 403". |
+| FR-7 | PASS | `canSendIn` and `sendMessage` (`RELATIONSHIP_ENDED`). `messaging.test.ts` "a dropped student cannot send but the teacher still can". `composer-qa.test.tsx` checks that the exact message "You can no longer send messages in this conversation." is shown. |
+| FR-8 | PASS | `contacts.ts`. `qa-sh13.test.ts` "FR-8: contacts are grouped, labelled…": My teachers, My child's teachers (child), Students in X, Parents of students in X, School office, `?q=`, DROPPED excluded. |
+| FR-9 | PASS | `listConversations` and `ConversationList.tsx`/`MessagesLayout.tsx`. `qa-sh13.test.ts` "FR-31/FR-9" (sort, "sender: text" preview, unread, search by subject/name) and "FR-14/FR-18" (Inbox/Archived tabs). |
+| FR-10 | PASS | `MessageThread.tsx`: day groups via `formatInSchoolTz`, FileList, "(edited)", `DELETED_TEXT`, IntersectionObserver `?before=`. `qa-sh13.test.ts` "older pages load 30 at a time". `messaging.test.ts` (redacted delete). |
+| FR-11 | PASS | `Composer.tsx`. `composer-qa.test.tsx`: Enter sends, Shift+Enter does not, counter only after 4,500, body 1–5,000, ≤5 files. `qa-sh13.test.ts` FR-27 checks `context: 'message'` file linking. |
+| FR-12 | PASS | `NewConversationDialog.tsx`, fed by `/api/messaging/contacts`. `composer-qa.test.tsx` (subject ≤120, dedup). E2E parent→teacher round trip uses the dialog. |
+| FR-13 | PASS | `THREAD_POLL_MS=5000` (`MessageThread.tsx`), `LIST_POLL_MS=30000` (`ConversationList.tsx`, `MessagesNavBadge.tsx`). `messaging.test.ts` "after+since poll". E2E round trip <6 s. |
+| FR-14 | PASS | `conversations.ts` markRead/setMuted/setArchived/leave and `ConversationMenu.tsx`. `qa-sh13.test.ts` "read clears unread + notification + pending email; archive moves tabs; mute is per user" and "leave rules". |
+| FR-15 | PASS | `loadOwnEditable` (15-minute window, soft delete only). `messaging.test.ts` "FR-3/FR-15…15-minute window; soft delete". |
+| FR-16 | PASS | `src/app/(app)/students/[id]/layout.tsx` and `StudentMessageActions.tsx`: "Message parents" for staff, through `messageableIds`; "Message teacher" for linked parents. Verified by reading the code only. No automated test (see coverage report). |
+| FR-17 | PASS | `courses/[courseId]/roster/RosterTable.tsx`: checkbox selection plus "Message selected students". PARENT gets 404 and STUDENT gets a separate view in `page.tsx`. Verified by reading the code only. No automated test. |
+| FR-18 | PASS | `src/config/navigation.ts` (Messages, ALL_ROLES, badge), `shell.tsx`, `MessagesNavBadge.tsx`. `qa-sh13.test.ts` checks that `unreadCount` drops after read. A live probe of `/api/messaging/unread-count` without a session returns 401. |
+| FR-19 | PASS | `notifications.ts` `onMessageSent` and `types.ts` (`message.received`, COMMUNICATION, email true). `messaging.test.ts` "three sends leave one unread notification" and "muted get no notification". |
+| FR-20 | PASS | `email.ts` `processPendingMessageEmails`, hooked into the dispatch route. `email.test.ts`: sent when unread, dropped when read or muted, deferred to the end of quiet hours. |
+| FR-21 | PASS | `QuietHoursSection.tsx` on `/account/notifications` and `/api/me/messaging-settings`. `qa-sh13.test.ts` "quiet-hours settings round trip…". `quiet-hours.test.ts` (wrap and DST). |
+| FR-22 | PASS | `reports.ts`, `/api/messages/[id]/report`. `MessageThread.tsx` toast "Reported — the school will review this.". `composer-qa.test.tsx` (reason 1–1,000). `messaging.test.ts` "duplicate OPEN report is 409; own message 403". |
+| FR-23 | PASS | `safeguarding.ts` listReports (OPEN first)/getReport (±5 context)/reviewReport and `SafeguardingReports.tsx`. `safeguarding.test.ts` "non-lead admins and teachers get 403" and "review needs a note; handled is 409". |
+| FR-24 | PASS | `searchConversations` and `getConversationForSafeguarding`. `safeguarding.test.ts` "student conversations only; deleted body and revisions visible". |
+| FR-25 | PASS | `viewAudit` in `safeguarding.ts`. `safeguarding.test.ts` "every view audited" and "report detail is audited". |
+| FR-26 | PASS | `onMessageReported` and `types.ts` (`message.reported`, mandatoryInApp, email true, ADMIN). `messaging.test.ts` "leads are notified". |
+| FR-27 | PASS | `src/server/files/contexts.ts` `messageResolver`. `qa-sh13.test.ts` "FR-27": participant ✓, lead ✓, non-lead admin ✗, non-participant ✗, anonymous ✗, re-attach refused. |
+| FR-28 | PASS | 15 route files under `src/app/api/{conversations,messages,messaging,safeguarding,me/messaging-settings}` built on `withHandler` and Zod. A live probe of each group without a session returns 401 `UNAUTHENTICATED` in the standard error shape. The services behind them are covered by the integration suites. |
+| FR-29 | PASS | `prisma/seed.ts` `seedMessaging`: Alice is the lead, plus four threads with the specified message counts and one OPEN report, each checked against the contact rules. Dev DB: Alice `isSafeguardingLead=true` and "Staff room" (4 msgs) are present. The course-dependent threads are skipped because the dev DB has 0 courses, which is the designed `logger.warn` behaviour. |
+| FR-30 | PASS | `validateNewConversation` → `involvesStudent`. `messaging.test.ts` "FR-30/A11". `qa-sh13.test.ts` FR-32 (`involvesStudent` is true). |
+| FR-31 | PASS | `insertMessage` updates `lastMessageAt`. `qa-sh13.test.ts` "send bumps lastMessageAt". |
+| FR-32 | PASS | `loadRelations`/`contacts.ts` use `coTeacherIds`. `qa-sh13.test.ts` "a co-teacher manages the course" and "unrelated teacher 403". |
+| NFR-1 | PASS | `access.ts` `getParticipation` (404 for non-participants and leavers) and `assertSafeguardingLead` (fresh DB read). `messaging.test.ts` "non-participants and participants who left get 404". `safeguarding.test.ts` 403s. `qa-sh13.test.ts` "ex-participant 404". Live probes: every API returns 401 anonymously, and `/admin/safeguarding` redirects to `/login` (307). |
+| NFR-2 | PASS | `qa-sh13.test.ts` "NFR-2: an 'after' poll with nothing new returns empty arrays, quickly" (<100 ms at the service level against local Postgres). Keyset query on `(conversationId, createdAt)`. |
+| NFR-3 | PASS | No user-facing hard delete: `deleteMessage` sets `deletedAt`, and `editMessage` writes a `MessageRevision`. `safeguarding.test.ts` "deleted body and revisions visible". See observation O-1. |
+| NFR-4 | PASS | `assertRateLimit` (reuses `src/server/rate-limit.ts`). `messaging.test.ts` "the 31st message in a minute is 429 RATE_LIMITED". |
+| NFR-5 | PASS | QA scan: the messaging UI's only non-MUI third-party import is `date-fns`, a utility that renders nothing. No Tailwind, shadcn, Radix or notistack anywhere in `src`. All 58 MUI modules used (`@mui/material/*`, `@mui/icons-material/*`, `@mui/x-data-grid`) are standard documented exports and resolve under `tsc`. QA cannot independently verify that mui-mcp was consulted. `dev-log.md` records the lookups. |
+| NFR-6 | PASS | `src/lib/validators/messaging.ts` and services in `src/server/messaging/`. Thin `withHandler` routes. No `console.log` in messaging code (grep). UTC storage with `formatInSchoolTz` for display. |
+| NFR-7 | PASS | `MessagesLayout.tsx` `useMediaQuery(theme.breakpoints.down(768))` gives a single pane with back navigation. Verified by reading the code. No viewport test exists. |
+| NFR-8 | PASS | E2E `messaging.spec.ts` "parent → teacher round trip appears in the other open thread within 6 s", re-run by QA (✓ 25.6 s total). No websocket code (grep). |
+| NFR-9 | PASS | Grep of messaging server and UI code: no websocket, typing, reaction or WebRTC code, and no broadcast feature. No files outside the ownership matrix were changed for this feature. |
+| NFR-10 | **FAIL** | SH-13's own test requirements are met: the contact matrix, notification collapse, quiet-hours deferral and edit revision tests all exist and pass, as do both Playwright scenarios. Lint ✅ and typecheck ✅. **The "existing suite stays green" clause fails.** The full run is 505/510, and `lockout.test.ts` does not load. All are pre-existing (see Headline 1). |
+| NFR-11 | PASS | `reviewReport` audits `safeguarding.report.{review,dismiss}`. `updateUser` audits the flag change. `safeguarding.test.ts` "FR-23/NFR-11" and "FR-2… audited". |
 
-## Recommended actions
-1. **Fix Headline 1:** in `publishOnce`, run the gradebook upsert after `notify()`, or guard it with try/log. Then rerun `qa-sh9.test.ts` several times.
-2. Triage or quarantine the pre-existing auth/attendance/toast/lockout failures so the suite can be green (carried over from SH-9/SH-10).
-3. Restore a term for the current academic year in the dev DB (the e2e specs require one), or make the specs create their own term.
-4. Optional: add runtime tests for `scales-service.ts` and the CSV export, and a load test for NFR-3.
+## Headline findings
+
+### 1. Full suite not green. All failures predate SH-13 (NFR-10)
+| Failing test | Status |
+|---|---|
+| `attendance-qa.test.ts` FR-22, FR-10/FR-19 | Pre-existing (in the SH-9, SH-10 and SH-11 lists) |
+| `auth.test.ts` "rate limits after 10 attempts per IP" (timeout) | Pre-existing, flaky (SH-11 list) |
+| `auth-forms.test.tsx` ForgotPasswordForm focus | Pre-existing (SH-11 list) |
+| `useToast.test.tsx` auto-hide | Pre-existing (SH-11 list) |
+| `lockout.test.ts` (file fails to load, next-auth ESM) | Pre-existing (SH-11 list) |
+
+None of these files import messaging code. The SH-11 regression in `qa-sh9.test.ts` passed in this run.
+
+### 2. No SH-13 defects found
+QA found no stubs, `TODO`s or placeholder logic in any of the 67 owned files. All of them exist and are non-empty.
+
+## Observations (non-blocking)
+- **O-1 (NFR-3, low):** `Message.sender` is `onDelete: Cascade`. If a User row were ever hard-deleted, that user's messages and revisions would be deleted with it. No code in `src/` hard-deletes users today (users are archived). Consider `Restrict` if retention must hold against DB-level deletes.
+- **O-2:** `canMessage()` in `contact-rules.ts` is exported but nothing calls it. Every caller uses `canMessageWith` or `messageableIds`. Delete it, or keep it as the documented FR-5 entry point.
+- **O-3:** `unreadCount` (the sidebar badge) includes muted conversations. The PRD does not specify this. Product should confirm the behaviour.
+- **O-4:** FR-16, FR-17, NFR-7 and the safeguarding/quiet-hours UIs have no automated UI tests. They were verified by reading the code. See `coverage-report.md` for suggested tests.
+- **O-5:** The FR-29 seed could not be fully verified on the dev DB because it has 0 courses. Re-seed a DB with courses to confirm the Pat↔Tom, MATH-7A and reported threads.
+
+## Gates run by QA
+| Check | Result |
+|---|---|
+| `npm run typecheck` | ✅ clean (including the QA test files) |
+| `npm run lint` | ✅ no warnings or errors |
+| SH-13 unit plus integration (`TEST_DATABASE_URL` = dev DB) | ✅ 90/90 (Dev 69 + QA 21) |
+| E2E `tests/e2e/messaging.spec.ts` (`APP_URL=http://localhost:3100`, fresh `next dev`) | ✅ 2/2. The server was stopped afterwards. |
+| Anonymous probes of 9 messaging/safeguarding endpoints and 1 page | ✅ 401 `UNAUTHENTICATED` / 307 → `/login` |
+| Full `vitest run` | ❌ 505/510 plus 1 file load error, all pre-existing (Headline 1) |
+| Ownership matrix (67 files) | ✅ all present and non-stub |
+
+## QA test files added
+- `tests/integration/messaging/qa-sh13.test.ts`: 12 tests covering FR-6/8/9/10/14/18/21/27/31/32 and NFR-2.
+- `tests/unit/messaging/composer-qa.test.tsx`: 9 tests covering the FR-11 composer, the FR-7 blocked state, and the FR-11/12/21/22 validators.
+
+QA changed no product code.

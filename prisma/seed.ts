@@ -163,6 +163,7 @@ async function main() {
   await seedAssignments();
   await seedQuizzes();
   await seedGradebook();
+  await seedMessaging();
 }
 
 /** Deterministic PRNG so every seed run produces the same attendance (FR-38). */
@@ -632,6 +633,112 @@ async function seedGradebook() {
     const { generateDrafts } = await import('../src/server/report-cards/report-card-service');
     logger.info('Seed: 7A Semester 1 report card drafts', await generateDrafts({ id: admin.id, role: 'ADMIN' }, { termId: s1.id, studentIds: members.map((m) => m.studentId) }));
   }
+}
+
+/**
+ * PRD-13 FR-29: Alice is the safeguarding lead, Pat↔Sam are linked, and four demo threads.
+ * Each thread is idempotent (looked up by subject) and checked against the real contact rules;
+ * a block whose prerequisites are missing is skipped with logger.warn, never forced.
+ */
+async function seedMessaging() {
+  const { loadRelations, checkNewConversation } = await import('../src/server/messaging/contact-rules');
+  const byEmail = (email: string) => prisma.user.findUnique({ where: { email }, select: { id: true, role: true } });
+  const [alice, tom, tina, sam, pat] = await Promise.all(
+    ['admin@schoolhub.test', 'teacher@schoolhub.test', 'teacher2@schoolhub.test', 'student@schoolhub.test', 'parent@schoolhub.test'].map(byEmail),
+  );
+
+  if (alice?.role === 'ADMIN') await prisma.user.update({ where: { id: alice.id }, data: { isSafeguardingLead: true } });
+  else logger.warn('Seed: Alice Admin not found, skipping safeguarding lead');
+
+  if (pat && sam) {
+    const hasPrimary = (await prisma.parentStudentLink.count({ where: { studentId: sam.id, isPrimary: true } })) > 0;
+    await prisma.parentStudentLink.upsert({
+      where: { parentId_studentId: { parentId: pat.id, studentId: sam.id } },
+      update: {},
+      create: { parentId: pat.id, studentId: sam.id, relationship: 'GUARDIAN', isPrimary: !hasPrimary },
+    });
+  }
+
+  type U = { id: string; role: Role };
+  const HOUR = 3_600_000;
+  /** Creates one thread; messages are [participant index, body], oldest first. Returns message ids or null if skipped. */
+  async function thread(subject: string, members: (U | null | undefined)[], messages: [number, string][]): Promise<string[] | null> {
+    if (members.some((m) => !m)) {
+      logger.warn('Seed: messaging prerequisites missing, skipping thread', { subject });
+      return null;
+    }
+    if (await prisma.conversation.findFirst({ where: { subject }, select: { id: true } })) return null;
+    const [creator, ...others] = members as U[];
+    const rel = await loadRelations(members.map((m) => m!.id));
+    const problem = checkNewConversation(creator, others.map((o) => o.id), rel);
+    if (problem) {
+      logger.warn('Seed: thread would break contact rules, skipping', { subject, problem });
+      return null;
+    }
+    const start = Date.now() - messages.length * 2 * HOUR;
+    const at = (i: number) => new Date(start + i * 2 * HOUR);
+    const last = at(messages.length - 1);
+    return prisma.$transaction(async (tx) => {
+      const c = await tx.conversation.create({
+        data: { subject, createdById: creator.id, involvesStudent: members.some((m) => m!.role === 'STUDENT'), lastMessageAt: last, createdAt: at(0) },
+      });
+      const ids: string[] = [];
+      for (const [i, [who, body]] of messages.entries()) {
+        ids.push((await tx.message.create({ data: { conversationId: c.id, senderId: members[who]!.id, body, createdAt: at(i) } })).id);
+      }
+      // Whoever sent the last message has read everything; everyone else has one unread.
+      const lastSender = members[messages[messages.length - 1][0]]!.id;
+      await tx.conversationParticipant.createMany({
+        data: (members as U[]).map((m) => ({ conversationId: c.id, userId: m.id, lastReadAt: m.id === lastSender ? last : at(messages.length - 2) })),
+      });
+      return ids;
+    });
+  }
+
+  let created = 0;
+  if (await thread("Sam's homework", [pat, tom], [
+    [0, "Hi Mr Teacher, Sam has been finding this week's fractions homework hard. Is there anything we can do at home?"],
+    [1, 'Thanks for letting me know. Sam is doing well in class — practising equivalent fractions for 10 minutes a day would help.'],
+    [0, 'That sounds manageable. Are there worksheets you would recommend?'],
+    [1, "I've put two extra worksheets in the course materials under Week 3."],
+    [0, "Great, we'll work through them this weekend."],
+    [1, "Perfect. Let me know how it goes — I'll check in with Sam on Monday."],
+  ])) created++;
+
+  const math = await prisma.course.findFirst({
+    where: { code: 'MATH-7A', archivedAt: null, academicYear: { isCurrent: true } },
+    select: { teacherId: true, enrollments: { where: { status: 'ACTIVE', student: { status: 'ACTIVE' } }, select: { studentId: true }, orderBy: { studentId: 'asc' }, take: 4 } },
+  });
+  const mathTeacher = math ? await prisma.user.findUnique({ where: { id: math.teacherId }, select: { id: true, role: true } }) : null;
+  const four = math?.enrollments.length === 4 ? math.enrollments.map((e) => ({ id: e.studentId, role: 'STUDENT' as const })) : null;
+  if (!four) logger.warn('Seed: MATH-7A with 4 ACTIVE students not found, skipping group thread');
+  else if (await thread('MATH-7A fractions practice', [mathTeacher, ...four], [
+    [0, "Hi all — I've set up this group for questions about the fractions practice set due Friday."],
+    [1, 'Do we need to simplify every answer?'],
+    [0, 'Yes please, always give answers in their simplest form.'],
+  ])) created++;
+
+  if (await thread('Staff room', [tina, tom], [
+    [0, 'Are you still okay to swap duty on Thursday?'],
+    [1, 'Yes, Thursday works. I can take the lunch slot.'],
+    [0, "Thanks! I'll cover your Friday morning in return."],
+    [1, 'Deal — see you at the staff meeting.'],
+  ])) created++;
+
+  // Student↔teacher thread with one OPEN report (teacher reports the student's message).
+  const reported = await thread('Quiz retake', [sam, tom], [
+    [0, 'Can I retake the quiz? I was off sick.'],
+    [1, "Yes — you can retake it on Wednesday at lunch."],
+    [0, 'This is so unfair, everyone else got extra time and you never help me!!!'],
+    [1, "I understand you're frustrated. Let's talk about it on Wednesday."],
+  ]);
+  if (reported && tom) {
+    created++;
+    await prisma.messageReport.create({
+      data: { messageId: reported[2], reporterId: tom.id, reason: 'Student seems very upset — flagging for pastoral follow-up.' },
+    });
+  }
+  logger.info('Seed: demo messaging ready', { threadsCreated: created });
 }
 
 async function disconnectAll() {

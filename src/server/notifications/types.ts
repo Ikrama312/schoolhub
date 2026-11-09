@@ -166,6 +166,23 @@ export const NOTIFICATION_TYPES = {
     mandatoryInApp: false,
     roles: ['STUDENT', 'PARENT'],
   },
+  // PRD-13 messaging (FR-19, FR-26). message.received email is deferred via PendingMessageEmail (FR-20).
+  'message.received': {
+    label: 'New message',
+    description: 'Someone sent you a direct message.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ALL,
+  },
+  'message.reported': {
+    label: 'Message reported',
+    description: 'A message was reported for safeguarding review.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: true,
+    roles: ['ADMIN'],
+  },
 } as const satisfies Record<string, NotificationTypeDef>;
 
 export type NotificationType = keyof typeof NOTIFICATION_TYPES;

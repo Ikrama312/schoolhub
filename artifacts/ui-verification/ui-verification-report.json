@@ -1,63 +1,224 @@
 {
-  "ticketId": "SH-11",
-  "timestamp": "2026-11-09T15:23:52Z",
+  "ticketId": "SH-13",
+  "timestamp": "2026-11-09T18:26:55Z",
   "phase": "ui-verification",
   "version": "1.0",
   "status": "complete",
-  "summary": {
-    "uiFacingRequirements": 31,
-    "findingsTotal": 34,
-    "pass": 32,
-    "fail": 2,
-    "blocked": 0,
-    "minorObservations": 2,
-    "additionalFindings": {
-      "UIV-1": "FAIL (moderate): at 375 px the on-screen report card (/report-cards/[id]/print) overflows. The Courses table is wider than the card, so the Grade and Comment columns spill past the card border and the page scrolls horizontally (scrollWidth > innerWidth). Students and parents open this page from their phones (FR-36). Printing on A4 is unaffected. Fix: wrap the Courses table in a TableContainer with overflowX auto, or stack the columns below the sm breakpoint in ReportCardDocument.tsx.",
-      "UIV-2": "FAIL (minor): the course grading-scale Select in Gradebook settings renders blank when the course uses the school default (scaleId ''). The 'School default (Standard A–F)' option exists, but MUI Select shows nothing for an empty value unless displayEmpty is set (plus InputLabel shrink). A teacher can't see which scale applies. Fix: slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }} on the TextField in GradebookSettingsClient.tsx.",
-      "UIV-3": "minor (a11y): the filled error chip 'Weights total 90 / 100' is close to invisible (pale red text on a pale red fill, see teacher-gradebook-settings-invalid-1280.png). axe reports color-contrast (serious) x2 on the settings page. The red helper text next to Save ('Weights must total 100 before saving.') still tells the user what is wrong.",
-      "UIV-4": "minor (a11y/layout): at 375 px the expanded course card's item table on /grades is horizontally scrollable. The % and Comment columns start off-screen, and axe reports scrollable-region-focusable (serious) x1 because the scroll container cannot receive keyboard focus.",
-      "UIV-5": "minor (a11y, pre-existing pattern): axe reports empty-table-header (minor) on the DataGrids. This is the unlabeled first header cell of the column-group row (gradebook) and the scales grid.",
-      "UIV-6": "not exercised in the UI (covered by QA unit, integration or e2e tests): arrow-key navigation between cells (cells were clicked, then digits+Enter, E, M and Delete were used); a synced quiz cell opening its attempt (the assignment path was verified); virtualisation at 60x120 and the NFR-2 timings; DRAFT-only regeneration (FR-31); the grade-level filter on the roster (the section filter was used); the grade.posted notification; and the green (>=80) card colour, since only red and amber cards were rendered on the student view.",
-      "ENV-1": "The dev DB's current academic year (2026-2027) has no terms. Gradebook, grades and report cards are unusable until an admin adds terms. The gradebook tab shows a clear info Alert in that state (teacher-gradebook-no-terms-1280.png). Verification used a temporary tagged term.",
-      "ENV-2": "Not UI, for QA/dev: the DB holds 9 orphaned TermGradeOverride rows whose courses no longer exist (created 13:36–14:27Z, before this phase ran). Several carry 'A pleasure to teach', which comes from tests/e2e/report-cards.spec.ts, and that spec's cleanup does not delete overrides. TermGradeOverride has no FK to Course, so course deletion does not cascade. This phase left them in place."
-    }
-  },
-  "method": "Production build (`npm run build`, exit 0) served with `next start -p 3300` against local Postgres :5433. The existing :3000/:3001 servers were left alone. A throwaway Playwright driver outside the repo (/tmp/uiv-sh11/driver.cjs) created tagged fixtures 'uiv-sh11': an admin, a homeroom teacher, students Sam Aardvark and Zed Zebra in section uiv-sh11, an outsider student, a parent linked to both students, and courses UIV Maths (Homework 40 / Exams 60) and UIV English (no categories). Maths items were HW one /20, HW two /10, Exam /100, a hidden item, and a synced assignment item 'UIV Essay' (Zed returned late, 8/10). The fixtures also included a temporary term, created after first checking the no-terms state. The driver signed in per role with bypassCSP (as the e2e suite does) and drove every SH-11 surface: teacher and admin at 1280x800, student and parent at 375x667, with extra 375/1280 checks. State changes were checked against the DB, print media was emulated, and PDFs were rendered to check A4 page size and page count. A second probe (/tmp/uiv-sh11/nav.cjs) confirmed the sidebar entries for STUDENT and PARENT at both widths. All fixtures were removed afterwards (verified: 0 tagged users, courses, terms or sections remain). No console or page errors were captured apart from the expected 404s on the access-denial checks. figma-readiness.json does not exist, so the checks compare against requirements.json only. Screenshots and PDFs are in screenshots/ and the raw probe output is in uiv-raw.json.",
   "findings": [
-    { "requirementId": "FR-2", "surface": "Assignment editor and quiz editor Settings: 'Gradebook category' select", "verdict": "PASS", "notes": "Both editors render a category select with options None / Homework / Exams, loaded from the course's categories. The assignment editor shows the saved value (Homework). Screenshots: teacher-assignment-editor-category-1280.png, teacher-quiz-editor-category-1280.png." },
-    { "requirementId": "FR-9", "surface": "Gradebook grid: synced vs manual cells", "verdict": "PASS", "notes": "Synced (assignment) cells are not editable. Clicking one navigates to the source instead of entering edit mode. PUT /api/grade-items/<synced>/grades/<student> returns 400 'Only the comment can be changed here. Edit this item at its source.' Manual cells are fully editable." },
-    { "requirementId": "FR-14", "surface": "Term override (letter only)", "verdict": "PASS", "notes": "A letter-only override (B) kept the computed percent. The Term cell shows '78.0% B *'. The DB row has percent null, letter B, comment saved. The student view and the report card show 78.0 B." },
-    { "requirementId": "FR-15", "surface": "Gradebook Term column (golden case)", "verdict": "PASS", "notes": "Entering HW 18/20 and 9/10 (Homework 40%) and Exam 70/100 (Exams 60%) by keyboard gave category averages 90.0 / 70.0 and Term '78.0% C+' (bold). The ungraded synced item and the hidden item were correctly excluded. The student Grades tab showed the same 78.0% (letter B after the later letter-only override)." },
-    { "requirementId": "FR-16", "surface": "/admin/grading-scales + ScaleEditorDialog", "verdict": "PASS", "notes": "Lists 'Standard A–F' with a Default chip and the band summary. The edit dialog shows 12 bands (letter, min %, GPA, descriptor). Validation shown inline: 'Letters must be unique' and 'Must be lower than the band above'. A valid Pass 50 / Fail 0 scale was created and then deleted. Delete is disabled for the default scale. The nav entries 'Grading scales' and 'Report cards' appear under Administration." },
-    { "requirementId": "FR-17", "surface": "/courses/[id]/gradebook/settings", "verdict": "FAIL", "notes": "Categories editor (name, weight, drop lowest, up/down/remove) works. The live chip updates 'Weights total 100 / 100' → '90 / 100', Save becomes disabled with a red 'Weights must total 100 before saving.', and the API returns 400 for a total of 90. FAIL because of UIV-2: the grading-scale Select renders blank instead of showing 'School default (Standard A–F)'. Also UIV-3: the invalid-total chip is nearly unreadable (axe color-contrast serious x2)." },
-    { "requirementId": "FR-18", "surface": "Course 'Gradebook' tab (MIT DataGrid)", "verdict": "PASS", "notes": "The tab is visible to the teacher. A term selector shows '(current)'. Column groups are 'Homework (40%)', 'Exams (60%)' and 'Averages'. Each item header shows a source icon, title, due date and /max (e.g. 'HW one 6 Nov · /20'), and hidden items get an eye-off icon with dimmed text. After the items come the category % columns and a bold Term column. Students are sorted by last name (Aardvark, Zebra). No pinned columns. At 375 the grid scrolls horizontally inside its own scroller (1410 vs 325 px) and the page does not overflow. Virtualisation at 60x120 was not load-tested (UIV-6)." },
-    { "requirementId": "FR-19", "surface": "Gradebook cell rendering", "verdict": "PASS", "notes": "Cells render the score ('18'), 'EX', 'M' (bold red, rgb(185,28,28)) and '—'. The late synced submission shows '8' with a clock icon (aria-label 'Late')." },
-    { "requirementId": "FR-20", "surface": "Gradebook keyboard editing", "verdict": "PASS", "notes": "Digits + Enter saved scores (PUT per cell). E → EX, M → M and Delete → '—', each with one PUT, and DB rows match (excused true, then cleared). There were 6 grade.update audit rows. Entering 25 on a /10 item gave a red cell outline and the toast 'Score must be between 0 and 10.', with nothing saved. Arrow-key movement was not exercised (UIV-6)." },
-    { "requirementId": "FR-21", "surface": "Gradebook: click synced cell", "verdict": "PASS", "notes": "Clicking Zed's 'UIV Essay' cell navigated to /courses/<id>/assignments/<assignmentId>/grade?studentId=<zed>. The quiz-attempt path was not exercised (UIV-6)." },
-    { "requirementId": "FR-22", "surface": "Add manual item dialog", "verdict": "PASS", "notes": "The dialog has Title*, Category (Uncategorised default), Max points*, Date (DatePicker, with an explanatory helper) and Term (defaults to the selected term). Submitting empty shows 'Title is required'. Creating 'UIV Oral presentation' /10 added a column immediately and a MANUAL GradeItem in the right term." },
-    { "requirementId": "FR-23", "surface": "Row action 'Override term grade / comment' dialog", "verdict": "PASS", "notes": "A tune icon per student row (aria-label 'Override term grade for Aardvark, Sam') opens a dialog with Percent, Letter (Computed + scale letters) and 'Teacher comment (appears on the report card)'. Saving closed the dialog with a 'Term grade saved' toast and updated the Term cell with an '*'." },
-    { "requirementId": "FR-24", "surface": "Item column menu", "verdict": "PASS", "notes": "The menu shows 'Hide from students', 'Set ungraded to missing' and 'Item statistics', followed by the stock Filter / Hide column / Manage columns. Statistics dialog: counted scores, average, median, high and low (18 / 20). Hide → eye-off icon in the header and isVisible=false. Show restores it. 'Set ungraded to missing' on the past-due Exam turned Zed's cell to M and his term to 32.0% F (correct: 0.4×80 + 0.6×0)." },
-    { "requirementId": "FR-25", "surface": "Export CSV", "verdict": "PASS", "notes": "The link returns 200 text/csv as an attachment ('uiv-sh11-uiv-sh11_term-gradebook.csv'). Columns: Last name, First name, each item (/max), category %, Term %, Letter. Values match the grid, including EX, M, the override letter B, and 32.0 F." },
-    { "requirementId": "FR-26", "surface": "Student 'Grades' tab (/students/[id]/grades) and the shared StudentGradesView", "verdict": "PASS", "notes": "One card per course with a percent+letter chip, descriptor and item count. Colours: English 50.0% F → red (colorError), Maths 78.0% B → amber (colorWarning). Green was not rendered (UIV-6). Expanding shows category subtotal chips ('Homework (40%): 90.0%', 'Exams (60%): 70.0%', 'Uncategorised: —') and an item table with title, category, score/max, %, comment and flag chips. Hidden items are absent. At 375 the %/Comment columns need horizontal scroll (UIV-4)." },
-    { "requirementId": "FR-27", "surface": "/grades (student + parent) and sidebar nav", "verdict": "PASS", "notes": "Student: page header 'Grades' with the course cards. Parent with 2 linked children: a 'Child' select appears, and switching to Zed loads his cards (Maths 32.0% F, English 65.0% D). The 'Grades' nav entry is present for STUDENT and PARENT at both 1280 and 375 (nav probe)." },
-    { "requirementId": "FR-28", "surface": "Course 'Grades' tab for STUDENT", "verdict": "PASS", "notes": "Course tabs for the student are Overview/Roster/Assignments/Quizzes/Grades, with no Gradebook or Attendance. The tab shows only the UIV Maths card." },
-    { "requirementId": "FR-29", "surface": "/admin/report-cards roster", "verdict": "PASS", "notes": "Term, Grade level and Section filters. The table has Student, Admission no., Section, Status ('Not generated' outlined chip) and Warnings (e.g. '1 course has ungraded items; No teacher comment for uiv-sh11-eng'). The buttons 'Generate drafts (2)', 'Publish all (0)' and 'Print all (0)' reflect counts. axe: no violations. Only the section filter was exercised." },
-    { "requirementId": "FR-30", "surface": "Generate drafts → snapshot / rendered preview", "verdict": "PASS", "notes": "The confirm dialog generated 2 drafts, and the status chips changed to Draft. The preview shows the school name, 'Report card — <term>, 2026-2027 (DRAFT)', student, admission number ('—', none set), grade level, section, homeroom teacher and term dates. Per course it shows subject + course code, teacher, %, letter + descriptor and teacher comment, then the attendance summary (rate/absences/lates) and the grading scale legend. No logo is shown because SchoolSettings.logoUrl is null." },
-    { "requirementId": "FR-31", "surface": "Regenerate drafts", "verdict": "PASS", "notes": "The confirmation copy states 'Published cards are never changed; comments on drafts are kept.' Published cards rendered from their snapshot. Regeneration of a DRAFT after grade edits was not re-driven through the UI (covered by the integration test, UIV-6)." },
-    { "requirementId": "FR-32", "surface": "/report-cards/[id] review page", "verdict": "PASS", "notes": "Homeroom teacher: the homeroom comment is enabled and saved (DB updated), and the principal comment is disabled. Admin: both are enabled, and the principal comment saved. The rendered preview updates with both comments. The teacher does not see Publish/Unpublish." },
-    { "requirementId": "FR-33", "surface": "/report-cards (homeroom list) + TEACHER nav", "verdict": "PASS", "notes": "The teacher nav includes 'Report cards'. The page lists the section's students for the term with Draft chips and warning text, and each row links to the review page." },
-    { "requirementId": "FR-34", "surface": "Publish (single + bulk) / Unpublish", "verdict": "PASS", "notes": "Single publish from the review page, then Unpublish. The confirm button stays disabled until a Reason is entered. After unpublishing, the status is DRAFT and an unpublish audit row exists. 'Publish all (2)' from the roster changed both rows to Published. report_card.published notifications were created for the students and the linked parent (6 total, including the republish)." },
-    { "requirementId": "FR-35", "surface": "/report-cards/[id]/print and /report-cards/print (Print all)", "verdict": "PASS", "notes": "Letterhead, tables and two signature lines (Principal, Homeroom teacher). Under print media the sidebar Drawer, the AppBar and the 'Print / Save as PDF' button are hidden while the card stays visible. The PDF uses an A4 portrait MediaBox (595x842 pt) and one card fits on 1 page. 'Print all' rendered 2 articles, with break-after: page between them, as a 2-page PDF. Screen layout at 1280 is clean. The on-screen 375 layout is broken (UIV-1, reported separately)." },
-    { "requirementId": "FR-35", "surface": "Report card on-screen view at 375 px (phone)", "verdict": "FAIL", "notes": "UIV-1: the Courses table overflows the card. The Grade and Comment columns extend past the Paper border and the page scrolls horizontally. See student-report-card-print-375.png and parent-report-card-print-375.png." },
-    { "requirementId": "FR-36", "surface": "Student 'Report cards' tab (/students/[id]/report-cards)", "verdict": "PASS", "notes": "Before publishing, the student sees 'No report cards yet' (the draft is not listed). After publishing it lists '<term> — 2026-2027, Published 2026-11-09' with a Published chip, and the item opens the print view." },
-    { "requirementId": "FR-37", "surface": "Report card access control", "verdict": "PASS", "notes": "The student requesting their own DRAFT card gets 404 on both the print page and the API. After publishing, the API returns 200 and the page renders. An outsider student (not in the section) gets 404 on the print page and on GET /api/report-cards/:id. The parent and homeroom teacher have access." },
-    { "requirementId": "FR-42", "surface": "GET /api/students/:id/grades + rendered views", "verdict": "PASS", "notes": "The hidden item ('UIV Hidden check', graded 10 for Sam) appears in neither the student UI nor the API response. The ungraded synced item shows '— / 10'. The outsider gets 404 from the API and the /students/<id>/grades page." },
-    { "requirementId": "NFR-5", "surface": "Student/parent privacy (server-side)", "verdict": "PASS", "notes": "Same evidence as FR-37 and FR-42: hidden items and unpublished cards never reach student or parent responses." },
-    { "requirementId": "NFR-8", "surface": "DataGrid MIT tier", "verdict": "PASS", "notes": "Column groups and cell editing are used. No pinned-column DOM (0 pinned elements) and no Pro license watermark." },
-    { "requirementId": "NFR-11", "surface": "Print layout", "verdict": "PASS", "notes": "A4 portrait (@page size A4 portrait), one card per page, app chrome hidden. PDFs are in screenshots/parent-report-card.pdf and screenshots/print-all.pdf." },
-    { "requirementId": "NFR-7", "surface": "All new screens", "verdict": "PASS", "notes": "Every rendered surface is built from MUI components (DataGrid, Select/TextField, Chip, Card/Accordion, Dialog, Table, DatePicker). No unstyled raw HTML was observed." },
-    { "requirementId": "FR-26", "surface": "/grades item table at 375 px", "verdict": "PASS", "notes": "Minor observation UIV-4: % and Comment columns sit in a horizontal scroll region that isn't keyboard-focusable (axe scrollable-region-focusable, serious). The content is reachable by swipe." },
-    { "requirementId": "FR-18", "surface": "Gradebook with no terms (environment)", "verdict": "PASS", "notes": "ENV-1: with no terms, the tab shows an info Alert ('This course’s academic year has no terms yet. An administrator needs to add terms before grades can be recorded.') rather than crashing." }
+    {
+      "requirementId": "FR-9",
+      "surface": "/messages inbox — conversation list (1280)",
+      "verdict": "PASS",
+      "notes": "Two panes. Inbox/Archived tabs and search box. The empty state reads 'No conversations yet'. Rows show the other participant's avatar, the subject or names, relative time and a 'Pam: …' sender preview. Unread rows are bold (font-weight 700) with a count badge (4). Newest activity sorts first. Minor (UIV-4): when the last message is deleted, the preview shows 'This message was deleted' with no sender prefix."
+    },
+    {
+      "requirementId": "FR-10",
+      "surface": "Message thread",
+      "verdict": "PASS",
+      "notes": "Sender avatar, name and time on each message. A day divider ('Monday 9 November 2026') uses the school timezone (America/New_York). The attachment renders through FileList (homework-note.txt, 20 B). The '(edited)' marker and an italic 'This message was deleted' render. Shift+Enter newlines are preserved. Upward infinite scroll (30 per page) was not exercised in the UI because the fixtures had fewer than 30 messages. QA covers it at the service level."
+    },
+    {
+      "requirementId": "FR-11",
+      "surface": "Composer",
+      "verdict": "PASS",
+      "notes": "Enter sends and Shift+Enter adds a newline. The counter '4600 / 5000' appears past 4,500 characters. Send is disabled at 5,001. 'Attach files' with a '0 / 5' limit indicator; the uploaded file is sent as a message attachment."
+    },
+    {
+      "requirementId": "FR-12",
+      "surface": "New-conversation dialog",
+      "verdict": "PASS",
+      "notes": "Multi-select 'To' picker fed by the contacts endpoint and grouped by label, plus 'Subject (optional)' and 'Message'. Send creates the conversation, closes the dialog (0 dialogs open 2.5 s later) and navigates to /messages/[id]."
+    },
+    {
+      "requirementId": "FR-8",
+      "surface": "Recipient picker contact groups",
+      "verdict": "PASS",
+      "notes": "Parent sees \"My child's teachers (Sam)\" and 'School office'. Student sees 'My teachers' and 'School office'. Searching for another student gives 'No one you can message matches'. A direct API create between two students returns 403."
+    },
+    {
+      "requirementId": "FR-6",
+      "surface": "Student reply in a staff-created group",
+      "verdict": "PASS",
+      "notes": "A student can reply in a teacher-created group. Student-to-student creation is refused (see FR-8)."
+    },
+    {
+      "requirementId": "FR-7",
+      "surface": "Composer when the relationship has ended",
+      "verdict": "PASS",
+      "notes": "A student whose enrollment was set to DROPPED sees an info Alert, 'You can no longer send messages in this conversation.', in place of the composer. The API send returns 403. The teacher can still send in the same group."
+    },
+    {
+      "requirementId": "FR-13",
+      "surface": "Thread polling",
+      "verdict": "PASS",
+      "notes": "A message sent in the parent's browser appeared in the teacher's open thread in about 5.35 s (5 s poll), within the 6 s limit. The 30 s list and badge polling was not timed in the UI. The badge cleared after a reload."
+    },
+    {
+      "requirementId": "FR-14",
+      "surface": "Conversation menu: mute / archive / participants",
+      "verdict": "PASS",
+      "notes": "The menu offers Mute, Archive and View participants. Mute is saved (mutedAt set). After a reload, the list row shows a bell-off icon and the menu shows 'Unmute'. Archive shows the toast 'Conversation archived', removes the row from Inbox and lists it under Archived. Unarchive works. The Participants dialog lists names with role chips. Opening the thread sets lastReadAt and clears the sidebar badge. Minor: UIV-3 (the muted icon's aria-label is hidden from assistive tech), UIV-5 (the 'Conversation muted' toast didn't show while an earlier toast was still visible)."
+    },
+    {
+      "requirementId": "FR-14",
+      "surface": "Leave group",
+      "verdict": "PASS",
+      "notes": "A student in a group sees 'Leave group' with a confirm dialog. After leaving, the conversation is gone from the list, and reopening its URL gives 404. The teacher who created this student group is not offered 'Leave group'."
+    },
+    {
+      "requirementId": "FR-15",
+      "surface": "Edit / delete own message",
+      "verdict": "PASS",
+      "notes": "Message options lead to Edit, then an inline editor and Save, then '(edited)'. Delete opens a confirm dialog ('Everyone in the conversation will see \"This message was deleted\"'), then the message shows as deleted. A message older than 15 minutes has no options button, and a late PATCH returns 403."
+    },
+    {
+      "requirementId": "FR-16",
+      "surface": "Student page header actions",
+      "verdict": "PASS",
+      "notes": "Teacher: 'Message parents' on /students/[id] opens the dialog prefilled with the linked parent (Pam Parent). Parent: 'Message teacher' opens the dialog limited to the \"My child's teachers (Sam)\" group."
+    },
+    {
+      "requirementId": "FR-17",
+      "surface": "Course roster 'Message selected students'",
+      "verdict": "PASS",
+      "notes": "The button is disabled until a student is selected. 'Select all' gives the dialog prefilled with both students. Sending creates a 3-participant group with involvesStudent=true."
+    },
+    {
+      "requirementId": "FR-18",
+      "surface": "Sidebar 'Messages' entry + unread badge",
+      "verdict": "PASS",
+      "notes": "Present for PARENT, TEACHER, STUDENT and ADMIN at 1280 px, and in the 375 px hamburger nav. The badge ('N unread conversations') shows for an unread conversation and clears after reading."
+    },
+    {
+      "requirementId": "FR-21",
+      "surface": "Quiet hours section on /account/notifications",
+      "verdict": "PASS",
+      "notes": "'Quiet hours' section with Start and End time fields and a school-timezone hint (America/New_York). 22:00–07:00 (wrapping past midnight) saved and persisted after a reload. No horizontal scroll at 375 px."
+    },
+    {
+      "requirementId": "FR-22",
+      "surface": "Report a message",
+      "verdict": "PASS",
+      "notes": "Message options lead to Report, which opens the 'Report message' dialog with a reason field. Submitting shows the toast 'Reported — the school will review this.'. The user's own messages have no Report item."
+    },
+    {
+      "requirementId": "FR-23",
+      "surface": "/admin/safeguarding Reports queue",
+      "verdict": "PASS",
+      "notes": "The safeguarding lead sees the nav entry. The queue lists the OPEN report with an orange chip. The detail drawer shows the reason, participants, and 5 messages of context either side with the 'Reported' highlight. 'Mark reviewed' is disabled until a note is entered, and the status changes to REVIEWED. A non-lead admin gets no nav entry, the page redirects to /forbidden, and the API returns 403. See FAIL UIV-1 for the drawer header."
+    },
+    {
+      "requirementId": "FR-23",
+      "surface": "Safeguarding report detail drawer — header/Close button",
+      "verdict": "FAIL",
+      "notes": "UIV-1: the temporary right Drawer (z-index drawer=1200) opens beneath the fixed AppBar (z-index drawer+1). The drawer header holding the 'Report' title and the Close button is covered: elementFromPoint at the Close button returns the app bar, and the click times out. The user can only close the drawer with Esc or a backdrop click. Fix: add `sx={{ zIndex: (t) => t.zIndex.modal }}` to the Drawer in SafeguardingReports.tsx:181."
+    },
+    {
+      "requirementId": "FR-24",
+      "surface": "Safeguarding Conversations search + read-only view",
+      "verdict": "PASS",
+      "notes": "The Conversations tab has Participant and Active from/to filters. It lists only student conversations: the student group is listed and the parent↔teacher thread is not. The read-only view has no composer. It shows the deleted body with a 'Deleted <time>' chip, an 'Edited' chip and the original text under 'Earlier versions'. 'Open full conversation' appears only when a student is involved. Without a student, the safeguarding view returns 404."
+    },
+    {
+      "requirementId": "FR-25",
+      "surface": "Safeguarding view audit",
+      "verdict": "PASS",
+      "notes": "Each view added a 'safeguarding.conversation.view' AuditLog row (1→2 in the main run, 2 in the supplementary run)."
+    },
+    {
+      "requirementId": "FR-26",
+      "surface": "message.reported notification to the lead",
+      "verdict": "PASS",
+      "notes": "The safeguarding lead's bell shows an unread badge (1) after the report. Seen in the screenshots; the notification payload was not inspected in the UI."
+    },
+    {
+      "requirementId": "FR-2",
+      "surface": "isSafeguardingLead on the admin user form",
+      "verdict": "BLOCKED",
+      "notes": "There is no admin user edit form in this codebase. ADR-11, accepted at intake, makes PATCH /api/users/:id the only way to set the flag, so there was nothing to render. QA verified the flag at the API level."
+    },
+    {
+      "requirementId": "NFR-7",
+      "surface": "Responsive single pane below 768 px",
+      "verdict": "PASS",
+      "notes": "At 375 px, /messages shows only the list, and /messages/[id] shows only the thread with a 'Back to conversations' arrow that returns to the list. No horizontal page scroll (0 px)."
+    },
+    {
+      "requirementId": "NFR-5",
+      "surface": "MUI-only UI",
+      "verdict": "PASS",
+      "notes": "All rendered surfaces use MUI components: List, Tabs, Autocomplete, Dialog, Drawer, DataGrid, Alert, Chip and Snackbar. No unstyled raw HTML seen."
+    },
+    {
+      "requirementId": "NFR-8",
+      "surface": "Near-real-time delivery",
+      "verdict": "PASS",
+      "notes": "Same evidence as FR-13: about 5.35 s, within the 6 s limit, with no websockets."
+    }
   ],
-  "blockedReason": null
+  "blockedReason": null,
+  "summary": {
+    "total": 25,
+    "pass": 23,
+    "fail": 1,
+    "blocked": 1
+  },
+  "defects": [
+    {
+      "id": "UIV-1",
+      "severity": "moderate",
+      "requirementId": "FR-23",
+      "file": "src/components/messaging/SafeguardingReports.tsx",
+      "line": 181,
+      "summary": "The report detail drawer opens under the fixed AppBar, so the 'Report' title and Close button are hidden and can't be clicked",
+      "fix": "Add sx={{ zIndex: (t) => t.zIndex.modal }} to the Drawer"
+    }
+  ],
+  "observations": [
+    {
+      "id": "UIV-2",
+      "type": "a11y",
+      "detail": "axe on /messages and /account/notifications: list (serious) x1-2, because ListItemButton renders as <a> directly inside <ul> without <li>. Also heading-order (moderate) and region (moderate); the region rule is an app-wide pattern. /admin/safeguarding gave color-contrast (serious) x1 in one of the runs."
+    },
+    {
+      "id": "UIV-3",
+      "type": "a11y",
+      "detail": "The muted icon in a conversation row has aria-label='Muted', but MUI SvgIcon sets aria-hidden without titleAccess, so screen readers don't announce the muted state. Use titleAccess=\"Muted\"."
+    },
+    {
+      "id": "UIV-4",
+      "type": "content",
+      "detail": "The list preview for a deleted last message is 'This message was deleted' with no 'sender:' prefix. Product should decide whether it should read 'Pam: This message was deleted'."
+    },
+    {
+      "id": "UIV-5",
+      "type": "ux",
+      "detail": "The 'Conversation muted' toast did not appear while the earlier 'Reported…' toast was still showing (shared toast behaviour). The mute itself succeeded."
+    },
+    {
+      "id": "UIV-6",
+      "type": "coverage",
+      "detail": "Not exercised in the UI: upward infinite scroll at 30 per page, 30 s list/badge poll timing, the 25-participant cap message, and deferred email delivery (FR-20). QA covers these at the service level."
+    },
+    {
+      "id": "ENV-1",
+      "type": "environment",
+      "detail": "Production CSP (script-src 'self', next.config.js) blocks Next's inline hydration scripts under `next start`. This is pre-existing (ADR-4), and the existing E2E specs use bypassCSP. Verification used bypassCSP: true. Without it, no client UI hydrates in production."
+    },
+    {
+      "id": "ENV-2",
+      "type": "environment",
+      "detail": "The in-memory per-IP login rate limit (10 per window) forced a server restart between driver runs. Expected behaviour."
+    }
+  ],
+  "method": {
+    "build": "npm run build (exit 0), served with next start -p 3300 against Postgres :5433. The :3000 and :3001 servers were left untouched.",
+    "driver": "Throwaway Playwright scripts outside the repo: /tmp/uiv-sh13/driver.cjs and supp.cjs. Tagged fixtures uiv-sh13/uiv-sh13s: safeguarding-lead admin, non-lead admin, teacher, parent linked to student 1, 2 students, and 1 course. All were removed afterwards (0 remaining).",
+    "viewports": [
+      "1280x800",
+      "375x667"
+    ],
+    "designReference": "figma-readiness.json is absent, so the comparison is against requirements.json only.",
+    "rawResults": "uiv-raw.json"
+  }
 }

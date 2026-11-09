@@ -1,83 +1,44 @@
 {
-  "ticketId": "SH-12",
-  "timestamp": "2026-11-09T16:40:31.636Z",
-  "succeeded": false,
+  "ticketId": "SH-13",
+  "timestamp": "2026-11-09T18:27:37.725Z",
+  "succeeded": true,
   "phases": {
-    "intake": {
-      "succeededCount": 1,
-      "failedCount": 0,
-      "cost": {
-        "totalUsd": 0.7724338000000001,
-        "tokens": {
-          "input": 24,
-          "output": 15811,
-          "cacheRead": 544059,
-          "cacheWrite": 55180
-        }
-      }
-    },
-    "architect": {
-      "succeededCount": 4,
-      "failedCount": 0,
-      "cost": {
-        "totalUsd": 2.8389604,
-        "tokens": {
-          "input": 72,
-          "output": 57789,
-          "cacheRead": 1654187,
-          "cacheWrite": 234555
-        }
-      }
-    },
-    "dev-planning": {
-      "succeededCount": 1,
-      "failedCount": 0,
-      "cost": {
-        "totalUsd": 0.8641557999999998,
-        "tokens": {
-          "input": 20,
-          "output": 14657,
-          "cacheRead": 610959,
-          "cacheWrite": 80120
-        }
-      }
-    },
     "dev": {
-      "succeededCount": 0,
-      "failedCount": 1,
+      "succeededCount": 1,
+      "failedCount": 0,
       "cost": {
-        "totalUsd": 0,
+        "totalUsd": 0.903424,
         "tokens": {
-          "input": 0,
-          "output": 0,
-          "cacheRead": 0,
-          "cacheWrite": 0
+          "input": 58,
+          "output": 11223,
+          "cacheRead": 1901935,
+          "cacheWrite": 59669
         }
       }
     },
     "qa": {
-      "succeededCount": 0,
-      "failedCount": 1,
+      "succeededCount": 1,
+      "failedCount": 0,
       "cost": {
-        "totalUsd": 0,
+        "totalUsd": 2.3606016000000003,
         "tokens": {
-          "input": 0,
-          "output": 0,
-          "cacheRead": 0,
-          "cacheWrite": 0
+          "input": 90,
+          "output": 39970,
+          "cacheRead": 4335228,
+          "cacheWrite": 129647
         }
       }
     },
     "ui-verification": {
-      "succeededCount": 0,
-      "failedCount": 1,
+      "succeededCount": 1,
+      "failedCount": 0,
       "cost": {
-        "totalUsd": 0,
+        "totalUsd": 3.059373,
         "tokens": {
-          "input": 0,
-          "output": 0,
-          "cacheRead": 0,
-          "cacheWrite": 0
+          "input": 94,
+          "output": 50212,
+          "cacheRead": 4275950,
+          "cacheWrite": 231103
         }
       }
     }
@@ -127,6 +88,6 @@
     "verdict": "Repeated \"Unknown\" errors — check artifacts/telemetry/api-retries.jsonl for details."
   },
   "cost": {
-    "totalUsd": 4.47555
+    "totalUsd": 6.3233986
   }
 }

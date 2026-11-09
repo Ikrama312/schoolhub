@@ -1,6 +1,7 @@
 import type { Prisma, Role, UserStatus } from '@prisma/client';
 import { prisma } from '@/server/db';
 import { AppError } from '@/server/http';
+import { audit } from '@/server/audit';
 import { createToken, INVITE_TTL } from '@/server/auth/tokens';
 import { authLink, sendAuthEmail } from '@/server/auth/email';
 import { linkParentToStudentTx } from '@/server/services/userLinks';
@@ -81,6 +82,7 @@ function toUserDto(user: UserWithProfile) {
     role: user.role,
     status: user.status,
     phone: user.phone,
+    isSafeguardingLead: user.isSafeguardingLead,
     profile: buildProfile(user),
   };
 }
@@ -169,10 +171,21 @@ export async function createUser(input: CreateUserInput) {
   return getUserWithProfile(prisma, userId);
 }
 
-export async function updateUser(id: string, input: UpdateUserInput) {
-  return prisma.$transaction(async (tx) => {
+export async function updateUser(id: string, input: UpdateUserInput, options: { actorId?: string } = {}) {
+  let leadChange: { old: boolean; new: boolean } | null = null;
+  const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.user.findUniqueOrThrow({ where: { id } });
     const emailChanged = input.email !== undefined && input.email !== existing.email;
+
+    // PRD-13 FR-2 / ADR-11: the flag is meaningful only for ADMIN.
+    if (input.isSafeguardingLead === true && existing.role !== 'ADMIN') {
+      throw new AppError('VALIDATION_ERROR', 'Only administrators can be safeguarding leads.', {
+        reason: 'SAFEGUARDING_LEAD_REQUIRES_ADMIN',
+      });
+    }
+    if (input.isSafeguardingLead !== undefined && input.isSafeguardingLead !== existing.isSafeguardingLead) {
+      leadChange = { old: existing.isSafeguardingLead, new: input.isSafeguardingLead };
+    }
 
     await tx.user.update({
       where: { id },
@@ -181,6 +194,7 @@ export async function updateUser(id: string, input: UpdateUserInput) {
         lastName: input.lastName,
         email: input.email,
         phone: input.phone,
+        isSafeguardingLead: input.isSafeguardingLead,
       },
     });
 
@@ -213,6 +227,11 @@ export async function updateUser(id: string, input: UpdateUserInput) {
 
     return getUserWithProfile(tx, id);
   });
+  // NFR-11: old → new in user.update metadata (the route's own audit row lists changed fields).
+  if (leadChange) {
+    await audit({ actorId: options.actorId, action: 'user.update', entityType: 'User', entityId: id, metadata: { isSafeguardingLead: leadChange } });
+  }
+  return result;
 }
 
 // ---- list / detail (FR-2, FR-3, FR-11, NFR-2) ----

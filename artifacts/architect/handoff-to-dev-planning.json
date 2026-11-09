@@ -1,11 +1,11 @@
 {
-  "ticketId": "SH-12",
-  "timestamp": "2026-11-09T19:35:00Z",
+  "ticketId": "SH-13",
+  "timestamp": "2026-11-09T22:42:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "status": "complete",
-  "endpointCount": 12,
+  "endpointCount": 23,
   "blockers": [],
   "artifacts": [
     "artifacts/architect/tech-stack-decisions.md",
@@ -14,13 +14,12 @@
     "artifacts/architect/api-contracts.json"
   ],
   "notes": [
-    "12 endpoints across 10 route files (matching system-design §2.6 and the PRD API table, FR-34), plus 2 existing endpoints extended without contract change: /api/internal/email/dispatch (publishDueAnnouncements, FR-27) and /api/files/:id (the 'announcement' context, FR-30).",
-    "Base path is /api, not /api/v1. Envelopes, pagination (default 20, max 100; manage max 50) and error codes come from src/server/http.ts. RATE_LIMITED 429 already exists in ApiErrorCode.",
-    "Error policy: targeting violations → 403 (AC-3). Non-member, not-visible or non-owner access to a specific announcement → 404. State conflicts (author editing ARCHIVED, ack without requiresAck, remind when !requiresAck) → 409. Second reminder within 24h → 429 with details.retryAfter (FR-25, ADR-4).",
-    "Contract decisions beyond system-design: zero-recipient publish returns VALIDATION_ERROR with details.reason='NO_RECIPIENTS'. PATCH mode=draft on a PUBLISHED row is 409 (archive instead). Archive is idempotent. Ack also sets readAt if it was empty. Remind with nobody left still claims the throttle and returns notified: 0. On feed page 1, pinned items are lifted to the top and meta.total excludes them. Manage accepts an optional ?status filter on displayStatus. Percentages are integers rounded half-up, or null when the denominator is 0.",
-    "Schema addition: Announcement.lastRemindedAt DateTime? (FR-25), already listed in system-design §1.",
-    "NotifyInput gains an optional mandatoryInApp override (system-design A9) so announcement.published stays a single type key (FR-26).",
-    "Shared DTOs (AudienceRow, AnnouncementInput, FeedItem, AnnouncementDetail, AudienceCounts) are in api-contracts.json `components`. src/lib/validators/announcements.ts should mirror them."
+    "There are 23 endpoints. 21 are new routes from system-design §3.3. 2 are existing routes that get extended: PATCH /api/users/:id (isSafeguardingLead, FR-2) and POST /api/internal/email/dispatch (processPendingMessageEmails, FR-20). The file routes gain the 'message' context with no contract change (FR-27).",
+    "The base path is /api, not /api/v1. Envelopes and error codes come from src/server/http.ts. VALIDATION_ERROR maps to 400, not 422, so the 422 mentioned for isSafeguardingLead in system-design §1 should be read as 400 VALIDATION_ERROR.",
+    "Error policy: a non-participant or a participant who has left gets 404. Contact rules, relationship ended, the edit window and safeguarding access give 403 with details.reason. A duplicate OPEN report or reviewing a non-OPEN report gives 409. The rate limit gives 429 with details.retryAfterMs.",
+    "Decisions made beyond system-design: leave refusals use details.reason 'ONE_TO_ONE' or 'CREATOR_OF_STUDENT_GROUP'. A review requires a note; a dismissal does not. Safeguarding GET /conversations/:id returns 404 when involvesStudent is false. The message poll returns hasMore only in initial and 'before' mode. The dispatch summary gains messageEmails {sent, deferred, dropped}.",
+    "Carried risks from system-design §1: there is no user-admin UI for isSafeguardingLead; mui-mcp must be used in dev (NFR-5); the rate limiter is per-process; students/[id] needs a new layout.tsx.",
+    "src/lib/validators/messaging.ts should mirror the DTOs in api-contracts.json `components`."
   ],
   "nextPhase": "dev-planning"
 }

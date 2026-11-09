@@ -10,6 +10,8 @@ import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import GradingOutlinedIcon from '@mui/icons-material/GradingOutlined';
 import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
 import StraightenOutlinedIcon from '@mui/icons-material/StraightenOutlined';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 
 export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
@@ -20,6 +22,14 @@ export interface NavItem {
   roles: Role[];
   /** Sidebar subheader; consecutive items sharing a group render under one heading (PRD-05 Decision 1). */
   group?: string;
+  /** PRD-13 FR-18: the shell renders a live badge for this key. */
+  badge?: 'messages';
+  /** PRD-13 FR-23: hidden unless the flag is set (the page still enforces access itself). */
+  requires?: 'safeguardingLead';
+}
+
+export interface NavFlags {
+  safeguardingLead?: boolean;
 }
 
 // Exported (PRD-04 TASK-3) so route handlers can call
@@ -34,6 +44,7 @@ export const ALL_ROLES: Role[] = ['ADMIN', 'TEACHER', 'STUDENT', 'PARENT'];
 export const navigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: DashboardOutlinedIcon, roles: ALL_ROLES },
   { label: 'Notifications', href: '/notifications', icon: NotificationsNoneIcon, roles: ALL_ROLES },
+  { label: 'Messages', href: '/messages', icon: ChatBubbleOutlineIcon, roles: ALL_ROLES, badge: 'messages' },
   { label: 'My courses', href: '/my-courses', icon: MenuBookOutlinedIcon, roles: ['TEACHER', 'STUDENT', 'PARENT'] },
   { label: 'Assignments', href: '/assignments', icon: AssignmentOutlinedIcon, roles: ['STUDENT', 'PARENT', 'TEACHER', 'ADMIN'] },
   { label: 'Grades', href: '/grades', icon: GradingOutlinedIcon, roles: ['STUDENT', 'PARENT'] },
@@ -45,8 +56,9 @@ export const navigation: NavItem[] = [
   { label: 'Courses', href: '/admin/courses', icon: ClassOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Grading scales', href: '/admin/grading-scales', icon: StraightenOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Report cards', href: '/admin/report-cards', icon: WorkspacePremiumOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
+  { label: 'Safeguarding', href: '/admin/safeguarding', icon: ShieldOutlinedIcon, roles: ['ADMIN'], requires: 'safeguardingLead', group: 'Administration' },
 ];
 
-export function navigationForRole(role: Role): NavItem[] {
-  return navigation.filter((item) => item.roles.includes(role));
+export function navigationForRole(role: Role, flags: NavFlags = {}): NavItem[] {
+  return navigation.filter((item) => item.roles.includes(role) && (!item.requires || flags[item.requires]));
 }

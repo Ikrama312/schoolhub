@@ -105,6 +105,8 @@ export const updateUserSchema = z.object({
   lastName: z.string().min(1).optional(),
   email: requiredEmailSchema.optional(),
   phone: optionalPhoneSchema,
+  /** PRD-13 FR-2: only an ADMIN may be a safeguarding lead (enforced in updateUser). */
+  isSafeguardingLead: z.boolean().optional(),
   profile: z
     .object({
       dateOfBirth: z.coerce.date().refine(isValidStudentAge, {

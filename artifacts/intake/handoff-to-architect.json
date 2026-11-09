@@ -1,31 +1,16 @@
 {
-  "ticketId": "SH-12",
-  "timestamp": "2026-11-09T18:00:00Z",
+  "ticketId": "SH-13",
+  "timestamp": "2026-11-09T19:00:00Z",
   "phase": "intake",
   "version": "1.0",
   "status": "complete",
-  "requirementsCount": 47,
-  "functionalCount": 36,
-  "nonFunctionalCount": 11,
-  "overallConfidencePct": 94,
-  "techStack": "react",
-  "figmaPresent": false,
+  "requirementsCount": 43,
+  "overallConfidencePct": 95,
   "blockers": [],
-  "assumptionsFlagged": [
-    "FR-5 (MEDIUM): SECTION membership means current academic-year SectionMember rows.",
-    "FR-15 (MEDIUM): drafts may have zero recipients. The refusal applies only on publish or schedule.",
-    "FR-25 (MEDIUM): the FR-1 schema has no field to store the 24h reminder throttle. Suggestion: a nullable Announcement.lastRemindedAt column and 429 RATE_LIMITED. The architect decides.",
-    "FR-17: when more than 3 announcements are pinned, the extra ones fall into newest-first order.",
-    "AC-8: the seed has no 6A section and no ParentStudentLink rows. The test fixture must create Pat's 6A child.",
-    "Shared components are in src/components/<Name>/, not src/components/shared/. Reuse them where they are."
-  ],
-  "keyRisks": [
-    "NFR-2: isUserInAudience and the feed query must work as SQL/Prisma joins on AnnouncementAudience (OR over the type branches), not by resolving the full recipient set. The 200 ms target is for a parent with 3 children and 2,000 rows.",
-    "FR-7 / NFR-10: isUserInAudience and resolveAudienceUserIds are two code paths that must agree for every seed user. Keep the rule definitions in one place.",
-    "FR-27: publishDueAnnouncements must claim notifiedAt atomically (updateMany where notifiedAt IS NULL) so concurrent maintenance runs never double-notify. Hook it into /api/internal/email/dispatch.",
-    "FR-30: the 'announcement' file-access resolver must allow anonymous callers only for isPublic + PUBLISHED + not expired + publishAt <= now.",
-    "NFR-3 / FR-10: teacher audience checks must cover coTeacherIds and homeroom, and must reject isPublic and the SCHOOL, STAFF, ROLE and GRADE_LEVEL types on both POST and PATCH.",
-    "FR-32: NavItem has no badge field. Extend navigation minimally and reuse the NotificationBell polling pattern."
+  "notes": [
+    "PRD-12 (Announcements) is not implemented in the workspace (SH-12 run failed). PRD-13 does not depend on it at the code level. Proceed.",
+    "Open architect decisions are listed in requirements.json clarificationLog[0].unresolved: co-teacher scope, updatedAt on new models, where isSafeguardingLead is edited, quiet-hours role scope.",
+    "The student route segment is [id], not [studentId]. Shared components live in src/components/<Name>/."
   ],
   "nextPhase": "architect"
 }

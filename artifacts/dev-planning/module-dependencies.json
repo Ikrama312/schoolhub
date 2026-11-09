@@ -1,6 +1,6 @@
 {
-  "ticketId": "SH-12",
-  "timestamp": "2026-11-09T16:38:39Z",
+  "ticketId": "SH-13",
+  "timestamp": "2026-11-09T23:10:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "modules": [
@@ -9,96 +9,180 @@
       "dependsOn": []
     },
     {
+      "name": "src/lib/messaging",
+      "dependsOn": []
+    },
+    {
       "name": "src/lib/validators",
       "dependsOn": []
     },
     {
-      "name": "src/server/announcements",
-      "dependsOn": [
-        "prisma",
-        "src/lib/validators",
-        "src/server/notifications",
-        "src/server/files",
-        "src/server/csv.ts",
-        "src/server/audit.ts",
-        "src/server/http.ts",
-        "src/server/courses",
-        "src/lib/dates.ts",
-        "src/lib/logger.ts"
-      ]
-    },
-    {
       "name": "src/server/notifications",
       "dependsOn": [
-        "prisma",
-        "src/server/email"
+        "prisma"
       ]
     },
     {
       "name": "src/server/files",
       "dependsOn": [
-        "src/server/announcements"
+        "prisma",
+        "src/server/messaging"
       ]
     },
     {
-      "name": "src/app/api/announcements",
+      "name": "src/server/messaging",
       "dependsOn": [
-        "src/server/announcements",
+        "prisma",
+        "src/lib/validators",
+        "src/lib/messaging",
+        "src/server/notifications",
+        "src/server/auth",
+        "src/server/http.ts",
+        "src/server/rate-limit.ts",
+        "src/server/audit.ts",
+        "src/lib/dates.ts",
+        "src/lib/logger.ts"
+      ]
+    },
+    {
+      "name": "src/server/services",
+      "dependsOn": [
+        "prisma",
+        "src/lib/validators",
+        "src/server/audit.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/conversations",
+      "dependsOn": [
+        "src/server/messaging",
         "src/lib/validators",
         "src/server/http.ts",
         "src/server/auth"
       ]
     },
     {
-      "name": "src/app/api/public/news",
+      "name": "src/app/api/messages",
       "dependsOn": [
-        "src/server/announcements",
-        "src/server/rate-limit.ts",
+        "src/server/messaging",
+        "src/lib/validators",
         "src/server/http.ts",
-        "src/config/public-routes.ts"
+        "src/server/auth"
+      ]
+    },
+    {
+      "name": "src/app/api/messaging",
+      "dependsOn": [
+        "src/server/messaging",
+        "src/lib/validators",
+        "src/server/http.ts",
+        "src/server/auth"
+      ]
+    },
+    {
+      "name": "src/app/api/me/messaging-settings",
+      "dependsOn": [
+        "src/server/messaging",
+        "src/lib/validators",
+        "src/server/http.ts",
+        "src/server/auth"
+      ]
+    },
+    {
+      "name": "src/app/api/safeguarding",
+      "dependsOn": [
+        "src/server/messaging",
+        "src/lib/validators",
+        "src/server/http.ts"
       ]
     },
     {
       "name": "src/app/api/internal/email/dispatch",
       "dependsOn": [
-        "src/server/announcements"
+        "src/server/messaging"
       ]
     },
     {
-      "name": "src/config",
+      "name": "src/components/messaging",
+      "dependsOn": [
+        "src/lib/messaging",
+        "src/lib/dates.ts",
+        "src/components/UserAvatar",
+        "src/components/FileUpload",
+        "src/components/FileList",
+        "src/components/ConfirmDialog",
+        "src/components/Toast",
+        "src/components/EmptyState",
+        "src/components/DataTable"
+      ]
+    },
+    {
+      "name": "src/config/navigation.ts",
       "dependsOn": []
     },
     {
-      "name": "src/app/(app)/shell.tsx",
+      "name": "src/app/(app)/messages",
       "dependsOn": [
-        "src/config",
-        "src/app/api/announcements"
-      ]
-    },
-    {
-      "name": "src/app/(app)/announcements",
-      "dependsOn": [
-        "src/server/announcements",
-        "src/lib/validators",
-        "src/components",
-        "src/lib/dates.ts",
+        "src/components/messaging",
         "src/server/auth"
       ]
     },
     {
-      "name": "src/app/(app)/courses/[courseId]/announcements",
+      "name": "src/app/(app)/admin/safeguarding",
       "dependsOn": [
-        "src/app/(app)/announcements",
-        "src/server/courses"
+        "src/components/messaging",
+        "src/server/messaging",
+        "src/components/PageHeader"
       ]
     },
     {
-      "name": "tests",
+      "name": "src/app/(app)/students/[id]",
       "dependsOn": [
-        "src/server/announcements",
-        "src/lib/validators",
-        "src/app/api/announcements",
+        "src/components/messaging",
+        "src/server/auth",
         "prisma"
+      ]
+    },
+    {
+      "name": "src/app/(app)/courses/[courseId]/roster",
+      "dependsOn": [
+        "src/components/messaging"
+      ]
+    },
+    {
+      "name": "src/app/(app)/account/notifications",
+      "dependsOn": [
+        "src/components/messaging"
+      ]
+    },
+    {
+      "name": "src/app/(app) (layout.tsx, shell.tsx)",
+      "dependsOn": [
+        "src/config/navigation.ts",
+        "src/components/messaging"
+      ]
+    },
+    {
+      "name": "tests/unit/messaging",
+      "dependsOn": [
+        "src/server/messaging"
+      ]
+    },
+    {
+      "name": "tests/integration/messaging",
+      "dependsOn": [
+        "src/server/messaging",
+        "src/app/api/conversations",
+        "src/app/api/messages",
+        "src/app/api/safeguarding",
+        "prisma"
+      ]
+    },
+    {
+      "name": "tests/e2e",
+      "dependsOn": [
+        "src/app/(app)/messages",
+        "prisma/seed.ts"
       ]
     }
   ]

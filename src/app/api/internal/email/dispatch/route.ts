@@ -7,6 +7,7 @@ import { purgeOldNotifications } from '@/server/notifications/purge';
 import { purgeOrphanFiles } from '@/server/files/purge';
 import { sendDueReminders } from '@/server/assignments/reminders';
 import { autoSubmitExpiredAttempts, sendAfterCloseResultsReleased } from '@/server/quiz/maintenance';
+import { processPendingMessageEmails } from '@/server/messaging/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,15 @@ export const POST = withHandler(async (request: Request) => {
     logger.error('Quiz results release failed', { message: error instanceof Error ? error.message : String(error) });
   }
 
+  // PRD-13 FR-20: deferred message emails, isolated like the jobs above.
+  let messageEmails = { sent: 0, deferred: 0, dropped: 0 };
+  try {
+    messageEmails = await processPendingMessageEmails(new Date());
+    if (messageEmails.sent || messageEmails.deferred || messageEmails.dropped) logger.info('Message emails processed', messageEmails);
+  } catch (error) {
+    logger.error('Message emails failed', { message: error instanceof Error ? error.message : String(error) });
+  }
+
   if (Date.now() - lastPurgeAt > DAY_MS) {
     lastPurgeAt = Date.now();
     try {
@@ -64,5 +74,5 @@ export const POST = withHandler(async (request: Request) => {
       logger.error('Orphan file purge failed', { message: error instanceof Error ? error.message : String(error) });
     }
   }
-  return ok(result);
+  return ok({ ...result, messageEmails });
 });

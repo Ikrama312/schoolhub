@@ -12,6 +12,8 @@ export interface NotifyInput {
   body?: string;
   link?: string;
   email?: { subject?: string; template: 'generic-notification'; data?: Record<string, unknown> };
+  /** PRD-13 FR-20: false skips the in-app row (email-only send of a deferred message email). Default true. */
+  inApp?: boolean;
 }
 
 function truncate(value: string, max: number, field: string, type: string): string {
@@ -52,7 +54,7 @@ export async function notify(input: NotifyInput): Promise<void> {
     const emailTo: { email: string; firstName: string }[] = [];
     for (const user of users) {
       const prefs = resolvePrefs(def, prefByUser.get(user.id));
-      if (prefs.inApp) inAppIds.push(user.id);
+      if (prefs.inApp && input.inApp !== false) inAppIds.push(user.id);
       if (prefs.email && input.email && user.email) emailTo.push(user);
     }
 

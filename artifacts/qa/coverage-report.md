@@ -1,59 +1,64 @@
-# Coverage Report — SH-11 (PRD-11 Gradebook, Grading Scales & Report Cards)
+# Coverage Report — SH-13 (PRD-13 Direct Messaging)
 
-- ticketId: SH-11
-- timestamp: 2026-11-09T14:29:37Z
+- ticketId: SH-13
+- timestamp: 2026-11-09T18:03:21Z
+- method: **function-level mapping, done by hand.** No coverage provider is installed (`@vitest/coverage-v8` is not in `devDependencies`), and QA did not add a dependency. Each exported function or component below was traced to the tests that execute it.
 
-> This file replaces the stale SH-10 coverage report.
+## Test inventory (SH-13)
 
-## Method
-
-No coverage instrumenter is installed (`@vitest/coverage-v8` is not a dependency), and QA did not add one. Coverage is therefore mapped by hand: for each new or changed module, the tests that exercise it **and were run by QA in this phase**.
-
-## Tests run by QA
-
-| Suite | Tests | Result |
-|---|---|---|
-| `tests/unit/gradebook/grade-calc.test.ts` (Dev) | 17 | ✅ pass |
-| `tests/unit/gradebook/term-placement.test.ts` (Dev) | 4 | ✅ pass |
-| `tests/unit/gradebook/validators.test.ts` (**QA, new**) | 4 | ✅ pass |
-| `tests/integration/gradebook/gradebook-sync.test.ts` (Dev) | 8 | ✅ pass (Postgres) |
-| `tests/integration/gradebook/backfill.test.ts` (Dev) | 1 | ✅ pass (Postgres) |
-| `tests/integration/report-cards/report-cards.test.ts` (Dev) | 5 | ✅ pass (Postgres) |
-| `tests/integration/gradebook/qa-sh11.test.ts` (**QA, new**) | 7 | ✅ pass 3/3 runs (Postgres) |
-| `tests/e2e/gradebook.spec.ts` (Dev, Playwright, fresh prod build :3100) | 1 | ✅ pass |
-| `tests/e2e/report-cards.spec.ts` (Dev, Playwright, fresh prod build :3100) | 1 | ✅ pass |
-| **SH-11 total** | **48** | **48/48** |
-
-Integration tests are skipped without `TEST_DATABASE_URL`. QA ran them with `TEST_DATABASE_URL=$DATABASE_URL`, after confirming with `prisma migrate status` that the schema is up to date.
-
-## Per-module coverage
-
-| Module | Covered by | Coverage | Gaps |
+| File | Author | Tests | Result |
 |---|---|---|---|
-| `src/server/gradebook/grade-calc.ts` | grade-calc unit (17), qa-sh11, e2e | **High.** Every exported function is tested: no categories, empty categories, drop lowest, never-drop-all, missing vs ungraded vs excused, hidden, strict due boundary, rounding at band edges (89.95→90.0 A−, 76.95→77.0 C+), letter-only / percent-only / both overrides, colour bands | `applyDropLowest` tie-breaks (equal ratios → dueAt → id) are not asserted |
-| `src/server/gradebook/term-placement.ts` | term-placement unit (4) | **High** | — |
-| `src/lib/validators/gradebook.ts` | validators unit (QA), qa-sh11 (via `.parse`) | **Medium-high.** Covers band rules, weight sum, unique category names, the 1,000-character comment cap | `reportCardPatchSchema`, `unpublishSchema` are only covered indirectly by report-cards integration |
-| `src/server/gradebook/gradebook-sync.ts` | gradebook-sync (8), backfill, qa-sh11 | **High.** Covers assignment publish/draft/archive/delete, return vs save, exemption on/off, A7 hide-survives-resave, quiz IMMEDIATELY / MANUAL / AFTER_CLOSE, practice | `assertCategoryInCourse` rejection (foreign category) is not asserted; the no-term skip path (A6) is only unit-covered via `termFor` |
-| `src/server/gradebook/backfill.ts` + `scripts/gradebook-backfill.ts` | backfill (1) | **Medium.** Idempotency is proven | The CLI wrapper (18 lines) is untested |
-| `src/server/gradebook/load.ts` | qa-sh11, report-cards, e2e | **High** (indirect) | — |
-| `src/server/gradebook/gradebook-service.ts` | qa-sh11 (7), e2e | **Medium-high.** Covers getGradebook (sort, result, 35×80 perf), createManualItem, putGrade (manual, synced-comment-only, out-of-course teacher, student refused, audit, grade.posted once), updateItem (synced reject / hide), markAllMissing (before / after due), putTermOverride (letter-only, unknown letter, audit) | `exportGradebookCsv` (FR-25), `deleteItem`, `updateItem` maxPoints-below-existing-score guard |
-| `src/server/gradebook/categories-service.ts` | qa-sh11 | **Medium.** Covers the weights≠100 reject and a valid replace | Foreign-id reject, gradingScaleId change |
-| `src/server/gradebook/scales-service.ts` | — (validators only) | **Low.** The service is untested. QA did not exercise create/update/delete, because those would flip the school default in the shared dev DB | Admin-only guard, default swap, A11 delete conflicts. The DB invariant is enforced by the partial unique index `grading_scale_one_default` (present in the DB) |
-| `src/server/gradebook/student-grades-service.ts` | qa-sh11, e2e (parent) | **High.** Covers student and parent views, hidden item excluded, unreturned score null, other student / unlinked parent refused | — |
-| `src/server/report-cards/report-card-service.ts`, `snapshot.ts`, `access.ts` | report-cards integration (5), report-cards e2e | **High.** Covers generate, roster warnings, draft hidden from family, comment field rules, publish + notifications, 7B NOT_FOUND, snapshot immutability, regenerate skips PUBLISHED, unpublish with reason | NFR-3 (600×8 < 30 s) is not load-tested |
-| `src/server/assignments/assignments-service.ts` (hooks) | gradebook-sync, existing assignment suites | **High** | See qa-report Headline 1: `publishOnce` change made `qa-sh9` flaky |
-| `src/server/quiz/*` (hooks) | gradebook-sync (3 quiz tests), existing quiz suites | **High** | — |
-| `src/server/notifications/types.ts` | qa-sh11 (grade.posted), report-cards (report_card.published) | **High** | — |
-| API route handlers (`src/app/api/**`, 17 files, 9–19 lines each) | e2e (gradebook PUT grades, report-card generate/publish/GET) | **Low-medium.** Handlers are thin (validator → service) | No HTTP-level tests for grading-scales, grade-categories, term-overrides, mark-missing, students/:id/grades |
-| UI: `GradebookGrid.tsx` | gradebook e2e | **Medium.** Covers keyboard edit (digits+Enter, E, M, Delete), 78.0% C+ | Column menu (hide/show, mark missing, stats), Export CSV button, synced-cell click-through, Add item / Override dialogs |
-| UI: `ReportCardDocument.tsx`, `PrintButton.tsx`, print pages | report-cards e2e | **Medium.** Covers the parent print view with chrome hidden under `print` media | Bulk "Print all" page |
-| UI: `StudentGradesView.tsx`, `/grades`, `/students/[id]/grades`, course Grades | — | **Low.** Only the data layer is tested (qa-sh11) | Rendering, child selector |
-| UI: admin grading-scales, gradebook settings, admin report-cards roster, homeroom list/review, student report-cards tab | report-cards e2e (admin roster only) | **Low** | Scale editor, settings live-sum chip, homeroom review page |
-| `prisma/seed.ts` (PRD-11 block) | Dev manual run on temp 7A fixtures (dev-log) | **Not re-run by QA.** The dev DB has no 7A courses, so the block would only log a skip | — |
+| `tests/unit/messaging/contact-rules.test.ts` | Dev | 43 | ✅ 43/43 |
+| `tests/unit/messaging/quiet-hours.test.ts` | Dev | 9 | ✅ 9/9 |
+| `tests/integration/messaging/messaging.test.ts` | Dev | 9 | ✅ 9/9 |
+| `tests/integration/messaging/email.test.ts` | Dev | 4 | ✅ 4/4 |
+| `tests/integration/messaging/safeguarding.test.ts` | Dev | 4 | ✅ 4/4 |
+| `tests/e2e/messaging.spec.ts` | Dev | 2 | ✅ 2/2 (QA re-ran it on a fresh `next dev -p 3100`) |
+| **`tests/integration/messaging/qa-sh13.test.ts`** | **QA (new)** | 12 | ✅ 12/12 |
+| **`tests/unit/messaging/composer-qa.test.tsx`** | **QA (new)** | 9 | ✅ 9/9 |
+| **Total** | | **92** | **✅ 92/92** |
 
-## Summary
+The integration tests run against the real migrated Postgres. Set `TEST_DATABASE_URL` to the `.env` `DATABASE_URL` to run them.
 
-- **Server logic** (calc, sync, backfill, student grades, report cards): well covered. Every PRD "Test Requirements" item (calculation matrix, sync hooks, backfill idempotency, snapshot immutability, the 3 Playwright flows) exists and passes.
-- **Estimated line coverage of new server code: ~75–80%** (hand estimate). The main untested pieces are `scales-service.ts`, `exportGradebookCsv`, `deleteItem`, and the CLI wrapper.
-- **UI components: ~35–40%** (hand estimate). Only the two e2e flows exercise them.
-- **Recommended additions:** an HTTP test for `/api/grading-scales` on an isolated DB; a CSV export assertion; a Playwright check for the column menu and the student Grades tab.
+## Server code (`src/server/messaging/*`): 42 of 46 exported functions executed by tests (≈91%; the other 4 are `canMessage`, `messageableIds`, and the two route/page guards)
+
+| File | Covered | Not covered |
+|---|---|---|
+| `contact-rules.ts` | `canMessageWith`, `checkNewConversation`, `canSendInWith` (unit). `loadRelations`, `validateNewConversation`, `canSendIn` (integration) | `canMessage` (has no callers in `src/`, so it is dead code). `messageableIds` (only `students/[id]/layout.tsx` uses it, and no test renders that layout) |
+| `messages.ts` | `toMessageDTO`, `assertRateLimit`, `listMessages` (`after`/`since` and `before` paging, hasMore, empty poll), `insertMessage` (including attachments), `sendMessage`, `editMessage`, `deleteMessage` | — |
+| `conversations.ts` | `listConversations` (tabs, search, preview, unread), `getConversation`, `createConversation`, `markRead`, `setMuted`, `setArchived`, `leave` (all branches), `unreadCount` | — |
+| `access.ts` | `getParticipation`, `isSafeguardingLead`, `assertSafeguardingLead` | `requireSafeguardingLead` and `requirePageSafeguardingLead` are covered only by QA's live probes: anonymous API call → 401, anonymous page → 307 to `/login`. No signed-in non-lead route test exists. The service-level 403 is tested. |
+| `quiet-hours.ts` | `isInQuietHours`, `quietHoursEnd` (wrap-midnight, DST), `getSettings`, `putSettings` | — |
+| `notifications.ts` | `onMessageSent` (collapse, mute, pending email), `onMessageReported` | — |
+| `email.ts` | `processPendingMessageEmails` (send, drop on read, drop when muted, quiet-hours deferral) | Two drop branches have no test: participant left, conversation missing |
+| `contacts.ts` | `listContacts`: STUDENT, PARENT and TEACHER groups, `?q=` filter, DROPPED exclusion | ADMIN branch (Staff/Students/Parents groups) and the TEACHER homeroom branch |
+| `reports.ts` | `reportMessage` (own message 403, duplicate 409, leads notified) | — |
+| `safeguarding.ts` | `listReports`, `getReport`, `reviewReport`, `searchConversations`, `getConversationForSafeguarding` (plus the audit rows) | The `from`/`to` date filters in `searchConversations` |
+| `src/server/files/contexts.ts` → `messageResolver` | participant, ex-participant, lead, non-lead admin, anonymous (QA) | — |
+| `src/server/services/users.ts` (isSafeguardingLead) | `updateUser` ADMIN-only plus audit (Dev safeguarding test) | — |
+| `src/lib/validators/messaging.ts` | send/create/report/settings/list-query schemas (QA) | `reviewReportSchema` and `safeguardingConversationsQuery` are tested only indirectly, through the services |
+
+## API route handlers (`src/app/api/{conversations,messages,messaging,safeguarding,me/messaging-settings}`): 15 files
+
+- These are thin `withHandler` wrappers: guard, then Zod parse, then service. No test calls the handlers directly.
+- QA confirmed on a live dev server that every handler group returns **401 UNAUTHENTICATED** without a session (conversations, messages POST, unread-count, safeguarding/reports, me/messaging-settings).
+- The E2E calls `POST /api/conversations` (403 for student→student) and drives the send and poll routes through the UI.
+- **Gap:** there is no handler-level test of the 403 for a signed-in non-lead calling `/api/safeguarding/*`. The service throws that 403 and the service is tested.
+
+## UI (`src/components/messaging/*`, pages): about 25% unit-tested, the rest is E2E-exercised or untested
+
+| Component | Coverage |
+|---|---|
+| `Composer.tsx` | ✅ Unit (QA): Enter / Shift+Enter, blank, counter >4,500, FR-7 blocked state |
+| `MessagesLayout`, `ConversationList`, `MessageThread`, `NewConversationDialog`, `usePolling`, `/messages` pages | E2E only: parent→teacher round trip <6 s, student picker. No unit tests |
+| `ConversationMenu`, `MessagesNavBadge`, `StudentMessageActions`, `RosterTable`, `QuietHoursSection`, `SafeguardingReports`, `SafeguardingConversations`, `/admin/safeguarding` pages, `students/[id]/layout.tsx` | **No automated tests.** Verified only by reading the code. Their server logic is covered. |
+
+## Seed (`prisma/seed.ts` `seedMessaging`)
+
+There is no test. The current dev DB has **0 courses**, so only the "Staff room" thread (4 messages) and Alice's `isSafeguardingLead=true` are present. The Pat↔Tom, MATH-7A and reported student threads were skipped by design (`logger.warn`).
+
+## Biggest coverage gaps (suggested next tests)
+1. A route-level test that a signed-in non-lead ADMIN gets 403 on `/api/safeguarding/*`.
+2. `listContacts` for ADMIN and for homeroom teachers.
+3. A component test for `ConversationMenu` (hide Leave when `canLeave` is false) and for `QuietHoursSection`.
+4. Run the seed against a DB that has courses, to confirm all four threads and the report.

@@ -1,330 +1,432 @@
 {
-  "ticketId": "SH-12",
-  "timestamp": "2026-11-09T16:38:39Z",
+  "ticketId": "SH-13",
+  "timestamp": "2026-11-09T23:10:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "tasks": [
     {
       "id": "TASK-1",
-      "description": "Prisma migration: AnnouncementStatus/AudienceType enums; Announcement (+lastRemindedAt), AnnouncementAudience, AnnouncementAttachment, AnnouncementRead models exactly per PRD FR-1 block; indexes from system-design §1; back-relations User.announcements, User.announcementReads, FileObject.announcementAttachments. Run prisma migrate dev --name add_announcements under the fixed folder name.",
+      "description": "Prisma: add ReportStatus enum, Conversation, ConversationParticipant, Message, MessageAttachment, MessageRevision, MessageReport, MessagingSettings, PendingMessageEmail, User.isSafeguardingLead and all back-relations (User, FileObject) with the indexes in system-design §2; write migration 20261112000000_add_direct_messaging and run prisma generate",
       "files": [
         "prisma/schema.prisma",
-        "prisma/migrations/20261112000000_add_announcements/migration.sql"
+        "prisma/migrations/20261112000000_add_direct_messaging/migration.sql"
       ],
       "dependencies": [],
-      "estimateHours": 2,
+      "estimateHours": 3,
       "requirementIds": [
         "FR-1",
-        "FR-25",
-        "NFR-2"
-      ]
-    },
-    {
-      "id": "TASK-2",
-      "description": "Shared Zod schemas mirroring api-contracts components: audienceRowSchema (refId/flag refinements), announcementInputSchema (title ≤150 trimmed, body ≤20000, audiences ≤20, attachments ≤10, mode, schedule-in-future, expiresAt > publishAt), announcementPatchSchema, feedQuerySchema, manageQuerySchema, statsQuerySchema, previewAudienceSchema. Unit test of limits and refinements.",
-      "files": [
-        "src/lib/validators/announcements.ts",
-        "tests/unit/validators/announcements.test.ts"
-      ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 1.5,
-      "requirementIds": [
         "FR-2",
-        "FR-34"
-      ]
-    },
-    {
-      "id": "TASK-3",
-      "description": "toPlainText(md, max) with about six regexes (code fences, images, links keep text, HTML tags, emphasis, heading and list markers), whitespace collapse and … truncation. Add a ponytail: comment for the remark/strip-markdown upgrade path. Unit test.",
-      "files": [
-        "src/server/announcements/excerpt.ts",
-        "tests/unit/announcements/excerpt.test.ts"
-      ],
-      "dependencies": [],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-18",
-        "FR-28",
-        "NFR-4"
-      ]
-    },
-    {
-      "id": "TASK-4",
-      "description": "Generic audience service (no Announcement imports): AudienceRow type, getAudienceKeys(userId) (≤~4 indexed queries, childByKey for parents), pure matchesAudience, isUserInAudience, audienceWhere(keys) Prisma fragment, resolveAudienceUserIds (ACTIVE/non-archived, parents only via ACTIVE students, archived courses excluded), countAudienceByRole, audienceLabels. Unit test matchesAudience for every type × flag × role with hand-built keys.",
-      "files": [
-        "src/server/announcements/audience.ts",
-        "tests/unit/announcements/audience-match.test.ts"
-      ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 4,
-      "requirementIds": [
         "FR-3",
         "FR-4",
-        "FR-5",
-        "FR-6",
-        "FR-7",
-        "FR-8",
-        "FR-14",
-        "FR-18",
-        "FR-22",
-        "NFR-2"
-      ]
-    },
-    {
-      "id": "TASK-5",
-      "description": "Register notification types 'announcement.published' (COMMUNICATION, defaultEmail true, mandatoryInApp false, ALL roles) and 'announcement.reminder' (COMMUNICATION, defaultEmail true, mandatoryInApp true). Add optional NotifyInput.mandatoryInApp override passed to resolvePrefs (one-line change, A9).",
-      "files": [
-        "src/server/notifications/types.ts",
-        "src/server/notifications/notify.ts"
-      ],
-      "dependencies": [],
-      "estimateHours": 0.5,
-      "requirementIds": [
-        "FR-26",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-6",
-      "description": "announcements-service.ts write side: visibleWhere, isVisible, displayStatus, assertCanTarget (admin anything; teacher COURSE as teacherId/coTeacherIds, SECTION as homeroom; else 403), createAnnouncement (transaction + attachFiles, zero-recipient NO_RECIPIENTS check except drafts), updateAnnouncement (author/admin else 404, archived non-admin 409, PUBLISHED→draft 409, retarget check on resulting values, audit on admin edits, never clears notifiedAt), archiveAnnouncement (idempotent, audit), claimAndNotify (atomic notifiedAt claim, chunks of 1000, generic-notification email, 300-char body, mandatoryInApp = requiresAck). Unit test assertCanTarget cases.",
-      "files": [
-        "src/server/announcements/announcements-service.ts",
-        "tests/unit/announcements/permissions.test.ts"
-      ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-3",
-        "TASK-4",
-        "TASK-5"
-      ],
-      "estimateHours": 5,
-      "requirementIds": [
-        "FR-9",
-        "FR-10",
-        "FR-11",
-        "FR-12",
-        "FR-15",
-        "FR-16",
-        "FR-26",
-        "FR-27",
-        "FR-28",
-        "FR-29",
-        "FR-36",
-        "NFR-3",
-        "NFR-6",
-        "NFR-11"
-      ]
-    },
-    {
-      "id": "TASK-7",
-      "description": "announcements-service.ts read side: listFeed (tabs, courseId filter after assertCanViewCourse, ≤3 pinned on page 1 excluded from main list and meta.total, publishAt desc/id desc, FeedItem DTO with excerpt, labels, unread, forChildren), unreadCount, getForViewer (404 for non-members, readAt upsert keeping first), acknowledge (409 if !requiresAck, idempotent), previewAudience, listManage (live reach/readPct/ackPct, ?status on displayStatus, pageSize ≤50), getStats, statsCsv (toCsv, school timezone), sendReminder (lastRemindedAt claim, 429 with retryAfter, notified = recipients − acked), getPublicNews (public-safe DTO).",
-      "files": [
-        "src/server/announcements/announcements-service.ts"
-      ],
-      "dependencies": [
-        "TASK-6"
-      ],
-      "estimateHours": 6,
-      "requirementIds": [
-        "FR-14",
-        "FR-17",
-        "FR-18",
-        "FR-19",
-        "FR-20",
-        "FR-21",
-        "FR-22",
-        "FR-23",
-        "FR-24",
-        "FR-25",
-        "FR-31",
-        "FR-32",
-        "NFR-2",
-        "NFR-6",
-        "NFR-7"
-      ]
-    },
-    {
-      "id": "TASK-8",
-      "description": "publishDueAnnouncements(now): findMany SCHEDULED ∧ notifiedAt null ∧ publishAt ≤ now, take 50, claimAndNotify each, log { claimed } with logger (copy the quiz/maintenance.ts pattern). Add an isolated try/catch pass to the dispatch route, with an announcementsPublished counter.",
-      "files": [
-        "src/server/announcements/maintenance.ts",
-        "src/app/api/internal/email/dispatch/route.ts"
-      ],
-      "dependencies": [
-        "TASK-6"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-16",
-        "FR-27",
-        "NFR-11"
-      ]
-    },
-    {
-      "id": "TASK-9",
-      "description": "announcementFileResolver(user|null, file): public ∧ visible → allow (anonymous too); otherwise no user → deny; ADMIN/author → allow; visible ∧ isUserInAudience → allow; else deny. Register 'announcement' in registerBuiltInContexts.",
-      "files": [
-        "src/server/announcements/files.ts",
-        "src/server/files/contexts.ts"
-      ],
-      "dependencies": [
-        "TASK-6"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
         "FR-30",
-        "NFR-6",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-10",
-      "description": "Collection route handlers (withHandler → requireUser/requireRole → parseQuery/parseBody → one service call → ok/paginated): GET/POST /api/announcements, GET unread-count, POST preview-audience, GET manage.",
-      "files": [
-        "src/app/api/announcements/route.ts",
-        "src/app/api/announcements/unread-count/route.ts",
-        "src/app/api/announcements/preview-audience/route.ts",
-        "src/app/api/announcements/manage/route.ts"
-      ],
-      "dependencies": [
-        "TASK-7"
-      ],
-      "estimateHours": 1.5,
-      "requirementIds": [
-        "FR-11",
-        "FR-14",
-        "FR-17",
-        "FR-23",
-        "FR-32",
-        "FR-34",
-        "NFR-3"
-      ]
-    },
-    {
-      "id": "TASK-11",
-      "description": "Item route handlers: GET/PATCH /api/announcements/[id], POST archive, POST ack, GET stats (format=csv → text/csv + Content-Disposition 'announcement-<id>-recipients.csv'), POST remind.",
-      "files": [
-        "src/app/api/announcements/[id]/route.ts",
-        "src/app/api/announcements/[id]/archive/route.ts",
-        "src/app/api/announcements/[id]/ack/route.ts",
-        "src/app/api/announcements/[id]/stats/route.ts",
-        "src/app/api/announcements/[id]/remind/route.ts"
-      ],
-      "dependencies": [
-        "TASK-7"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-12",
-        "FR-19",
-        "FR-20",
-        "FR-24",
-        "FR-25",
-        "FR-34",
+        "FR-31",
+        "NFR-2",
         "NFR-3",
         "NFR-6"
       ]
     },
     {
-      "id": "TASK-12",
-      "description": "GET /api/public/news: no auth, rateLimit by client IP, parsePagination, getPublicNews. Add '/api/public/news' to PUBLIC_API_PATHS.",
+      "id": "TASK-2",
+      "description": "Shared limits (BODY_MAX, COUNTER_FROM, MAX_FILES, MAX_PARTICIPANTS, EDIT_WINDOW_MS, THREAD_POLL_MS, LIST_POLL_MS, PAGE_SIZE) and all Zod schemas from system-design §3.2, mirroring api-contracts.json components",
       "files": [
-        "src/app/api/public/news/route.ts",
-        "src/config/public-routes.ts"
+        "src/lib/messaging/constants.ts",
+        "src/lib/validators/messaging.ts"
+      ],
+      "dependencies": [],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-11",
+        "FR-13",
+        "FR-15",
+        "FR-28",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-3",
+      "description": "Contact rules: pure canMessageWith + loadRelations batch loader (teacherId OR coTeacherIds, ACTIVE enrollments, current-year homeroom, ParentStudentLink, ACTIVE recipients), canMessage, messageableIds, validateNewConversation (2..25, student group needs staff), canSendIn (A4 rule); table-driven unit test over full role×role matrix",
+      "files": [
+        "src/server/messaging/contact-rules.ts",
+        "tests/unit/messaging/contact-rules.test.ts"
       ],
       "dependencies": [
+        "TASK-1",
+        "TASK-2"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-5",
+        "FR-6",
+        "FR-7",
+        "FR-32",
+        "NFR-1",
+        "NFR-10"
+      ]
+    },
+    {
+      "id": "TASK-4",
+      "description": "Access helpers: getParticipation (404 when missing or leftAt set), requireSafeguardingLead (ADMIN + DB-read flag, 403), requirePageSafeguardingLead (redirect /forbidden)",
+      "files": [
+        "src/server/messaging/access.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 1,
+      "requirementIds": [
+        "NFR-1",
+        "FR-23",
+        "FR-24"
+      ]
+    },
+    {
+      "id": "TASK-5",
+      "description": "Notification plumbing: register message.received and message.reported types (COMMUNICATION); add optional NotifyInput.inApp (default true) to notify() — existing callers unchanged",
+      "files": [
+        "src/server/notifications/types.ts",
+        "src/server/notifications/notify.ts"
+      ],
+      "dependencies": [],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-19",
+        "FR-20",
+        "FR-26"
+      ]
+    },
+    {
+      "id": "TASK-6",
+      "description": "Quiet hours: pure isInQuietHours (wraps midnight) and quietHoursEnd (fromZonedTime), getSettings/putSettings (both-or-neither, start≠end); unit test incl. DST and edge minutes",
+      "files": [
+        "src/server/messaging/quiet-hours.ts",
+        "tests/unit/messaging/quiet-hours.test.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-2"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-20",
+        "FR-21",
+        "NFR-10"
+      ]
+    },
+    {
+      "id": "TASK-7",
+      "description": "Messaging notifications + deferred email: conversationLink, onMessageSent (collapse unread message.received, in-app notify, create-only PendingMessageEmail upsert, skip muted/left), onMessageReported; processPendingMessageEmails (claim-by-delete, read/muted/left drop, quiet-hours re-defer, notify inApp:false, ≤200/run); hook into dispatch route in its own try/catch with messageEmails summary",
+      "files": [
+        "src/server/messaging/notifications.ts",
+        "src/server/messaging/email.ts",
+        "src/app/api/internal/email/dispatch/route.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-5",
+        "TASK-6"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-4",
+        "FR-19",
+        "FR-20",
+        "FR-26"
+      ]
+    },
+    {
+      "id": "TASK-8",
+      "description": "Message service: listMessages keyset (before | after+since → {messages, changed}, deleted redaction), sendMessage + exported send-transaction helper (rate limit, participation, canSendIn, attachment ownership ≤5, link files, bump lastMessageAt, sender lastReadAt, unarchive others, after-commit onMessageSent), editMessage (MessageRevision in tx) and soft deleteMessage within 15 min",
+      "files": [
+        "src/server/messaging/messages.ts"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-3",
+        "TASK-4",
         "TASK-7"
       ],
-      "estimateHours": 0.5,
+      "estimateHours": 4,
       "requirementIds": [
+        "FR-3",
+        "FR-7",
+        "FR-10",
+        "FR-11",
+        "FR-13",
+        "FR-15",
+        "FR-27",
         "FR-31",
-        "FR-34",
-        "NFR-9"
+        "NFR-2",
+        "NFR-3",
+        "NFR-4"
+      ]
+    },
+    {
+      "id": "TASK-9",
+      "description": "Conversation service: listConversations (lastMessageAt desc, preview, LATERAL unread count ≤99, archived/q filters), createConversation (validateNewConversation, involvesStudent, first message via send helper), getConversation (canSend/canLeave), markRead (also marks notification read + deletes PendingMessageEmail), setMuted, setArchived, leave (ONE_TO_ONE / CREATOR_OF_STUDENT_GROUP refusals), unreadCount raw COUNT",
+      "files": [
+        "src/server/messaging/conversations.ts"
+      ],
+      "dependencies": [
+        "TASK-8"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-6",
+        "FR-9",
+        "FR-12",
+        "FR-14",
+        "FR-18",
+        "FR-30",
+        "FR-31",
+        "NFR-2"
+      ]
+    },
+    {
+      "id": "TASK-10",
+      "description": "Register 'message' file-access context: participant not left, or ADMIN safeguarding lead (DB read); deny on error",
+      "files": [
+        "src/server/files/contexts.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-27",
+        "NFR-1"
+      ]
+    },
+    {
+      "id": "TASK-11",
+      "description": "Contacts service: listContacts(user, q) builds labelled groups (My teachers, My child's teachers (<child>), Students in <course>, Parents of students in <course>, Homeroom <section>, Staff, School office) from contact-rules relation queries, q filter, cap 50/group",
+      "files": [
+        "src/server/messaging/contacts.ts"
+      ],
+      "dependencies": [
+        "TASK-3"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-8"
+      ]
+    },
+    {
+      "id": "TASK-12",
+      "description": "Reports + safeguarding services: reportMessage (participant, not sender, 409 on duplicate OPEN, after-commit onMessageReported); listReports, getReport (±5 msgs incl. deleted + revisions, audited), reviewReport (note required for review, 409 if not OPEN, audited), searchConversations (involvesStudent only), getConversationForSafeguarding (404 if !involvesStudent, audit every call)",
+      "files": [
+        "src/server/messaging/reports.ts",
+        "src/server/messaging/safeguarding.ts"
+      ],
+      "dependencies": [
+        "TASK-4",
+        "TASK-7"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-22",
+        "FR-23",
+        "FR-24",
+        "FR-25",
+        "FR-26",
+        "NFR-1",
+        "NFR-3",
+        "NFR-11"
       ]
     },
     {
       "id": "TASK-13",
-      "description": "Sidebar: add optional NavItem.badgeEndpoint and an Announcements entry (ALL_ROLES, badgeEndpoint '/api/announcements/unread-count'). shell.tsx wraps the icon in MUI Badge for items with badgeEndpoint and polls every 30 s while the page is visible, copying NotificationBell.",
+      "description": "Conversation API routes (thin withHandler → auth → parse → service): GET/POST /api/conversations, GET /api/conversations/:id, GET/POST /api/conversations/:id/messages, POST read/mute/archive/leave",
       "files": [
-        "src/config/navigation.ts",
-        "src/app/(app)/shell.tsx"
+        "src/app/api/conversations/route.ts",
+        "src/app/api/conversations/[id]/route.ts",
+        "src/app/api/conversations/[id]/messages/route.ts",
+        "src/app/api/conversations/[id]/read/route.ts",
+        "src/app/api/conversations/[id]/mute/route.ts",
+        "src/app/api/conversations/[id]/archive/route.ts",
+        "src/app/api/conversations/[id]/leave/route.ts"
       ],
       "dependencies": [
-        "TASK-10"
+        "TASK-2",
+        "TASK-8",
+        "TASK-9"
       ],
-      "estimateHours": 1,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-32",
+        "FR-6",
+        "FR-7",
+        "FR-9",
+        "FR-10",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-28",
         "NFR-1",
-        "NFR-8"
+        "NFR-4"
       ]
     },
     {
       "id": "TASK-14",
-      "description": "Feed page /announcements: server page (requireUser) with PageHeader and a 'New announcement' button for ADMIN/TEACHER. AnnouncementFeed client component (MUI Tabs All/Unread/Requires acknowledgement, Pagination, EmptyState; takes an optional courseId so the course tab can reuse it). AnnouncementCard (CardMedia cover via /api/files/:id, title, author and role, formatInSchoolTz date, label Chips, 'For <child>' Chip, plain-text excerpt, attachment count, unread dot with visuallyHidden 'Unread'). Look up MUI components via mui-mcp.",
+      "description": "Message, messaging and settings API routes: PATCH/DELETE /api/messages/:id, POST /api/messages/:id/report, GET /api/messaging/unread-count, GET /api/messaging/contacts, GET/PUT /api/me/messaging-settings",
       "files": [
-        "src/app/(app)/announcements/page.tsx",
-        "src/app/(app)/announcements/AnnouncementFeed.tsx",
-        "src/app/(app)/announcements/AnnouncementCard.tsx"
+        "src/app/api/messages/[id]/route.ts",
+        "src/app/api/messages/[id]/report/route.ts",
+        "src/app/api/messaging/unread-count/route.ts",
+        "src/app/api/messaging/contacts/route.ts",
+        "src/app/api/me/messaging-settings/route.ts"
       ],
       "dependencies": [
-        "TASK-10"
+        "TASK-2",
+        "TASK-6",
+        "TASK-8",
+        "TASK-9",
+        "TASK-11",
+        "TASK-12"
       ],
-      "estimateHours": 3,
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-17",
+        "FR-8",
+        "FR-15",
         "FR-18",
+        "FR-21",
         "FR-22",
-        "FR-33",
-        "NFR-1",
-        "NFR-4",
-        "NFR-5",
-        "NFR-7"
+        "FR-28"
       ]
     },
     {
       "id": "TASK-15",
-      "description": "Detail page /announcements/[id]: server page calls getForViewer (notFound on 404). AnnouncementDetailView renders MarkdownView body, FileList attachments, the 'I acknowledge' Button → POST ack → disabled 'Acknowledged on 14 Sep' (formatInSchoolTz), and Edit/Stats links when canEdit/canViewStats. Errors via useToast.",
+      "description": "Safeguarding API routes: GET /api/safeguarding/reports, GET/PATCH /api/safeguarding/reports/:id, GET /api/safeguarding/conversations, GET /api/safeguarding/conversations/:id",
       "files": [
-        "src/app/(app)/announcements/[id]/page.tsx",
-        "src/app/(app)/announcements/[id]/AnnouncementDetailView.tsx"
+        "src/app/api/safeguarding/reports/route.ts",
+        "src/app/api/safeguarding/reports/[id]/route.ts",
+        "src/app/api/safeguarding/conversations/route.ts",
+        "src/app/api/safeguarding/conversations/[id]/route.ts"
       ],
       "dependencies": [
-        "TASK-11"
+        "TASK-2",
+        "TASK-12"
       ],
       "estimateHours": 2,
       "requirementIds": [
-        "FR-19",
-        "FR-20",
+        "FR-23",
+        "FR-24",
+        "FR-25",
+        "FR-28",
         "NFR-1",
-        "NFR-4",
-        "NFR-6",
-        "NFR-7"
+        "NFR-11"
       ]
     },
     {
       "id": "TASK-16",
-      "description": "Composer: AnnouncementComposer (react-hook-form + zodResolver(announcementInputSchema): TextField title, MarkdownEditor, cover FileUpload (context 'announcement'), attachments FileUpload + FileList, Switches for pinned/requiresAck/isPublic (admins only), RadioGroup publish/schedule/draft, DateTimePickers converted from the school timezone to UTC) and AudienceBuilder (rows of Select type → Autocomplete entity from existing grade-level/section/course APIs, teachers limited to own courses and homeroom → 3 Checkboxes; 400 ms debounced preview line). /announcements/new and /announcements/[id]/edit server pages (ADMIN/TEACHER; edit 404 unless canEdit).",
+      "description": "isSafeguardingLead on PATCH /api/users/:id: add to updateUserSchema; updateUser rejects true for non-ADMIN (400 VALIDATION_ERROR) and audits the change in user.update metadata",
       "files": [
-        "src/app/(app)/announcements/AnnouncementComposer.tsx",
-        "src/app/(app)/announcements/AudienceBuilder.tsx",
-        "src/app/(app)/announcements/new/page.tsx",
-        "src/app/(app)/announcements/[id]/edit/page.tsx"
+        "src/lib/validators/users.ts",
+        "src/server/services/users.ts"
       ],
       "dependencies": [
-        "TASK-10",
-        "TASK-11"
+        "TASK-1"
+      ],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-2",
+        "NFR-11"
+      ]
+    },
+    {
+      "id": "TASK-17",
+      "description": "Seed: Alice Admin safeguarding lead; upsert Pat↔Sam ParentStudentLink; idempotent threads Pat↔Tom (6), Tom + 4 MATH-7A students (3), Tina↔Tom (4), student↔teacher thread with one OPEN report; logger.warn skip on missing prerequisites",
+      "files": [
+        "prisma/seed.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-3"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-29"
+      ]
+    },
+    {
+      "id": "TASK-18",
+      "description": "Inbox client foundation: usePolling hook (pauses on document.hidden, fires on visibilitychange), MessagesLayout (two panes, single pane + back IconButton below 768px), ConversationList (Inbox/Archived tabs, search, Badge unread, 30s poll). Look up every MUI component via mui-mcp first",
+      "files": [
+        "src/components/messaging/usePolling.ts",
+        "src/components/messaging/MessagesLayout.tsx",
+        "src/components/messaging/ConversationList.tsx"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-13"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-9",
+        "FR-13",
+        "NFR-5",
+        "NFR-7",
+        "NFR-8"
+      ]
+    },
+    {
+      "id": "TASK-19",
+      "description": "Thread client: MessageThread (day dividers in school tz, FileList, edited/deleted states, IntersectionObserver load-older with stable scroll, 5s after+since poll, POST /read on new visible messages, per-message edit/delete/report Menu + toast), Composer (Enter sends, Shift+Enter newline, FileUpload context 'message' ≤5, counter >4500, disabled when !canSend), ConversationMenu (mute, archive, participants Dialog, leave ConfirmDialog hidden when !canLeave)",
+      "files": [
+        "src/components/messaging/MessageThread.tsx",
+        "src/components/messaging/Composer.tsx",
+        "src/components/messaging/ConversationMenu.tsx"
+      ],
+      "dependencies": [
+        "TASK-13",
+        "TASK-14",
+        "TASK-18"
       ],
       "estimateHours": 5,
       "requirementIds": [
+        "FR-7",
+        "FR-10",
+        "FR-11",
         "FR-13",
         "FR-14",
         "FR-15",
+        "FR-22",
+        "NFR-5",
+        "NFR-8"
+      ]
+    },
+    {
+      "id": "TASK-20",
+      "description": "NewConversationDialog: Autocomplete multiple + groupBy over /api/messaging/contacts, subject ≤120, first message, initialRecipients and optional group restriction props; navigates to /messages/<id> on success",
+      "files": [
+        "src/components/messaging/NewConversationDialog.tsx"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-13",
+        "TASK-14"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-12",
         "FR-16",
+        "FR-17",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-21",
+      "description": "Messages pages: server shells calling requirePageUser rendering MessagesLayout with ConversationList, MessageThread/Composer/ConversationMenu and the new-conversation button",
+      "files": [
+        "src/app/(app)/messages/layout.tsx",
+        "src/app/(app)/messages/page.tsx",
+        "src/app/(app)/messages/[conversationId]/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-18",
+        "TASK-19",
+        "TASK-20"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
         "FR-9",
         "FR-10",
         "NFR-1",
@@ -332,175 +434,171 @@
       ]
     },
     {
-      "id": "TASK-17",
-      "description": "Manage page /announcements/manage (DataTable: displayStatus chip, title, audience summary, reach, read %, ack %; row actions Edit, Stats, Archive via ConfirmDialog) and stats page /announcements/[id]/stats (StatCards recipients/read %/ack %, recipient DataTable with Unread/Not acknowledged ToggleButtonGroup, Export CSV link, Send reminder via ConfirmDialog with a 429 toast showing retry time). Server pages require ADMIN/TEACHER.",
+      "id": "TASK-22",
+      "description": "Navigation + unread badge: NavItem.badge/requires, Messages (all roles, badge 'messages') and Safeguarding (ADMIN, requires safeguardingLead) items, navigationForRole(role, flags); (app)/layout.tsx reads isSafeguardingLead and passes to shell; shell renders MessagesNavBadge (30s poll of unread-count)",
       "files": [
-        "src/app/(app)/announcements/manage/page.tsx",
-        "src/app/(app)/announcements/manage/ManageTable.tsx",
-        "src/app/(app)/announcements/[id]/stats/page.tsx",
-        "src/app/(app)/announcements/[id]/stats/StatsView.tsx"
+        "src/config/navigation.ts",
+        "src/app/(app)/layout.tsx",
+        "src/app/(app)/shell.tsx",
+        "src/components/messaging/MessagesNavBadge.tsx"
       ],
       "dependencies": [
-        "TASK-11"
+        "TASK-14",
+        "TASK-18"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-18",
+        "FR-23",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-23",
+      "description": "Student page + roster entry points: new students/[id]/layout.tsx (keeps [id] segment) rendering StudentMessageActions ('Message parents' for TEACHER/ADMIN hidden without linked parents; 'Message teacher' for PARENT restricted to My child's teachers group); roster page moves staff table into client RosterTable with Checkbox selection + 'Message selected students'",
+      "files": [
+        "src/app/(app)/students/[id]/layout.tsx",
+        "src/components/messaging/StudentMessageActions.tsx",
+        "src/app/(app)/courses/[courseId]/roster/page.tsx",
+        "src/app/(app)/courses/[courseId]/roster/RosterTable.tsx"
+      ],
+      "dependencies": [
+        "TASK-20"
       ],
       "estimateHours": 3,
+      "requirementIds": [
+        "FR-16",
+        "FR-17",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-24",
+      "description": "Quiet hours UI: QuietHoursSection (two TextField type=time, Save, Clear) on /account/notifications",
+      "files": [
+        "src/components/messaging/QuietHoursSection.tsx",
+        "src/app/(app)/account/notifications/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-14"
+      ],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-21",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-25",
+      "description": "Safeguarding UI: /admin/safeguarding page (requirePageSafeguardingLead, Tabs Reports/Conversations, ?report= opens drawer), SafeguardingReports and SafeguardingConversations (DataTable + detail Drawer, Mark reviewed with note / Dismiss), read-only audited conversation view page showing deleted bodies and revisions",
+      "files": [
+        "src/app/(app)/admin/safeguarding/page.tsx",
+        "src/app/(app)/admin/safeguarding/conversations/[id]/page.tsx",
+        "src/components/messaging/SafeguardingReports.tsx",
+        "src/components/messaging/SafeguardingConversations.tsx"
+      ],
+      "dependencies": [
+        "TASK-4",
+        "TASK-12",
+        "TASK-15"
+      ],
+      "estimateHours": 4,
       "requirementIds": [
         "FR-23",
         "FR-24",
         "FR-25",
         "NFR-1",
-        "NFR-3"
+        "NFR-3",
+        "NFR-5"
       ]
     },
     {
-      "id": "TASK-18",
-      "description": "Course tab: register { key 'announcements', label 'Announcements', roles ALL_ROLES } in course-tabs.ts. Course page uses AnnouncementFeed with courseId behind assertCanViewCourse.",
+      "id": "TASK-26",
+      "description": "Integration tests: notification collapse, muted skip, rate limit 429, non-participant/left 404, edit revision + 15-min window, duplicate report 409; deferred email read short-circuit and quiet-hours deferral; safeguarding 403 for non-leads and audit row on view",
       "files": [
-        "src/config/course-tabs.ts",
-        "src/app/(app)/courses/[courseId]/announcements/page.tsx"
+        "tests/integration/messaging/messaging.test.ts",
+        "tests/integration/messaging/email.test.ts",
+        "tests/integration/messaging/safeguarding.test.ts"
       ],
       "dependencies": [
-        "TASK-14"
-      ],
-      "estimateHours": 0.5,
-      "requirementIds": [
-        "FR-21"
-      ]
-    },
-    {
-      "id": "TASK-19",
-      "description": "Seed 6 announcements, idempotent by (title, authorId): school welcome (pinned, public), Grade 7 parents field-trip consent (requiresAck), MATH-7A homework club by Tom, staff meeting (STAFF), sports day scheduled +2 days (public), expired exam timetable. Skip a seed when its target is missing. Published seeds get notifiedAt = now so seeding never sends notifications.",
-      "files": [
-        "prisma/seed.ts"
-      ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-35"
-      ]
-    },
-    {
-      "id": "TASK-20",
-      "description": "Integration tests: audience-agreement (isUserInAudience === resolveAudienceUserIds membership for every seed and fixture user × every row type), publish (publishDueAnnouncements twice and concurrently → one notification set; PATCH never re-notifies; AC-4), api (AC-1, AC-2, AC-3 403, AC-5 60%/20 notified/429, AC-6, AC-7, AC-8 with a fixture creating Pat's 6A child and ParentStudentLink).",
-      "files": [
-        "tests/integration/announcements/audience-agreement.test.ts",
-        "tests/integration/announcements/publish.test.ts",
-        "tests/integration/announcements/api.test.ts"
-      ],
-      "dependencies": [
-        "TASK-8",
-        "TASK-9",
-        "TASK-10",
-        "TASK-11",
-        "TASK-12",
-        "TASK-19"
+        "TASK-7",
+        "TASK-13",
+        "TASK-14",
+        "TASK-15",
+        "TASK-16"
       ],
       "estimateHours": 4,
       "requirementIds": [
-        "FR-7",
-        "FR-27",
-        "FR-29",
-        "FR-10",
-        "FR-24",
-        "FR-25",
-        "FR-31",
+        "NFR-10",
+        "NFR-1",
+        "NFR-4",
+        "FR-15",
+        "FR-19",
+        "FR-20",
         "FR-22",
-        "NFR-10"
+        "FR-23",
+        "FR-25"
       ]
     },
     {
-      "id": "TASK-21",
-      "description": "Playwright e2e: admin composes a Grade 7 parents announcement with requiresAck, Pat reads and acknowledges, admin opens stats and sees the acknowledgement.",
+      "id": "TASK-27",
+      "description": "E2E: parent→teacher round trip in two browser contexts (appears < 6s); student→student absent from picker and POST returns 403",
       "files": [
-        "tests/e2e/announcements.spec.ts"
+        "tests/e2e/messaging.spec.ts"
       ],
       "dependencies": [
-        "TASK-13",
-        "TASK-15",
-        "TASK-16",
         "TASK-17",
-        "TASK-19"
+        "TASK-21",
+        "TASK-22"
       ],
       "estimateHours": 2,
       "requirementIds": [
+        "NFR-8",
         "NFR-10",
-        "FR-13",
-        "FR-20",
-        "FR-24"
+        "FR-5",
+        "FR-13"
       ]
     }
   ],
   "fileStructure": {
     "prisma/": [
       "schema.prisma",
-      "migrations/20261112000000_add_announcements/",
       "seed.ts"
     ],
-    "src/lib/validators/": [
-      "announcements.ts"
+    "prisma/migrations/": [
+      "20261112000000_add_direct_messaging/"
     ],
-    "src/server/announcements/": [
-      "excerpt.ts",
-      "audience.ts",
-      "announcements-service.ts",
-      "maintenance.ts",
-      "files.ts"
+    "src/app/": [
+      "(app)/",
+      "api/"
     ],
-    "src/server/notifications/": [
-      "types.ts",
-      "notify.ts"
-    ],
-    "src/server/files/": [
-      "contexts.ts"
+    "src/components/": [
+      "messaging/"
     ],
     "src/config/": [
-      "navigation.ts",
-      "course-tabs.ts",
-      "public-routes.ts"
+      "navigation.ts"
     ],
-    "src/app/(app)/": [
-      "shell.tsx",
-      "announcements/",
-      "courses/[courseId]/announcements/"
+    "src/lib/": [
+      "messaging/",
+      "validators/"
     ],
-    "src/app/(app)/announcements/": [
-      "page.tsx",
-      "AnnouncementFeed.tsx",
-      "AnnouncementCard.tsx",
-      "AnnouncementComposer.tsx",
-      "AudienceBuilder.tsx",
-      "new/",
-      "manage/",
-      "[id]/"
+    "src/server/": [
+      "files/",
+      "messaging/",
+      "notifications/",
+      "services/"
     ],
-    "src/app/api/announcements/": [
-      "route.ts",
-      "unread-count/",
-      "preview-audience/",
-      "manage/",
-      "[id]/"
+    "tests/e2e/": [
+      "messaging.spec.ts"
     ],
-    "src/app/api/announcements/[id]/": [
-      "route.ts",
-      "archive/",
-      "ack/",
-      "stats/",
-      "remind/"
+    "tests/integration/": [
+      "messaging/"
     ],
-    "src/app/api/": [
-      "public/news/",
-      "internal/email/dispatch/"
-    ],
-    "tests/": [
-      "unit/validators/",
-      "unit/announcements/",
-      "integration/announcements/",
-      "e2e/announcements.spec.ts"
+    "tests/unit/": [
+      "messaging/"
     ]
   },
-  "totalEstimateHours": 47.5,
+  "totalEstimateHours": 69,
   "nxpPatterns": [],
   "status": "complete"
 }

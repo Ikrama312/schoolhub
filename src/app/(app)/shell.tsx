@@ -33,6 +33,7 @@ import { navigationForRole } from '@/config/navigation';
 import type { SessionUser } from '@/server/auth/requireRole';
 import { UserAvatar } from '@/components/UserAvatar/UserAvatar';
 import { NotificationBell } from '@/components/NotificationBell/NotificationBell';
+import { MessagesNavBadge } from '@/components/messaging/MessagesNavBadge';
 
 const DRAWER_WIDTH_EXPANDED = 256;
 const DRAWER_WIDTH_COLLAPSED = 64;
@@ -41,12 +42,14 @@ const COLLAPSE_STORAGE_KEY = 'schoolhub.sidebar.collapsed';
 export interface AppShellProps {
   user: SessionUser;
   schoolShortName: string;
+  /** PRD-13 FR-23: shows the Safeguarding nav entry. */
+  safeguardingLead?: boolean;
   children: React.ReactNode;
 }
 
 const DESKTOP_BREAKPOINT_PX = 1024;
 
-export function AppShell({ user, schoolShortName, children }: AppShellProps) {
+export function AppShell({ user, schoolShortName, safeguardingLead = false, children }: AppShellProps) {
   const { mode, setMode } = useColorScheme();
   const pathname = usePathname();
   // FR-31/NFR-4 fix the fork at exactly 1024px — MUI's own "lg" breakpoint
@@ -71,7 +74,7 @@ export function AppShell({ user, schoolShortName, children }: AppShellProps) {
   };
 
   const drawerWidth = collapsed ? DRAWER_WIDTH_COLLAPSED : DRAWER_WIDTH_EXPANDED;
-  const items = navigationForRole(user.role);
+  const items = navigationForRole(user.role, { safeguardingLead });
   const fullName = `${user.firstName} ${user.lastName}`;
 
   const navList = (
@@ -92,7 +95,13 @@ export function AppShell({ user, schoolShortName, children }: AppShellProps) {
             sx={{ justifyContent: collapsed && isDesktop ? 'center' : 'flex-start' }}
           >
             <ListItemIcon sx={{ minWidth: collapsed && isDesktop ? 0 : 40, justifyContent: 'center' }}>
-              <Icon />
+              {item.badge === 'messages' ? (
+                <MessagesNavBadge>
+                  <Icon />
+                </MessagesNavBadge>
+              ) : (
+                <Icon />
+              )}
             </ListItemIcon>
             {!(collapsed && isDesktop) && <ListItemText primary={item.label} />}
           </ListItemButton>

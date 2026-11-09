@@ -81,6 +81,24 @@ export const quizResolver: FileAccessResolver = async (user, file) => {
   return canSeeDrafts(user, q.course) || q.status !== 'DRAFT';
 };
 
+/**
+ * 'message' (PRD-13 FR-27, A7): a participant of the message's conversation who has not left, or an
+ * ACTIVE ADMIN safeguarding lead (flag read from the DB). Errors deny (canAccessFile catches).
+ */
+export const messageResolver: FileAccessResolver = async (user, file) => {
+  if (!user || !file.contextId) return false;
+  const m = await prisma.message.findUnique({ where: { id: file.contextId }, select: { conversationId: true } });
+  if (!m) return false;
+  const p = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId: m.conversationId, userId: user.id } },
+    select: { leftAt: true },
+  });
+  if (p && !p.leftAt) return true;
+  if (user.role !== 'ADMIN') return false;
+  const lead = await prisma.user.findUnique({ where: { id: user.id }, select: { isSafeguardingLead: true, status: true } });
+  return !!lead?.isSafeguardingLead && lead.status === 'ACTIVE';
+};
+
 /** 'logo': public, including anonymous (app shell, login page, emails). */
 export const logoResolver: FileAccessResolver = () => true;
 
@@ -90,4 +108,5 @@ export function registerBuiltInContexts(register: (context: string, resolver: Fi
   register('assignment', assignmentResolver);
   register('submission', submissionResolver);
   register('quiz', quizResolver);
+  register('message', messageResolver);
 }
