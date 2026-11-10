@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/server/db';
 import { notify } from '@/server/notifications/notify';
 import { formatInSchoolTz } from '@/lib/dates';
+import { missingWork } from '@/server/dashboards/missing-work';
 import { getSchoolTimezone, visibleWhere } from './assignments-service';
 
 /**
@@ -66,9 +67,25 @@ export async function sendDueReminders(now = new Date()): Promise<{ dueSoon: num
     }
   }
 
-  const missingWindow = { gte: new Date(now.getTime() - MISSING_LOOKBACK_MS), lte: new Date(now.getTime() - 24 * HOUR) };
-  for (const { a, studentIds } of await candidates(missingWindow, now)) {
-    if (studentIds.length === 0) continue;
+  // Shared PRD-16 predicate; the old window was dueAt ∈ [now−8d, now−24h] (inclusive), so `to` is +1 ms.
+  const missingByStudent = await missingWork({
+    from: new Date(now.getTime() - MISSING_LOOKBACK_MS),
+    to: new Date(now.getTime() - 24 * HOUR + 1),
+    now,
+  });
+  const byAssignment = new Map<string, string[]>();
+  for (const [studentId, items] of missingByStudent) {
+    for (const item of items) byAssignment.set(item.assignmentId, [...(byAssignment.get(item.assignmentId) ?? []), studentId]);
+  }
+  const missingAssignments = byAssignment.size
+    ? await prisma.assignment.findMany({
+        where: { id: { in: [...byAssignment.keys()] } },
+        select: { id: true, title: true, dueAt: true, courseId: true, course: { select: { name: true } } },
+        orderBy: { dueAt: 'asc' },
+      })
+    : [];
+  for (const a of missingAssignments) {
+    const studentIds = byAssignment.get(a.id)!;
     const [students, links] = await Promise.all([
       prisma.user.findMany({ where: { id: { in: studentIds } }, select: { id: true, firstName: true, lastName: true } }),
       prisma.parentStudentLink.findMany({ where: { studentId: { in: studentIds } }, select: { studentId: true, parentId: true } }),

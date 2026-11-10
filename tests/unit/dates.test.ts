@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { addDateDays, formatInSchoolTz, nextTeachingDayDueAt, schoolDateOf, schoolMidnight } from '@/lib/dates';
+import {
+  addDateDays,
+  formatInSchoolTz,
+  greetingFor,
+  nextTeachingDayDueAt,
+  schoolDateOf,
+  schoolDaysBack,
+  schoolMidnight,
+} from '@/lib/dates';
 
 describe('formatInSchoolTz', () => {
   const utcDate = '2024-01-15T17:30:00.000Z';
@@ -88,5 +96,37 @@ describe('schoolMidnight / schoolDateOf (PRD-14 all-day conversion)', () => {
   it('addDateDays crosses month and year ends', () => {
     expect(addDateDays('2026-12-31', 1)).toBe('2027-01-01');
     expect(addDateDays('2026-03-01', -1)).toBe('2026-02-28');
+  });
+});
+
+describe('greetingFor (PRD-16 FR-3, NFR-7)', () => {
+  const tz = 'America/New_York'; // UTC-5 in November
+  it.each([
+    ['2026-11-10T09:59:00Z', 'Good evening'], // 04:59 local
+    ['2026-11-10T10:00:00Z', 'Good morning'], // 05:00
+    ['2026-11-10T16:59:00Z', 'Good morning'], // 11:59
+    ['2026-11-10T17:00:00Z', 'Good afternoon'], // 12:00
+    ['2026-11-10T21:59:00Z', 'Good afternoon'], // 16:59
+    ['2026-11-10T22:00:00Z', 'Good evening'], // 17:00
+    ['2026-11-11T04:59:00Z', 'Good evening'], // 23:59
+  ])('%s → %s', (iso, expected) => {
+    expect(greetingFor(new Date(iso), tz)).toBe(expected);
+  });
+
+  it('uses the school timezone, not UTC', () => {
+    expect(greetingFor(new Date('2026-11-10T10:00:00Z'), 'UTC')).toBe('Good morning');
+    expect(greetingFor(new Date('2026-11-10T10:00:00Z'), 'Asia/Tokyo')).toBe('Good evening'); // 19:00
+  });
+});
+
+describe('schoolDaysBack (PRD-16 FR-17)', () => {
+  it('returns the last n distinct session dates up to school-today, ascending', () => {
+    const dates = ['2026-11-09', '2026-11-05', '2026-11-06', '2026-11-09', '2026-11-12', '2026-11-04'];
+    expect(schoolDaysBack(3, 'UTC', dates, new Date('2026-11-10T12:00:00Z'))).toEqual(['2026-11-05', '2026-11-06', '2026-11-09']);
+  });
+
+  it('"today" is the school-tz date', () => {
+    // 2026-11-10T03:00Z is still 2026-11-09 in New York.
+    expect(schoolDaysBack(5, 'America/New_York', ['2026-11-09', '2026-11-10'], new Date('2026-11-10T03:00:00Z'))).toEqual(['2026-11-09']);
   });
 });

@@ -68,3 +68,24 @@ export function schoolDateOf(instant: Date | string, tz: string): string {
 export function addDateDays(dateStr: string, days: number): string {
   return new Date(Date.parse(`${dateStr}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
+
+/** PRD-16 FR-3: greeting by the school-tz hour: [05,12) morning, [12,17) afternoon, otherwise evening. */
+export function greetingFor(now: Date, tz: string): 'Good morning' | 'Good afternoon' | 'Good evening' {
+  const hour = Number(formatInSchoolTz(now, 'H', tz));
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+/**
+ * PRD-16 FR-17: the last `n` school days up to today (school tz), ascending. A school day is
+ * a date with at least one AttendanceSession; callers pass those dates (yyyy-MM-dd) in, so this
+ * module stays free of DB imports (it is also used by client components).
+ */
+export function schoolDaysBack(n: number, tz: string, sessionDates: Iterable<string>, now: Date = new Date()): string[] {
+  const today = schoolDateOf(now, tz);
+  return [...new Set(sessionDates)]
+    .filter((d) => d <= today)
+    .sort()
+    .slice(-n);
+}

@@ -119,6 +119,8 @@ model User {
   consentFormsCreated      ConsentForm[]             @relation("ConsentFormCreator")
   consentResponsesFor      ConsentResponse[]         @relation("ConsentResponseStudent")
   consentResponsesGiven    ConsentResponse[]         @relation("ConsentResponseParent")
+  /// PRD-16
+  riskSnapshots            StudentRiskSnapshot[]
 
   @@index([lastName, firstName, email])
   @@index([role, status])
@@ -272,6 +274,7 @@ model Term {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   gradeItems     GradeItem[]
+  riskSnapshots  StudentRiskSnapshot[]
 
   @@unique([academicYearId, name])
   @@unique([academicYearId, order])
@@ -1483,4 +1486,40 @@ model ConsentResponse {
   updatedAt     DateTime             @updatedAt
 
   @@unique([formId, studentId])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-16 Early-warning risk snapshot (FR-27, FR-28). One row per (student, term);
+// history is a capped Json array (last 10 level changes, ADR-5).
+// ---------------------------------------------------------------------------
+
+enum RiskLevel {
+  MEDIUM
+  HIGH
+}
+
+model StudentRiskSnapshot {
+  id             String     @id @default(cuid())
+  studentId      String
+  student        User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  termId         String
+  term           Term       @relation(fields: [termId], references: [id], onDelete: Cascade)
+  /// null = none
+  level          RiskLevel?
+  previousLevel  RiskLevel?
+  /// [{signal, level, value, label}]
+  reasons        Json
+  /// {attendancePct, coursesBelow60, lowestCoursePct, missingCount}
+  signals        Json
+  /// [{level, reasons, computedAt}] newest first, max 10
+  history        Json       @default("[]")
+  /// FR-32 14-day notification claim
+  highNotifiedAt DateTime?
+  computedAt     DateTime
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([studentId, termId])
+  @@index([termId, level])
+  @@index([termId, computedAt])
 }

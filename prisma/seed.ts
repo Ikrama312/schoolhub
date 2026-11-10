@@ -165,6 +165,7 @@ async function main() {
   await seedGradebook();
   await seedMessaging();
   await seedParentPortal();
+  await seedRiskCohort();
 }
 
 /** Deterministic PRNG so every seed run produces the same attendance (FR-38). */
@@ -893,6 +894,119 @@ async function seedParentPortal() {
     });
   }
   logger.info('Seed: parent portal ready', { families: families.length, responses: respondents.length });
+}
+
+/**
+ * PRD-16 FR-46: a small cohort that crosses the FR-25 thresholds, so the at-risk list is populated
+ * right after seeding: 3 HIGH (5 missing; one also < 50 %), 3 MEDIUM (3 missing, or one course
+ * 50–59 %), 3 none. Section 7R's homeroom teacher is the demo teacher (FR-32 notification target).
+ * Idempotent: users/section/course are upserted, demo assignments keep their rows but their
+ * due dates are moved back into the 30-day window on every run. Ends with a forced recompute.
+ */
+async function seedRiskCohort() {
+  const DAY = 86_400_000;
+  const now = Date.now();
+  const { currentTerm } = await import('../src/server/dashboards/insights');
+  const { recomputeRiskSnapshots } = await import('../src/server/dashboards/risk');
+  const [year, term, grade7, math, teacher] = await Promise.all([
+    prisma.academicYear.findFirst({ where: { isCurrent: true } }),
+    currentTerm(new Date(now)),
+    prisma.gradeLevel.findUnique({ where: { name: 'Grade 7' } }),
+    prisma.subject.findUnique({ where: { code: 'MATH' } }),
+    prisma.user.findUnique({ where: { email: 'teacher@schoolhub.test' } }),
+  ]);
+  if (!year || !term || !grade7 || !math || !teacher) {
+    console.log('Seed: no current term / Grade 7 / MATH / demo teacher, skipping the risk cohort');
+    return;
+  }
+
+  const section = await prisma.section.upsert({
+    where: { academicYearId_name: { academicYearId: year.id, name: '7R' } },
+    update: { homeroomTeacherId: teacher.id },
+    create: { academicYearId: year.id, gradeLevelId: grade7.id, name: '7R', homeroomTeacherId: teacher.id },
+  });
+  const course = await prisma.course.upsert({
+    where: { academicYearId_code: { academicYearId: year.id, code: 'STUDY-7R' } },
+    update: {},
+    create: { academicYearId: year.id, subjectId: math.id, sectionId: section.id, teacherId: teacher.id, name: 'Study Skills 7R', code: 'STUDY-7R' },
+  });
+
+  // [key, first, last, missing count, unit-test score]
+  const cohort: [string, string, string, number, number][] = [
+    ['high1', 'Harper', 'Hale', 5, 45],
+    ['high2', 'Hugo', 'Hart', 5, 72],
+    ['high3', 'Hana', 'Holt', 5, 68],
+    ['medium1', 'Mia', 'Marsh', 3, 75],
+    ['medium2', 'Milo', 'Moss', 3, 81],
+    ['medium3', 'Maya', 'Mills', 0, 55],
+    ['none1', 'Noah', 'North', 0, 88],
+    ['none2', 'Nina', 'Nash', 0, 92],
+    ['none3', 'Nate', 'Noble', 1, 79],
+  ];
+  const students: { id: string; missing: number; score: number }[] = [];
+  for (const [i, [key, firstName, lastName, missing, score]] of cohort.entries()) {
+    const u = await prisma.user.upsert({
+      where: { email: `risk.${key}@schoolhub.test` },
+      update: {},
+      create: {
+        email: `risk.${key}@schoolhub.test`,
+        firstName,
+        lastName,
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        studentProfile: {
+          create: {
+            admissionNumber: `RISK-${String(i + 1).padStart(3, '0')}`,
+            dateOfBirth: new Date('2014-03-01'),
+            gender: i % 2 ? 'MALE' : 'FEMALE',
+            gradeLevelId: grade7.id,
+            enrollmentDate: new Date('2026-08-17'),
+          },
+        },
+      },
+    });
+    await prisma.sectionMember.upsert({
+      where: { studentId_academicYearId: { studentId: u.id, academicYearId: year.id } },
+      update: {},
+      create: { sectionId: section.id, studentId: u.id, academicYearId: year.id },
+    });
+    students.push({ id: u.id, missing, score });
+  }
+  await prisma.enrollment.createMany({ data: students.map((s) => ({ courseId: course.id, studentId: s.id })), skipDuplicates: true });
+
+  // Five published assignments due 3–15 days ago; a student with `missing` = m skips the first m.
+  for (let n = 0; n < 5; n++) {
+    const title = `Reading log ${n + 1}`;
+    const dueAt = new Date(now - (3 + 3 * n) * DAY);
+    const existing = await prisma.assignment.findFirst({ where: { courseId: course.id, title }, select: { id: true } });
+    const a = existing
+      ? await prisma.assignment.update({ where: { id: existing.id }, data: { dueAt } })
+      : await prisma.assignment.create({
+          data: { courseId: course.id, title, submissionType: 'ONLINE_TEXT', maxPoints: '10', dueAt, status: 'PUBLISHED', createdById: teacher.id, notifiedAt: new Date() },
+        });
+    await prisma.submission.createMany({
+      data: students
+        .filter((s) => n >= s.missing)
+        .map((s) => ({ assignmentId: a.id, studentId: s.id, attemptNumber: 1, text: 'Done.', submittedAt: new Date(dueAt.getTime() - DAY) })),
+      skipDuplicates: true,
+    });
+  }
+
+  // One visible manual grade item in the current term drives the GRADES signal.
+  const item =
+    (await prisma.gradeItem.findFirst({ where: { courseId: course.id, termId: term.id, title: 'Unit test' } })) ??
+    (await prisma.gradeItem.create({ data: { courseId: course.id, termId: term.id, title: 'Unit test', maxPoints: '100', source: 'MANUAL' } }));
+  for (const s of students) {
+    await prisma.grade.upsert({
+      where: { gradeItemId_studentId: { gradeItemId: item.id, studentId: s.id } },
+      update: { score: String(s.score) },
+      create: { gradeItemId: item.id, studentId: s.id, score: String(s.score), updatedById: teacher.id },
+    });
+  }
+
+  const result = await recomputeRiskSnapshots({ force: true });
+  const levels = await prisma.studentRiskSnapshot.groupBy({ by: ['level'], where: { termId: term.id, studentId: { in: students.map((s) => s.id) } }, _count: { _all: true } });
+  logger.info('Seed: risk cohort ready', { ...result, levels: Object.fromEntries(levels.map((l) => [l.level ?? 'NONE', l._count._all])) });
 }
 
 async function disconnectAll() {

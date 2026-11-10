@@ -1,226 +1,169 @@
-# Tech Stack Decisions: PRD-15 Parent Portal (Child Switcher, Absence Notes, Conference Booking)
+# Tech Stack Decisions: PRD-16 Role Dashboards, Reports & Early-Warning Insights
 
-Ticket: SH-15 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-10T12:30:00Z · Status: complete
+Ticket: SH-16 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-10T13:00:00Z · Status: complete
 
-> This file replaces the SH-14 version. The other files in `artifacts/architect/` (`system-design.md`, `requirements-analysis-notes.md`, `api-contracts.json`, `handoff-to-dev-planning.json`, `threat-model-notes.json`) are still from SH-14 until their own sub-tasks rewrite them.
+> This file replaces the SH-15 version. The other files in `artifacts/architect/` are still from SH-15 until their own sub-tasks rewrite them.
 
-**Base stack (checked against `package.json`).** `artifacts/intake/tech-stack.json` reports `react` at 98% confidence. The workspace matches:
+**Summary:** keep intake's detected stack (`react`, 98 %). It meets every FR/NFR. **No new runtime or dev dependencies.** All of the following are already installed and pinned in `package.json`: Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict, MUI 9.5.0 with `@mui/x-charts`, `@mui/x-data-grid` and `@mui/x-date-pickers` 9.5.0, Prisma 5.20.0 on PostgreSQL 16, Auth.js 5.0.0-beta.25, Zod 3.23.8, date-fns 3.6.0 with date-fns-tz 3.2.0, Vitest 2.1.1, Playwright 1.47.2 with `@axe-core/playwright` 4.10.0, and tsx 4.16.2.
 
-- Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict
-- Prisma 5.20.0 on PostgreSQL 16, Zod 3.23.8, react-hook-form 7.53.0, Auth.js 5.0.0-beta.25
-- MUI 9.5.0 (material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts), @mui/x-scheduler 9.0.0-beta.15 (theme augmentation only)
-- date-fns 3.6.0, date-fns-tz 3.2.0, papaparse, file-type 20.5.0, react-markdown + rehype-sanitize (behind `MarkdownView`)
-- Vitest 2.1.1, Testing Library, Playwright 1.47.2
-
-Intake reported no blockers (`blockers: []`, 95% confidence). It left six warnings and seven unresolved questions. ADR-11 through ADR-13 cover them.
+Verified in the codebase: `src/server/dashboards/` and `src/server/reports/` do not exist yet. There is no `unstable_cache` or `revalidateTag` usage, no React error boundary, and no `seed:large` script. `@mui/x-charts` is already used in `QuizAnalytics.tsx`. `src/lib/dates.ts` and `src/server/csv.ts` already provide the timezone and CSV helpers.
 
 ---
 
-## ADR-1: Keep the existing stack and add no new dependencies
+## ADR-1: Keep the existing stack and add no dependencies
 
-**Context.** NFR-6 says to reuse what exists, with no re-scaffolding. NFR-7 requires lint, typecheck and tests to stay green. NFR-9 limits the work to one forge run. Every PRD-15 feature is covered by something already installed:
+**Context:** NFR-8 (brownfield reuse), NFR-4 (MUI-only UI), and NFR-10 (lint/typecheck/test stay green). The new features are dashboards, charts, tables, aggregate queries, a rule engine, caching and a seed script, and the installed stack covers all of them.
 
-- **Forms:** RHF + Zod
-- **Dates:** date-fns-tz
-- **CSV:** `src/server/csv.ts` / papaparse
-- **.ics:** `src/server/calendar/ical.ts`
-- **Markdown:** `MarkdownView` / `MarkdownEditor`
-- **Uploads:** `FileUpload` + `file-type`
-- **Grids:** MUI X DataGrid via `DataTable`
-- **Date inputs:** MUI X DatePicker
+**Decision:** Use only installed packages. Do not add charting, error-boundary, faker, cron, cache or date libraries.
 
-**Decision.** No new runtime or dev dependencies. `package.json` stays unchanged.
+**Consequences:** No lockfile churn and no new attack surface. The few small helpers we still need are covered in ADR-4 and ADR-10.
 
-**Consequences.** There is no new supply-chain surface and no lockfile churn. If dev-planning proposes a package, it needs a new ADR.
+## ADR-2: Use async Server Components for widgets, each in Suspense with a per-widget error boundary
 
-## ADR-2: UI is MUI only, and every component is looked up in mui-mcp first
+**Context:** FR-1, FR-2 and NFR-1 (first content in under 1.5 s). Next.js 14's `error.tsx` works at route-segment level, so it cannot isolate one widget's failure. React 18 has no built-in component-level error boundary, and none exists in `src/` yet.
 
-**Context.** NFR-4 requires MUI v9 and MUI X only. Banned libraries are never imported. Toasts go through `useToast()`, confirmations through `Dialog`/`ConfirmDialog`, pickers through `Autocomplete`. The mui-mcp server is connected in this session (`useMuiDocs`, `fetchDocs`).
+**Decision:**
+- `/dashboard/page.tsx` stays a server component. It checks the role, keeps the PARENT redirect to `/my-children`, and renders one of three role dashboards (FR-1).
+- Each widget is an `async` server component that loads its own data and is wrapped in `<Suspense fallback={<LoadingSkeleton/>}>` (reuse `src/components/LoadingSkeleton`), so widgets stream independently.
+- Add one small client `WidgetErrorBoundary`: a class component of about 25 lines using `getDerivedStateFromError`. It renders an MUI `Alert` with the text "This widget could not load" and a "Retry" `Button` that resets its state and calls `router.refresh()`. It lives in `src/components/WidgetErrorBoundary/` and is the only new shared component (FR-2).
 
-**Decision.** Map each new UI surface to MUI components:
+**Consequences:** One slow widget, such as at-risk, does not block the others. Widgets read data through server-side services directly, not through `/api/dashboard/*`. The FR-41 GET endpoints are thin JSON wrappers around the same service functions, for API parity and tests.
 
-| Surface | Requirements | MUI components |
-| --- | --- | --- |
-| Child switcher | FR-3, FR-6 | `Select` or `Menu`, with `UserAvatar` |
-| Overview cards | FR-9–FR-17 | `Card`, `List`, `Chip`, `LoadingSkeleton` |
-| Absence form | FR-18 | `DatePicker`, `RadioGroup`, `Checkbox` group, `FileUpload` |
-| Review queue | FR-21, FR-22 | `DataTable`, with `Dialog` for approve/reject |
-| Slot buttons | FR-30 | `ToggleButton` or `Button` grid |
-| Day view | FR-34 | `Table` with print CSS through `sx` and `@media print` |
-| Consent tracking | FR-39 | `DataTable` |
-| Signature field | FR-37 | `TextField` |
+## ADR-3: Cache aggregates with `unstable_cache`, using role-scoped keys and tags
 
-Developers must call `useMuiDocs` and `fetchDocs` before using each component. If the MCP is unreachable at dev time, that is a blocker, not something to work around.
+**Context:** FR-23, FR-24, NFR-1 and NFR-12. Next.js 14.2 provides `unstable_cache(fn, keyParts, { revalidate, tags })` and `revalidateTag()`.
 
-**Consequences.** QA's banned-import grep stays at zero hits. Printing (FR-34) uses `@media print` styles only, with no print library.
+**Decision:**
+- Wrap the expensive reads in `src/server/dashboards/insights.ts`: admin KPIs, the attendance trend, the enrollment and grade distributions, and risk summaries and lists.
+- Use `revalidate: 900` (15 minutes) and `3600` (60 minutes) for at-risk data.
+- Key parts must include the scope: `['admin']`, or `['teacher', teacherId]` for teacher-scoped data. This keeps one teacher's cached data out of another teacher's view (NFR-3).
+- Tags: `dashboard:admin`, `dashboard:teacher`, `dashboard:student` and `insights:at-risk`.
+- `POST /api/dashboard/refresh` (ADMIN only) calls `revalidateTag` for each tag after it triggers the risk recompute (ADR-6).
+- Each cached function returns `{ data, computedAt: ISO string }`, and the widget shows "Updated N min ago" from `computedAt` (FR-24).
 
-## ADR-3: Data model is one additive Prisma migration, plus three flagged extra columns
+**Consequences:**
+- `unstable_cache` serializes results to JSON, so cached values must not contain `Date` objects; use ISO strings.
+- The cache lives in each Next.js server process, which is acceptable for a single-node deployment.
+- `ponytail:` ceiling: with several app instances each one has its own cache, and Refresh only clears the instance that handles the request. Add a shared cache handler if the app is scaled out.
+- Per-user student widgets (FR-10 to FR-15) are cheap, single-student queries and are **not** cached. That avoids one cache entry per student.
 
-**Context.** FR-1 and FR-2 define the enums and models, and reuse `AudienceType` for consent. Consent audiences are limited to GRADE_LEVEL, SECTION and COURSE. Three requirements need persisted state that the PRD field list does not name:
+## ADR-4: Use MUI X Charts, the shared DataTable, and visually hidden data for accessibility
 
-- **FR-29:** block individual slots. Deleting a slot would not work, because the next availability regeneration would recreate it.
-- **FR-39:** "Remind non-responders" is limited to once per 24 h. `src/server/rate-limit.ts` is in-memory per process (its own `ponytail:` note says so), so the limit would reset on every deploy or restart.
-- **FR-40:** the 48 h reminder must go out once per form.
+**Context:** FR-15 to FR-19, FR-33 to FR-39, NFR-2, NFR-4 and NFR-5.
 
-**Decision.**
-- Add one migration `…_prd15_parent_portal` with the enums and models as specified. Date-only fields use `@db.Date` (NFR-8).
-- The three extra columns:
-  - `ConferenceSlot.blocked Boolean @default(false)` (FR-29)
-  - `ConsentForm.lastRemindedAt DateTime?` (FR-39)
-  - `ConsentForm.dueReminderSentAt DateTime?` (FR-40)
+**Decision:**
+- Use `LineChart` (FR-17 and the report trends), `BarChart` (FR-18 stacked by gender, the FR-19 histogram, and the reports) and `Gauge` (FR-15), all from `@mui/x-charts` 9.5.0.
+- Draw the FR-17 threshold with the chart's reference-line component, `ChartsReferenceLine`.
+- All tables use the existing `src/components/DataTable` (x-data-grid).
+- Charts are client components that receive serializable props from the server.
+- For NFR-2, every chart gets an `aria-label` summary built on the server, for example "Attendance trend: 94.2 % average, lowest 88.1 % on 3 Oct". It also gets a visually hidden MUI `Table` built with the `visuallyHidden` style from `@mui/utils`, which comes with `@mui/material`.
+- Series use labels and distinct marks or patterns, not colour alone.
+- Per NFR-5, the dev phase must look up each component through mui-mcp (`useMuiDocs` and `fetchDocs`, version 9.5.0) before using it. If MCP is unavailable, that is a blocker.
 
-  Both reminders claim their slot atomically with `updateMany({ where: { id, <col>: null | lt cutoff } })` and treat `count === 0` as "already done". This is the same pattern as `CalendarEvent.rsvpReminderSentAt` (D-1).
-- Use one `ConsentResponse` per (formId, studentId) via `@@unique` (FR-38). Changes update the row in place, and each change is audited.
-- Zod schemas in `src/lib/validators/<feature>.ts` enforce the FR-2 limits: span ≤ 30 days, details ≤ 1,000 chars, slotMinutes 5–60, parentNote ≤ 500 chars. Forms and handlers share these schemas (NFR-7).
+**Consequences:** No Recharts, Tailwind or shadcn (NFR-4). Each chart duplicates its data once, for the hidden table, which is trivial at these data sizes.
 
-**Consequences.** The extra columns go beyond "exactly as specified". `system-design.md` must list them as a deviation. If the PRD's own model already has an equivalent field, use that field and drop the extra column.
+## ADR-5: Implement risk scoring as rule-based pure functions plus a Prisma snapshot with embedded capped history
 
-## ADR-4: Conference booking uses a conditional UPDATE plus a partial unique index
+**Context:** FR-25 to FR-28, FR-31, FR-32, NFR-9 and NFR-11 (no ML). FR-28 is LOW confidence because "one row per student per term, upserted" conflicts with the trend arrow and history requirements.
 
-**Context.** NFR-1 requires that exactly one of two concurrent bookings succeeds. The loser gets 409 `That slot was just taken`. FR-31 allows one slot per teacher per child and no overlapping bookings across teachers. FR-30 requires the booking to be atomic.
+**Decision:**
+- `src/server/dashboards/risk.ts` exports pure, database-free functions `attendanceSignal`, `gradesSignal`, `missingSignal` and `overallLevel`. They take numbers and return `'HIGH' | 'MEDIUM' | null` plus a reason string. That makes the NFR-9 boundary tests plain Vitest tables.
+- A separate loader, `computeRiskInputs(termId, studentIds)`, fetches data in bulk, using a fixed number of queries per run rather than per student.
+- **FR-28 resolution:** keep `@@unique([studentId, termId])` on `StudentRiskSnapshot`. Add `previousLevel RiskLevel?` and `history Json`, a list of `{ level, computedAt, reasons }` capped at the last 10 **level changes**. Unchanged recomputes update `computedAt` only, so hourly runs do not flood the history. The trend arrow compares `level` with `previousLevel`, and the Insights tab renders `history`.
+- Add `highNotifiedAt DateTime?` to enforce the FR-32 rule of at most one notification per 14 days without querying the Notification table.
+- New enum `RiskLevel { MEDIUM HIGH }`. `none` is stored as a `null` level.
+- The "Missing" count reuses the definition from `src/server/assignments/reminders.ts`: published, due within the last 30 days, no submission, not exempt, and `submissionType != NO_SUBMISSION`.
+- A student with no data has no signal.
 
-**Decision.**
-1. Book with `prisma.conferenceSlot.updateMany({ where: { id, bookedByParentId: null, blocked: false }, data: {...} })`. If `count === 0`, throw `AppError('CONFLICT', 'That slot was just taken')`. The client then refetches the slots.
-2. Enforce "one per teacher per child" in the database: a raw-SQL partial unique index in the migration on `(eventId, teacherId, bookedForStudentId) WHERE bookedForStudentId IS NOT NULL`. A P2002 error maps to a 409 with the FR-31 message. This follows the attendance ADR-3 precedent of a partial unique index plus P2002 handling.
-3. Check for overlaps with the parent's other bookings at that time inside the same `$transaction` before the conditional update. It returns `You already have a meeting with <teacher> at <time>`.
+**Consequences:** One table and one migration, with no separate history table. History is limited to 10 level changes, which is enough for a "short history". `ponytail:` add a `StudentRiskSnapshotHistory` table if long-range trend analytics are ever needed.
 
-**Consequences.** There is no advisory lock and no SERIALIZABLE isolation. The FR-46 integration test fires two `Promise.all` bookings and asserts exactly one success. There is a small window in which one parent could double-book overlapping slots with two different teachers in two tabs at once. That is acceptable: it is the same parent, and no data is corrupted.
+## ADR-6: Hook the hourly recompute into the existing internal dispatch cron, gated in the database
 
-## ADR-5: Child selection uses an httpOnly cookie that is validated on every request
+**Context:** FR-27 and NFR-12. `src/app/api/internal/email/dispatch/route.ts` already runs the maintenance passes, each in its own try/catch. It currently gates the daily purge with an in-memory `lastPurgeAt`, which does not survive restarts or work across instances.
 
-**Context.** FR-3 to FR-6 require a selection stored in cookie `sh_child`, validated against `ParentStudentLink` on every request, falling back to the first child, with `?studentId=` as an override.
+**Decision:**
+- Add a `recomputeRiskSnapshots()` call in its own try/catch block.
+- Gate it with `max(computedAt)` from `StudentRiskSnapshot` for the current term: skip the run if the latest snapshot is less than 60 minutes old.
+- Admin Refresh bypasses the gate.
+- On completion, call `revalidateTag('insights:at-risk')`.
+- Notifications use the existing `notify()` with the new type `insights.student_high_risk` (default email on). The type is registered wherever notification types and preferences are declared.
 
-**Decision.**
-- Create one server helper, `getSelectedChild(user, searchParams?)`, in `src/server/parent/selected-child.ts`, wrapped in React `cache()`.
-- It resolves the child in this order: `?studentId=` if linked, then the `sh_child` cookie if linked, then the first linked child ordered by firstName.
-- It reads the cookie with `cookies()` from `next/headers`.
-- Writes go through one small route handler that sets the cookie with `httpOnly`, `sameSite=lax`, `path=/` and a 1-year maxAge, then calls `router.refresh()`. That handler is the existing `withHandler` pattern and gets the existing NFR-8 same-origin check in middleware.
+**Consequences:** No new scheduler. The "at most once per hour" rule holds across restarts and instances because it is gated in the database.
 
-**Consequences.** The cookie value is untrusted input. Every consumer gets it through the helper and never reads the cookie directly (NFR-5). The switcher lives in `shell.tsx`'s top bar.
+## ADR-7: Use Prisma aggregates first and parameterized `$queryRaw` for time-bucketed reports
 
-## ADR-6: The child overview is built from streaming server components
+**Context:** FR-16 to FR-22, FR-34 to FR-39 and NFR-1 (reports in under 3 s on 600 students over one school year).
 
-**Context.** NFR-2 requires first paint under 1 s and the full page under 2 s. FR-17 requires each card to load independently through Suspense. FR-8 makes this the parent landing page.
+**Decision:**
+- Use `groupBy`, `count` and `aggregate` for simple counts.
+- Use tagged-template `prisma.$queryRaw` (parameterized only, never `$queryRawUnsafe`) where Prisma cannot group by date or bucket. That covers the daily attendance rate over 30 school days, the 10 % grade histogram with median (`percentile_cont`), monthly enrollments and archives, and on-time, late and missing rates.
+- Bucket dates in SQL with `AT TIME ZONE $tz` (NFR-7).
+- The attendance report (FR-35) and course percentages (FR-13, FR-19, FR-36) must call the existing `attendance-service.ts` and the gradebook `grade-calc.ts` and `student-grades-service.ts`, so the numbers match the Grades tab.
+- Dev should check with `EXPLAIN` against `seed:large` and add indexes only where a query is slow. `AttendanceRecord @@index([studentId, createdAt])` already exists.
 
-**Decision.**
-- `/my-children/[studentId]` is a server component. It calls `assertCanViewStudent` once, then renders eight async card components (FR-9–FR-16). Each card is wrapped in `<Suspense fallback={<LoadingSkeleton/>}>` and runs its own service query.
-- No client data-fetching library is used. `GET /api/students/:id/overview` (FR-43) reuses the same service functions for API consumers.
-- Post-sign-in redirect for PARENT → `/my-children` (FR-8).
+**Consequences:** A small amount of raw SQL, kept in the `src/server/reports/` and `src/server/dashboards/` services and covered by NFR-9 integration tests with known totals.
 
-**Consequences.** Slow cards such as grades do not block fast ones. Each card query must stay index-backed. `AttendanceRecord(studentId, createdAt)` and `CalendarEvent(startAt, endAt)` indexes already exist.
+## ADR-8: Validate with Zod, keep handlers thin, export CSV through the existing helper, and enforce access server-side
 
-## ADR-7: Absence coverage is one pure module that attendance-service uses in three places
+**Context:** FR-30, FR-33, FR-41 to FR-44, NFR-3 and NFR-6.
 
-**Context.**
-- FR-23: approval converts ABSENT or missing records to EXCUSED.
-- FR-24: future registers are pre-filled.
-- FR-25: teachers may mark EXCUSED only when a note covers the student. Today `attendance-service.ts:219` restricts EXCUSED to ADMIN.
-- FR-27: absence notifications are suppressed.
-- FR-46 asks for unit tests of whole-day, partial-period and multi-day matching.
+**Decision:**
+- Put the schemas in `src/lib/validators/dashboards.ts` and `src/lib/validators/reports.ts`.
+- `reportKey` is a `z.enum([...6 keys])`, and an unknown key returns a 404 `NOT_FOUND`.
+- Handlers use the existing `withHandler`, `ok` and `AppError` from `src/server/http.ts`.
+- `?format=csv` goes through `toCsv` and `escapeCsvCell` in `src/server/csv.ts`, which already protects against formula injection, using the same column list as the table.
+- Teacher scope = `getAccessibleStudentIds()`. Filters are applied as an intersection with that set, so they can never widen it (FR-42).
 
-**Decision.**
-- Add a pure function `coversRecord(note, { date, periodId })` in `src/server/absence-notes/absence-coverage.ts`, with no Prisma import so it can be unit-tested.
-- `absence-notes-service.ts` loads the relevant notes, and attendance-service uses the function at three points:
-  1. `getRegister`: pre-fill EXCUSED and show a badge.
-  2. `saveRegister` line 219: replace the ADMIN-only check with "ADMIN, or an APPROVED note covers the record".
-  3. Before `notifyStudentAndParents` (~line 299): drop `attendance.absent` for students covered by a PENDING or APPROVED note.
-- Approval runs in one `$transaction`. It updates matching ABSENT records with an `updateMany`, and creates missing records for sessions that already exist. Dates with no session yet are handled by the FR-24 pre-fill.
-- After commit, call `audit({ request })` so the IP is stored (NFR-3).
+**Consequences:** No new HTTP or CSV code.
 
-**Consequences.** The rate recalculation needs no code, because `attendanceRate()` reads the records. Daily-homeroom sessions have no `periodId`, so whole-day and partial matching must treat a null `periodId` as matching any note that covers that date.
+## ADR-9: Do all date logic in the school timezone with date-fns-tz through `src/lib/dates.ts`
 
-## ADR-8: Dates and time zones reuse the existing helpers
+**Context:** FR-3, FR-4, FR-6, FR-10, FR-11, FR-17 and NFR-7.
 
-**Context.** NFR-8 requires UTC storage and school-timezone rules. Several features depend on this:
+**Decision:**
+- Reuse `schoolNow`, `schoolDateOf`, `schoolMidnight`, `addDateDays`, `nowAndNext` (for the Now/Next badges) and `formatInSchoolTz`.
+- Add a `greetingFor(now, tz)` helper next to them, and a "school days" helper that reads the existing teaching-days and holiday data.
 
-- FR-18: absence dates from 14 days back to 60 days ahead
-- FR-9: what counts as "today"
-- FR-32: the booking window
-- FR-40: the reminder 48 h before the due date
+**Consequences:** One timezone source of truth. Timestamps stay in UTC in the database.
 
-**Decision.** Use `schoolToday`, `addDays` and `daysBetween` from `attendance-rules.ts` and `date-fns-tz`, with the time zone from `SchoolSettings.timezone`. Generate slots (FR-29) with a pure `generateSlots(ranges, slotMinutes)` function in `conference-slots.ts`, which FR-46 also unit-tests.
+## ADR-10: Write a deterministic large seed as a tsx script with an inline PRNG
 
-**Consequences.** No new date helpers. Pure functions keep the unit tests free of timezone flakiness.
+**Context:** FR-45, FR-46 and NFR-1. The existing seed runs with `tsx prisma/seed.ts` through `db:seed`. Faker is not installed.
 
-## ADR-9: Files, notifications and .ics extend the existing registries
+**Decision:**
+- Add `prisma/seed-large.ts` and the npm script `"seed:large": "tsx prisma/seed-large.ts"`.
+- Use an inline mulberry32 PRNG (about 6 lines) with a fixed seed, plus fixed name lists, instead of adding faker.
+- Use `createMany` in batches for 600 students, 40 teachers and 60 school days of attendance, assignments and grades.
+- The default `prisma/seed.ts` stays small but must create at least 3 students at each risk level (High, Medium and none) by planting attendance, grades and missing work that cross the FR-25 thresholds (FR-46).
 
-**Context.** FR-18 and FR-41 add the `absence-note` file context. FR-19, FR-26, FR-28, FR-33, FR-36 and FR-44 add notification types. FR-33 needs an .ics attachment link.
+**Consequences:** Results are reproducible, and there is no new dependency.
 
-**Decision.**
-- **Files:** add an `absenceNoteResolver` to `src/server/files/contexts.ts`. It allows any linked parent (including the submitter), the homeroom teacher of the student's section, and ADMIN. Uploads reuse `FileUpload` and `files-service` validation, limited to PDF, JPG and PNG checked by `file-type` magic bytes.
-- **Notifications:** add these keys to `NOTIFICATION_TYPES` in `types.ts`, then send through the existing `notify()` / `notifyStudentAndParents()`:
+## ADR-11: Handle missing upstream data sources with empty states and direct reads instead of fixes outside scope
 
-  | Key | Default email |
-  | --- | --- |
-  | `absence_note.submitted` | false |
-  | `absence_note.reviewed` | true |
-  | `conference.slots_requested` | – |
-  | `conference.booked` | – |
-  | `conference.cancelled` | – |
-  | `consent.requested` | true |
-  | `consent.reminder` | true |
+**Context:** FR-8, FR-14, FR-21 and FR-38. There is no `Announcement` model (PRD-12) and no calendar service (PRD-14). NFR-11 says not to modify other PRDs' behaviour.
 
-- **.ics:** build it with the existing `buildCalendar` / `vevent` from `src/server/calendar/ical.ts`. Serve it from an authenticated GET per booked slot. The notification links to that URL.
+**Decision:**
+- **Announcements:** FR-8 and FR-14 render the existing `EmptyState` with the text "Announcements not available". FR-38 omits the read-rate metric and its column note says "not available". Expose this through one `announcementsAvailable = false` guard in the dashboards service, so it is a one-line change once PRD-12 ships the model.
+- **Events:** FR-21 reads `CalendarEvent` directly with a small Prisma query: school-wide, `start >= now`, ordered by start, `take: 5`. It does not expand recurrences. The existing `src/server/calendar/recurrence.ts` can be wired in later.
 
-**Consequences.** There is no attachment pipeline. Email links to the .ics URL, which matches FR-33's "attachment link" wording.
+**Consequences:** These requirements are implemented in degraded form, not blocked. This is recorded as a dependency gap for `system-design.md`. Intake reported no blockers.
 
-## ADR-10: Scheduled work goes in the existing cron route
+---
 
-**Context.** FR-40 needs a maintenance run. The only scheduler is `POST /api/internal/email/dispatch`, which is protected by `CRON_SECRET` and already runs assignment reminders and quiz maintenance in isolated try-blocks.
+## Requirement → ADR map
 
-**Decision.** Add a `sendConsentDueReminders(now)` call to that route as another isolated try-block. It is idempotent through the `dueReminderSentAt` claim (ADR-3).
+| ADR | Requirements |
+|---|---|
+| ADR-1 | NFR-4, NFR-8, NFR-10 |
+| ADR-2 | FR-1, FR-2, FR-41, NFR-1 |
+| ADR-3 | FR-23, FR-24, NFR-1, NFR-3, NFR-12 |
+| ADR-4 | FR-15, FR-16, FR-17, FR-18, FR-19, FR-29, FR-33–FR-39, NFR-2, NFR-4, NFR-5 |
+| ADR-5 | FR-7, FR-20, FR-25, FR-26, FR-27, FR-28, FR-29, FR-31, FR-32, NFR-9, NFR-11 |
+| ADR-6 | FR-24, FR-27, FR-32, NFR-12 |
+| ADR-7 | FR-5, FR-6, FR-12, FR-13, FR-16–FR-22, FR-34–FR-39, NFR-1, NFR-7, NFR-9 |
+| ADR-8 | FR-30, FR-33, FR-40, FR-41–FR-44, NFR-3, NFR-6 |
+| ADR-9 | FR-3, FR-4, FR-6, FR-10, FR-11, FR-17, NFR-7 |
+| ADR-10 | FR-45, FR-46, NFR-1, NFR-9 |
+| ADR-11 | FR-8, FR-14, FR-21, FR-38, NFR-11 |
 
-**Consequences.** No new cron, worker or script. Reminder precision is limited by the cron interval.
-
-## ADR-11: Unavailable upstream data degrades gracefully
-
-**Context.**
-- FR-13: the PRD-12 `Announcement` model is missing. Only `src/server/announcements/audience.ts` exists.
-- FR-5, FR-14, FR-35: SH-14's dev phase failed. The `CalendarEvent` and `EventAudience` models exist, but there are no calendar pages or API.
-- Building either one would violate NFR-9, which says not to take on another PRD's scope.
-
-**Decision.**
-- **FR-13:** render an `EmptyState` ("No announcements") behind a single service function that returns `[]`. Do not add an Announcement model.
-- **FR-14:** query `CalendarEvent` directly with the existing `audienceWhereForUser(user, { studentIds: [child] })` and return the next 5. Expand recurrence with `src/server/calendar/recurrence.ts`.
-- **FR-35:** render booked slots inside the overview's Upcoming events and Action items cards as "My meetings" items. There is no calendar page to add them to.
-- **FR-5:** the calendar `studentId` filter is not implemented, because there is no calendar page.
-- **ConsentForm.eventId:** an optional FK to `CalendarEvent`, which exists.
-
-**Consequences.** FR-13 and FR-35 are delivered partially. They become complete without schema work once PRD-12 and PRD-14 land. `system-design.md` should record this.
-
-## ADR-12: Answers to intake's open questions
-
-**Context.** Intake forwarded seven unresolved questions. No user is available to answer them.
-
-**Decision.**
-
-| # | Question | Decision |
-| --- | --- | --- |
-| 1 | Announcements | See ADR-11 |
-| 2 | Calendar | See ADR-11 |
-| 3 | Shared component location | Reuse components where they are, under `src/components/<Name>/`. Do not move them (NFR-6). |
-| 4 | Student detail route | `/students/[id]` is the target for "View all" links, including `/students/[id]/attendance`. |
-| 5 | Pages that adopt the `sh_child` default (FR-5) | The existing `/assignments`, `/grades` and `/api/me/timetable` consumers, plus the new `/my-children/*`, `/conferences/[id]` and `/consent-forms` pages. |
-| 6 | Reminder notification key | `consent.reminder` for both the 48 h reminder and the manual reminder (FR-44). |
-| 7 | Blocked slots (FR-29) | `ConferenceSlot.blocked` column (ADR-3). |
-
-**Consequences.** All seven are recorded as assumptions. None blocks the work.
-
-## ADR-13: Access control and tests follow the existing patterns
-
-**Context.** NFR-5 requires server-side access control on every handler. NFR-7 sets the quality gates. FR-46 lists the required tests.
-
-**Decision.**
-- **Access control:**
-  - Every handler uses `withHandler` and `requireRole`.
-  - Parent and child scoping uses `assertCanViewStudent` / `getAccessibleStudentIds`.
-  - Homeroom scoping checks section membership against `Section` (teacher's own section).
-  - Consent tracking is limited to the form's creator and ADMIN.
-  - Teachers may target only courses they manage (`canTargetAudience`).
-- **Tests:**
-  - Unit tests in Vitest cover the pure modules: `absence-coverage`, `conference-slots`, and signature matching (`trim().toLowerCase()` equality).
-  - Integration tests in Vitest against the database cover approval/pre-fill, concurrent booking and notification suppression.
-  - Three Playwright specs cover the FR-46 flows.
-- Use `logger`, never `console.log`.
-
-**Consequences.** No new test tooling. Seed data (FR-45) extends `prisma/seed.ts` in place.
+FR-9 (quick-action links) and FR-40 (navigation entries) are plain MUI links and config edits in `src/config/navigation.ts` and `src/config/student-tabs.ts`, and need no stack decision.

@@ -9,6 +9,7 @@ import { sendDueReminders } from '@/server/assignments/reminders';
 import { autoSubmitExpiredAttempts, sendAfterCloseResultsReleased } from '@/server/quiz/maintenance';
 import { processPendingMessageEmails } from '@/server/messaging/email';
 import { sendConsentDueReminders } from '@/server/consent-forms/consent-forms-service';
+import { recomputeRiskSnapshots } from '@/server/dashboards/risk';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,6 +71,15 @@ export const POST = withHandler(async (request: Request) => {
     logger.error('Consent due reminders failed', { message: error instanceof Error ? error.message : String(error) });
   }
 
+  // PRD-16 FR-27: hourly risk recompute, gated in the DB (skips while snapshots are < 60 min old), isolated.
+  let riskSnapshots: Awaited<ReturnType<typeof recomputeRiskSnapshots>> | null = null;
+  try {
+    riskSnapshots = await recomputeRiskSnapshots();
+    if (!riskSnapshots.skipped) logger.info('Risk snapshots recomputed', riskSnapshots);
+  } catch (error) {
+    logger.error('Risk snapshot recompute failed', { message: error instanceof Error ? error.message : String(error) });
+  }
+
   if (Date.now() - lastPurgeAt > DAY_MS) {
     lastPurgeAt = Date.now();
     try {
@@ -84,5 +94,5 @@ export const POST = withHandler(async (request: Request) => {
       logger.error('Orphan file purge failed', { message: error instanceof Error ? error.message : String(error) });
     }
   }
-  return ok({ ...result, messageEmails, consentReminders });
+  return ok({ ...result, messageEmails, consentReminders, riskSnapshots });
 });

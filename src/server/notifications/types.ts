@@ -273,6 +273,15 @@ export const NOTIFICATION_TYPES = {
     mandatoryInApp: false,
     roles: ['PARENT'],
   },
+  // PRD-16 FR-32: homeroom teacher, at most once per student per 14 days (highNotifiedAt claim).
+  'insights.student_high_risk': {
+    label: 'Student at high risk',
+    description: 'A student in your homeroom has moved to high risk.',
+    category: 'ACADEMIC',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['TEACHER'],
+  },
 } as const satisfies Record<string, NotificationTypeDef>;
 
 export type NotificationType = keyof typeof NOTIFICATION_TYPES;

@@ -1,177 +1,121 @@
-# File Structure — SH-15 (PRD-15 Parent Portal)
+# File Structure: SH-16 (PRD-16 Role Dashboards, Reports & Early-Warning Insights)
 
-Phase: dev-planning · Ticket: SH-15 · Generated 2026-11-10T14:00:00Z
-
-Planned tree of every file SH-15 creates or modifies. Each leaf is tagged `[OPERATION TASK-N]`; the exact list is `file-ownership-matrix.json`. Unlisted existing files are untouched (NFR-6: no moves, renames or re-scaffolding; ADR-1: `package.json` unchanged).
+Phase: dev-planning · 2026-11-10T15:00:00Z · Brownfield. Only the files this ticket touches are listed.
+`[C]` = CREATE and `[M]` = MODIFY. `(TASK-n)` names the task that owns the file. The source of truth is `file-ownership-matrix.json`.
 
 ```
-schoolhub/
-├── prisma/
-│   ├── migrations/
-│   │   └── 20261114000000_prd15_parent_portal/
-│   │       └── migration.sql  [CREATE TASK-1]
-│   ├── schema.prisma  [MODIFY TASK-1]
-│   └── seed.ts  [MODIFY TASK-25]
-├── src/
-│   ├── app/
-│   │   ├── (app)/
-│   │   │   ├── admin/
-│   │   │   │   └── conferences/
-│   │   │   │       ├── ConferenceEventsClient.tsx  [CREATE TASK-14]
-│   │   │   │       └── page.tsx  [CREATE TASK-14]
-│   │   │   ├── assignments/
-│   │   │   │   ├── AssignmentList.tsx  [MODIFY TASK-24]
-│   │   │   │   └── page.tsx  [MODIFY TASK-24]
-│   │   │   ├── attendance/
-│   │   │   │   ├── absence-notes/
-│   │   │   │   │   ├── AbsenceNotesReviewClient.tsx  [CREATE TASK-11]
-│   │   │   │   │   └── page.tsx  [CREATE TASK-11]
-│   │   │   │   └── take/
-│   │   │   │       └── RegisterForm.tsx  [MODIFY TASK-9]
-│   │   │   ├── conferences/
-│   │   │   │   ├── [id]/
-│   │   │   │   │   ├── BookingClient.tsx  [CREATE TASK-16]
-│   │   │   │   │   ├── availability/
-│   │   │   │   │   │   ├── AvailabilityClient.tsx  [CREATE TASK-15]
-│   │   │   │   │   │   └── page.tsx  [CREATE TASK-15]
-│   │   │   │   │   ├── day/
-│   │   │   │   │   │   └── page.tsx  [CREATE TASK-15]
-│   │   │   │   │   └── page.tsx  [CREATE TASK-16]
-│   │   │   │   └── page.tsx  [CREATE TASK-15]
-│   │   │   ├── consent-forms/
-│   │   │   │   ├── [id]/
-│   │   │   │   │   ├── ConsentResponseForm.tsx  [CREATE TASK-20]
-│   │   │   │   │   ├── page.tsx  [CREATE TASK-20]
-│   │   │   │   │   └── tracking/
-│   │   │   │   │       ├── ConsentTrackingClient.tsx  [CREATE TASK-20]
-│   │   │   │   │       └── page.tsx  [CREATE TASK-20]
-│   │   │   │   ├── new/
-│   │   │   │   │   ├── ConsentFormForm.tsx  [CREATE TASK-19]
-│   │   │   │   │   └── page.tsx  [CREATE TASK-19]
-│   │   │   │   └── page.tsx  [CREATE TASK-19]
-│   │   │   ├── dashboard/
-│   │   │   │   └── page.tsx  [MODIFY TASK-23]
-│   │   │   ├── grades/
-│   │   │   │   ├── GradesClient.tsx  [MODIFY TASK-24]
-│   │   │   │   └── page.tsx  [MODIFY TASK-24]
-│   │   │   ├── layout.tsx  [MODIFY TASK-6]
-│   │   │   ├── my-children/
-│   │   │   │   ├── [studentId]/
-│   │   │   │   │   ├── OverviewCards.tsx  [CREATE TASK-23]
-│   │   │   │   │   ├── absence/
-│   │   │   │   │   │   ├── new/
-│   │   │   │   │   │   │   ├── AbsenceNoteForm.tsx  [CREATE TASK-10]
-│   │   │   │   │   │   │   └── page.tsx  [CREATE TASK-10]
-│   │   │   │   │   │   └── page.tsx  [CREATE TASK-10]
-│   │   │   │   │   └── page.tsx  [CREATE TASK-23]
-│   │   │   │   └── page.tsx  [CREATE TASK-23]
-│   │   │   └── shell.tsx  [MODIFY TASK-6]
-│   │   └── api/
-│   │       ├── absence-notes/
-│   │       │   ├── [id]/
-│   │       │   │   ├── review/
-│   │       │   │   │   └── route.ts  [CREATE TASK-8]
-│   │       │   │   └── route.ts  [CREATE TASK-8]
-│   │       │   └── route.ts  [CREATE TASK-8]
-│   │       ├── conference-slots/
-│   │       │   └── [id]/
-│   │       │       ├── book/
-│   │       │       │   └── route.ts  [CREATE TASK-13]
-│   │       │       ├── cancel/
-│   │       │       │   └── route.ts  [CREATE TASK-13]
-│   │       │       ├── ics/
-│   │       │       │   └── route.ts  [CREATE TASK-13]
-│   │       │       └── route.ts  [CREATE TASK-13]
-│   │       ├── conferences/
-│   │       │   ├── [id]/
-│   │       │   │   ├── availability/
-│   │       │   │   │   └── route.ts  [CREATE TASK-13]
-│   │       │   │   ├── route.ts  [CREATE TASK-13]
-│   │       │   │   └── slots/
-│   │       │   │       └── route.ts  [CREATE TASK-13]
-│   │       │   └── route.ts  [CREATE TASK-13]
-│   │       ├── consent-forms/
-│   │       │   ├── [id]/
-│   │       │   │   ├── remind/
-│   │       │   │   │   └── route.ts  [CREATE TASK-18]
-│   │       │   │   ├── responses/
-│   │       │   │   │   └── route.ts  [CREATE TASK-18]
-│   │       │   │   ├── route.ts  [CREATE TASK-18]
-│   │       │   │   └── tracking/
-│   │       │   │       └── route.ts  [CREATE TASK-18]
-│   │       │   └── route.ts  [CREATE TASK-18]
-│   │       ├── internal/
-│   │       │   └── email/
-│   │       │       └── dispatch/
-│   │       │           └── route.ts  [MODIFY TASK-17]
-│   │       ├── me/
-│   │       │   ├── children/
-│   │       │   │   └── summary/
-│   │       │   │       └── route.ts  [CREATE TASK-22]
-│   │       │   ├── selected-child/
-│   │       │   │   └── route.ts  [CREATE TASK-5]
-│   │       │   └── timetable/
-│   │       │       └── route.ts  [MODIFY TASK-24]
-│   │       └── students/
-│   │           └── [id]/
-│   │               └── overview/
-│   │                   └── route.ts  [CREATE TASK-22]
-│   ├── components/
-│   │   └── ChildSwitcher/
-│   │       └── ChildSwitcher.tsx  [CREATE TASK-6]
-│   ├── config/
-│   │   └── navigation.ts  [MODIFY TASK-6]
-│   ├── lib/
-│   │   └── validators/
-│   │       ├── absence-notes.ts  [CREATE TASK-2]
-│   │       ├── attendance.ts  [MODIFY TASK-9]
-│   │       ├── conferences.ts  [CREATE TASK-2]
-│   │       └── consent-forms.ts  [CREATE TASK-2]
-│   └── server/
-│       ├── absence-notes/
-│       │   ├── absence-coverage.ts  [CREATE TASK-3]
-│       │   └── absence-notes-service.ts  [CREATE TASK-7]
-│       ├── attendance/
-│       │   └── attendance-service.ts  [MODIFY TASK-9]
-│       ├── conferences/
-│       │   ├── conference-slots.ts  [CREATE TASK-3]
-│       │   └── conferences-service.ts  [CREATE TASK-12]
-│       ├── consent-forms/
-│       │   ├── consent-forms-service.ts  [CREATE TASK-17]
-│       │   └── signature.ts  [CREATE TASK-3]
-│       ├── files/
-│       │   ├── contexts.ts  [MODIFY TASK-4]
-│       │   └── validate.ts  [MODIFY TASK-4]
-│       ├── notifications/
-│       │   └── types.ts  [MODIFY TASK-4]
-│       └── parent/
-│           ├── overview-service.ts  [CREATE TASK-21]
-│           └── selected-child.ts  [CREATE TASK-5]
-└── tests/
-    ├── e2e/
-    │   ├── absence-notes.spec.ts  [CREATE TASK-27]
-    │   ├── conferences.spec.ts  [CREATE TASK-27]
-    │   └── consent-forms.spec.ts  [CREATE TASK-27]
-    ├── integration/
-    │   ├── absence-notes/
-    │   │   └── absence-approval.test.ts  [CREATE TASK-26]
-    │   └── conferences/
-    │       └── concurrent-booking.test.ts  [CREATE TASK-26]
-    └── unit/
-        ├── absence-notes/
-        │   └── absence-coverage.test.ts  [CREATE TASK-3]
-        ├── conferences/
-        │   └── conference-slots.test.ts  [CREATE TASK-3]
-        └── consent-forms/
-            └── signature.test.ts  [CREATE TASK-3]
+package.json                                                    [M] (TASK-29)  "seed:large" script
+prisma/
+├── schema.prisma                                               [M] (TASK-1)   RiskLevel + StudentRiskSnapshot
+├── migrations/20261115000000_add_student_risk_snapshot/
+│   └── migration.sql                                           [C] (TASK-1)
+├── seed.ts                                                     [M] (TASK-28)  ≥3 students per risk level
+└── seed-large.ts                                               [C] (TASK-29)  600 students, mulberry32
+src/
+├── lib/
+│   ├── dates.ts                                                [M] (TASK-3)   greetingFor, schoolDaysBack
+│   └── validators/
+│       ├── dashboards.ts                                       [C] (TASK-6)
+│       └── reports.ts                                          [C] (TASK-6)
+├── config/
+│   ├── navigation.ts                                           [M] (TASK-27)
+│   └── student-tabs.ts                                         [M] (TASK-22)
+├── components/
+│   ├── Widget/
+│   │   ├── Widget.tsx                                          [C] (TASK-15)  Card + Suspense + boundary
+│   │   └── WidgetErrorBoundary.tsx                             [C] (TASK-15)  client
+│   └── charts/
+│       └── ChartA11y.tsx                                       [C] (TASK-15)  client, aria + hidden table
+├── server/
+│   ├── assignments/reminders.ts                                [M] (TASK-4)   uses missingWork
+│   ├── gradebook/batch-grades.ts                               [C] (TASK-5)   loadTermPercents
+│   ├── notifications/types.ts                                  [M] (TASK-7)   insights.student_high_risk
+│   ├── dashboards/
+│   │   ├── risk-rules.ts                                       [C] (TASK-2)   pure
+│   │   ├── missing-work.ts                                     [C] (TASK-4)
+│   │   ├── insights.ts                                         [C] (TASK-8)   cache helper + tags + risk summary
+│   │   ├── announcements.ts                                    [C] (TASK-8)   ANNOUNCEMENTS_AVAILABLE=false
+│   │   ├── risk.ts                                             [C] (TASK-9)   recompute, listAtRisk, insights
+│   │   ├── teacher.ts                                          [C] (TASK-11)
+│   │   ├── student.ts                                          [C] (TASK-12)
+│   │   └── admin.ts                                            [C] (TASK-13)
+│   └── reports/
+│       ├── enrollment.ts                                       [C] (TASK-23)
+│       ├── attendance.ts                                       [C] (TASK-23)
+│       ├── performance.ts                                      [C] (TASK-23)
+│       ├── completion.ts                                       [C] (TASK-24)
+│       ├── engagement.ts                                       [C] (TASK-24)
+│       ├── workload.ts                                         [C] (TASK-24)
+│       └── index.ts                                            [C] (TASK-25)  REPORTS registry
+└── app/
+    ├── (app)/
+    │   ├── dashboard/
+    │   │   ├── page.tsx                                        [M] (TASK-16)
+    │   │   └── _components/
+    │   │       ├── GreetingHeader.tsx                          [C] (TASK-16)
+    │   │       ├── RefreshButton.tsx                           [C] (TASK-16)  client
+    │   │       ├── TeacherDashboard.tsx                        [C] (TASK-17)
+    │   │       ├── StudentDashboard.tsx                        [C] (TASK-18)
+    │   │       ├── AdminDashboard.tsx                          [C] (TASK-19)
+    │   │       └── widgets/
+    │   │           ├── TodaysClassesWidget.tsx                 [C] (TASK-17)
+    │   │           ├── ToGradeWidget.tsx                       [C] (TASK-17)
+    │   │           ├── UpcomingDeadlinesWidget.tsx             [C] (TASK-17)
+    │   │           ├── AtRiskWidget.tsx                        [C] (TASK-17)
+    │   │           ├── TeacherMessagesWidget.tsx               [C] (TASK-17)
+    │   │           ├── QuickActionsWidget.tsx                  [C] (TASK-17)
+    │   │           ├── StudentTodayWidget.tsx                  [C] (TASK-18)
+    │   │           ├── DueSoonWidget.tsx                       [C] (TASK-18)
+    │   │           ├── RecentGradesWidget.tsx                  [C] (TASK-18)
+    │   │           ├── MyCoursesWidget.tsx                     [C] (TASK-18)
+    │   │           ├── AnnouncementsWidget.tsx                 [C] (TASK-18)
+    │   │           ├── TermAttendanceWidget.tsx                [C] (TASK-18)
+    │   │           ├── KpiRowWidget.tsx                        [C] (TASK-19)
+    │   │           ├── AttendanceTrendWidget.tsx               [C] (TASK-19)
+    │   │           ├── EnrollmentByGradeWidget.tsx             [C] (TASK-19)
+    │   │           ├── GradeDistributionWidget.tsx             [C] (TASK-19)
+    │   │           ├── RiskSummaryWidget.tsx                   [C] (TASK-19)
+    │   │           ├── UpcomingEventsWidget.tsx                [C] (TASK-19)
+    │   │           └── RecentActivityWidget.tsx                [C] (TASK-19)
+    │   ├── insights/at-risk/
+    │   │   ├── page.tsx                                        [C] (TASK-21)
+    │   │   └── _components/AtRiskFilters.tsx                   [C] (TASK-21)  client
+    │   ├── students/[id]/insights/page.tsx                     [C] (TASK-22)
+    │   └── admin/reports/
+    │       ├── page.tsx                                        [C] (TASK-26)
+    │       └── [reportKey]/
+    │           ├── page.tsx                                    [C] (TASK-26)
+    │           └── _components/ReportFilters.tsx               [C] (TASK-26)  client
+    └── api/
+        ├── dashboard/{teacher,student,admin,refresh}/route.ts  [C] (TASK-20)
+        ├── insights/at-risk/route.ts                           [C] (TASK-21)
+        ├── students/[id]/insights/route.ts                     [C] (TASK-22)
+        ├── reports/[reportKey]/route.ts                        [C] (TASK-26)
+        └── internal/email/dispatch/route.ts                    [M] (TASK-14)  hourly recompute hook
+tests/
+├── unit/
+│   ├── dashboards/risk-rules.test.ts                           [C] (TASK-2)
+│   ├── dates.test.ts                                           [M] (TASK-3)
+│   └── WidgetErrorBoundary.test.tsx                            [C] (TASK-15)
+├── integration/
+│   ├── dashboards/missing-work.test.ts                         [C] (TASK-4)
+│   ├── gradebook/batch-grades.test.ts                          [C] (TASK-5)
+│   ├── dashboards/risk.test.ts                                 [C] (TASK-10)
+│   ├── email-dispatch.test.ts                                  [M] (TASK-14)
+│   ├── dashboards/dashboard-api.test.ts                        [C] (TASK-20)
+│   └── reports/reports.test.ts                                 [C] (TASK-25)
+└── e2e/
+    ├── dashboard.spec.ts                                       [M] (TASK-30)
+    ├── insights.spec.ts                                        [C] (TASK-30)
+    └── reports.spec.ts                                         [C] (TASK-30)
 ```
 
-## Notes
+Reused without changes (NFR-8): `StatCard`, `DataTable`, `LoadingSkeleton`, `PageHeader`, `EmptyState`, `Toast`/`useToast`, `src/server/csv.ts`, `src/server/http.ts`, `attendance-service`, `grade-calc`/`student-grades-service`, `parent/overview-service`, `calendar/recurrence`, `notify()`, `audit()`, `auth/student-access`.
 
-- 63 files created, 18 modified, 0 deleted.
-- New server modules follow `src/server/<feature>/<feature>-service.ts`; pure helpers (`absence-coverage.ts`, `conference-slots.ts`, `signature.ts`) have no Prisma import so the FR-46 unit tests stay DB-free.
-- Route handlers live under `src/app/api/**/route.ts` (base path `/api`, not `/api/v1`).
-- `src/components/ChildSwitcher/` follows the existing `src/components/<Name>/` convention (ADR-12 #3).
-- `POST /api/files` needs no route change: the `absence-note` context is added through `files/contexts.ts` (access) and `files/validate.ts` (PDF/JPG/PNG only).
-- `/api/attendance/register` GET/PUT need no route change: the new EXCUSED pre-fill, rule and notification suppression all live in `attendance-service.ts`.
-- Partial by design (ADR-11): FR-13 Announcements card is an EmptyState; FR-35 'My meetings' appear only in overview cards; no calendar `studentId` filter (FR-5).
+## Suggested execution order
+
+1. **Foundations** (no dependencies, parallel): TASK-1, TASK-2, TASK-3, TASK-4, TASK-5, TASK-6, TASK-7, TASK-15
+2. **Engine:** TASK-8 → TASK-9 → TASK-10, TASK-14, TASK-28, TASK-29
+3. **Services:** TASK-11, TASK-12, TASK-13, TASK-23, TASK-24 → TASK-25
+4. **UI and API:** TASK-17, TASK-18, TASK-19 → TASK-16. Then TASK-20, TASK-21, TASK-22, TASK-26 → TASK-27
+5. **E2E:** TASK-30

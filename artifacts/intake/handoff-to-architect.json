@@ -1,21 +1,23 @@
 {
-  "ticketId": "SH-15",
+  "ticketId": "SH-16",
   "timestamp": "2026-11-10T12:00:00Z",
   "phase": "intake",
   "version": "1.0",
+
   "status": "complete",
-  "requirementsCount": 56,
+  "requirementsCount": 58,
   "functionalCount": 46,
-  "nonFunctionalCount": 10,
-  "overallConfidencePct": 95,
+  "nonFunctionalCount": 12,
+  "overallConfidencePct": 91,
   "blockers": [],
   "warnings": [
-    "SH-14 (PRD-14 Calendar) dev phase failed per artifacts/run-summary.json: CalendarEvent/EventAudience models exist but no calendar API or pages. FR-14, FR-35 ('My meetings'), FR-5 calendar filter and ConsentForm.eventId depend on it.",
-    "PRD-12 Announcement model absent (only src/server/announcements/audience.ts) — FR-13 overview Announcements card has no data source.",
-    "Shared components live under src/components/<Name>/ not src/components/shared/; student detail route is /students/[id].",
-    "Attendance-service currently restricts EXCUSED to ADMIN (attendance-service.ts:219) — FR-25 must relax this for teachers with an approved note; notification send path (attendance-service.ts ~line 299) is where FR-27 suppression hooks in.",
-    "ConferenceSlot has no 'blocked' field although FR-29 requires blocking individual slots — Architect to decide.",
-    "Previous SH-14 intake artifacts archived to artifacts/intake/.prev-SH-14/."
+    "PRD-12 Announcement model is absent: FR-8 and FR-14 (announcement widgets) and FR-38 (announcement read rate) have no data source. Default is an empty state or an omitted metric.",
+    "PRD-14 has no calendar service or API, but the CalendarEvent model exists. FR-21 (upcoming events) should read the model directly.",
+    "FR-28 (LOW): 'one row per student per term, upserted' conflicts with the trend arrow and the snapshot history. The Architect must choose a history design.",
+    "'Missing' is derived, not stored (SubmissionStatus is SUBMITTED|RETURNED). Reuse the definition in src/server/assignments/reminders.ts with a 30-day window.",
+    "The hourly risk recompute should hook into the existing maintenance pass in src/app/api/internal/email/dispatch/route.ts.",
+    "Shared components live under src/components/<Name>/ (StatCard, DataTable, LoadingSkeleton), not src/components/shared/. The student tab registry is src/config/student-tabs.ts.",
+    "Previous SH-15 intake artifacts are archived in artifacts/intake/.prev-SH-15/."
   ],
   "nextPhase": "architect"
 }

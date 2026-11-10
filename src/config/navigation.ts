@@ -16,6 +16,8 @@ import FamilyRestroomOutlinedIcon from '@mui/icons-material/FamilyRestroomOutlin
 import SickOutlinedIcon from '@mui/icons-material/SickOutlined';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import DrawOutlinedIcon from '@mui/icons-material/DrawOutlined';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
+import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
 
 export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
@@ -49,6 +51,9 @@ export const ALL_ROLES: Role[] = ['ADMIN', 'TEACHER', 'STUDENT', 'PARENT'];
  */
 export const navigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: DashboardOutlinedIcon, roles: ALL_ROLES },
+  // PRD-16 FR-40
+  { label: 'Reports', href: '/admin/reports', icon: AssessmentOutlinedIcon, roles: ['ADMIN'] },
+  { label: 'At-risk students', href: '/insights/at-risk', icon: WarningAmberOutlinedIcon, roles: ['ADMIN', 'TEACHER'] },
   // PRD-15 FR-42. The parent "Absence notes" entry lands on /attendance/absence-notes, which redirects to the selected child's list.
   { label: 'My children', href: '/my-children', icon: FamilyRestroomOutlinedIcon, roles: ['PARENT'] },
   { label: 'Absence notes', href: '/attendance/absence-notes', icon: SickOutlinedIcon, roles: ['PARENT', 'ADMIN'] },

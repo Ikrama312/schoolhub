@@ -1,0 +1,403 @@
+{
+  "ticketId": "SH-15",
+  "timestamp": "2026-11-10T13:30:00Z",
+  "phase": "architect",
+  "version": "1.0",
+
+  "conventions": {
+    "replaces": "This file replaces the stale SH-14 contracts.",
+    "basePath": "/api. This is the existing SchoolHub convention, not /api/v1. Route files are src/app/api/**/route.ts. (FR-43, NFR-6)",
+    "handlerPipeline": "withHandler → requireUser / requireRole → parseQuery / parseBody with schemas from src/lib/validators/{absence-notes,conferences,consent-forms}.ts → access helper (assertCanViewStudent, assertHomeroomOrAdmin, assertConsentOwnerOrAdmin) → one service call → ok(data) / ok(data, {status:201}) / paginated(rows, meta). Everything comes from src/server/http.ts. Do not hand-roll envelopes. (FR-43, NFR-5, NFR-7)",
+    "envelopes": {
+      "success": "{ data: T }",
+      "list": "{ data: T[], meta: { page, pageSize, total } } via paginated(). The query takes ?page (default 1), ?pageSize (default 20, clamped to 100 by parsePagination), ?sort=<field>:<asc|desc> and ?q. (NFR-10)",
+      "error": "{ error: { code, message, details? } }",
+      "nonJson": "GET /api/conference-slots/:id/ics returns text/calendar. GET /api/consent-forms/:id/tracking?format=csv returns text/csv with Content-Disposition: attachment."
+    },
+    "errorCodes": {
+      "VALIDATION_ERROR": 400,
+      "UNAUTHENTICATED": 401,
+      "FORBIDDEN": 403,
+      "NOT_FOUND": 404,
+      "CONFLICT": 409,
+      "RATE_LIMITED": 429,
+      "INTERNAL": 500
+    },
+    "errorPolicy": [
+      "A studentId the caller cannot view, or a note/form/slot belonging to one, returns 404 NOT_FOUND so existence does not leak. (NFR-5)",
+      "A visible resource the caller may not act on returns 403 FORBIDDEN with details.reason. The reasons are NOT_HOMEROOM, NOT_FORM_OWNER, NOT_SLOT_TEACHER, NOT_BOOKER and AUDIENCE_NOT_ALLOWED. (NFR-5, FR-21, FR-36, FR-39)",
+      "Business-rule failures that the caller can fix by changing input return 400 VALIDATION_ERROR with details.reason. The reasons are OUTSIDE_BOOKING_WINDOW, PAST_DUE, SIGNATURE_MISMATCH and DATE_WINDOW. http.ts has no 422 code, so system-design's '422' maps to 400. (FR-18, FR-32, FR-37)",
+      "State races return 409 CONFLICT with details.reason. The reasons are SLOT_TAKEN ('That slot was just taken'), OVERLAP ('You already have a meeting with <teacher> at <time>'), ONE_PER_TEACHER, ALREADY_REVIEWED and SLOT_BOOKED. (NFR-1, FR-22, FR-29, FR-31)",
+      "The remind throttle returns 429 RATE_LIMITED with details.retryAfterMs and a Retry-After header. (FR-39)"
+    ],
+    "dates": "Date-only fields are 'yyyy-MM-dd' strings (@db.Date). Instants are ISO 8601 UTC. Every 'today' / window / due rule is evaluated in SchoolSettings.timezone via schoolToday(). (NFR-8)",
+    "audit": "Absence review, consent respond/change and conference event create/update call audit({ request }) so getClientIp() captures the IP. (NFR-3, FR-23, FR-38)"
+  },
+
+  "components": {
+    "AbsenceNoteInput": {
+      "studentId": "string (cuid)",
+      "fromDate": "yyyy-MM-dd, ≥ schoolToday − 14 days",
+      "toDate": "yyyy-MM-dd, ≥ fromDate, ≤ schoolToday + 60 days, span ≤ 30 days",
+      "partialDay": "boolean",
+      "periodIds": "string[]. Required and non-empty when partialDay is true. Must be empty or absent when it is false.",
+      "reason": "AbsenceReason",
+      "details": "string, ≤ 1000 chars, optional",
+      "fileId": "string, optional. Must be a File uploaded with context 'absence-note'."
+    },
+    "AbsenceNote": {
+      "id": "string",
+      "student": "{ id, firstName, lastName, sectionName }",
+      "submittedBy": "{ id, name }",
+      "fromDate": "yyyy-MM-dd",
+      "toDate": "yyyy-MM-dd",
+      "partialDay": "boolean",
+      "periods": "{ id, name }[]",
+      "reason": "AbsenceReason",
+      "details": "string | null",
+      "file": "{ id, name, url } | null",
+      "status": "PENDING | APPROVED | REJECTED",
+      "reviewedBy": "{ id, name } | null",
+      "reviewNote": "string | null",
+      "reviewedAt": "ISO | null",
+      "createdAt": "ISO"
+    },
+    "ConferenceEventInput": {
+      "title": "string, 1..200",
+      "date": "yyyy-MM-dd",
+      "bookingOpensAt": "ISO",
+      "bookingClosesAt": "ISO, > bookingOpensAt, ≤ the end of `date` in the school timezone",
+      "slotMinutes": "int 5..60",
+      "gradeLevelIds": "string[], at least 1"
+    },
+    "ConferenceEvent": {
+      "id": "string",
+      "title": "string",
+      "date": "yyyy-MM-dd",
+      "bookingOpensAt": "ISO",
+      "bookingClosesAt": "ISO",
+      "slotMinutes": "int",
+      "gradeLevels": "{ id, name }[]",
+      "bookingOpen": "boolean (computed)",
+      "createdBy": "{ id, name }"
+    },
+    "ConferenceSlot": {
+      "id": "string",
+      "eventId": "string",
+      "teacher": "{ id, name, subjects: string[] }",
+      "startsAt": "ISO",
+      "endsAt": "ISO",
+      "location": "string | null",
+      "blocked": "boolean",
+      "available": "boolean (not booked and not blocked)",
+      "booking": "{ parent: { id, name }, student: { id, firstName, lastName }, parentNote: string | null } | null. Only the booking parent, the slot's teacher and ADMIN see this field. Everyone else gets null and sees only `available`. (NFR-5)",
+      "mine": "boolean (booked by the caller)"
+    },
+    "ConsentFormInput": {
+      "title": "string, 1..200",
+      "description": "string (Markdown), 1..10000",
+      "dueAt": "ISO, in the future",
+      "eventId": "string | null (CalendarEvent)",
+      "audiences": "{ type: 'GRADE_LEVEL' | 'SECTION' | 'COURSE', refId: string }[], 1..20. TEACHER callers may only use COURSE refIds they manage. Anything else returns 403 AUDIENCE_NOT_ALLOWED."
+    },
+    "ConsentForm": {
+      "id": "string",
+      "title": "string",
+      "description": "string (Markdown)",
+      "dueAt": "ISO",
+      "event": "{ id, title, startsAt } | null",
+      "audiences": "{ type, refId, label }[]",
+      "createdBy": "{ id, name }",
+      "lastRemindedAt": "ISO | null (creator/admin only)",
+      "counts": "{ granted, declined, noResponse } (creator/admin only)",
+      "children": "PARENT only: { studentId, firstName, response: { value, respondedBy: { id, name }, comment, updatedAt } | null }[], listing every linked child in the audience"
+    },
+    "ConsentResponseInput": {
+      "studentId": "string",
+      "value": "GRANTED | DECLINED",
+      "signature": "string, 1..200. Must match the caller's full name after trim().toLowerCase().",
+      "comment": "string, ≤ 1000, optional"
+    }
+  },
+
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/me/selected-child",
+      "description": "PARENT. Sets the sh_child cookie (httpOnly, sameSite=lax, 1 year) after checking ParentStudentLink. An unlinked studentId returns 404. The client then calls router.refresh().",
+      "requestSchema": { "studentId": "string" },
+      "responseSchema": { "data": { "studentId": "string" } },
+      "requirementIds": ["FR-3", "FR-4", "FR-6", "NFR-5"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/children/summary",
+      "description": "PARENT. Returns one summary card per linked child for /my-children. Data comes from overview-service.getChildrenSummary.",
+      "requestSchema": {},
+      "responseSchema": {
+        "data": [
+          {
+            "student": "{ id, firstName, lastName, avatarUrl, sectionName }",
+            "attendanceRateTerm": "number 0..1 | null",
+            "missingAssignments": "int",
+            "averageGradePct": "number | null"
+          }
+        ]
+      },
+      "requirementIds": ["FR-7", "FR-8"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/students/:id/overview",
+      "description": "PARENT (linked child) or staff, checked by assertCanViewStudent. Returns all eight overview cards from the same overview-service functions the streaming page uses. ?cards=today,attendance,... limits which cards load.",
+      "requestSchema": { "query": { "cards": "comma list of today|attendance|assignments|grades|announcements|events|teachers|actions, optional" } },
+      "responseSchema": {
+        "data": {
+          "today": "{ isSchoolDay: boolean, noSchoolReason: string | null, periods: { periodName, startsAt, endsAt, courseName, room, teacherName }[] }",
+          "attendance": "{ rateTerm: number | null, absences: int, lates: int, last5: { date, periodName | null, status }[] }",
+          "assignments": "{ missing: { id, title, courseName, dueAt }[], dueNext7Days: { id, title, courseName, dueAt }[] }",
+          "grades": "{ recent: { gradeItemId, title, courseName, score, maxScore, returnedAt }[], courses: { courseId, courseName, currentPct: number | null }[] }",
+          "announcements": "[] for now, because PRD-12 is absent (FR-13 partial)",
+          "events": "{ id, title, startsAt, endsAt, allDay, source: 'calendar' | 'myMeetings' }[], at most 5",
+          "teachers": "{ userId, name, subjects: string[], messageHref }[]",
+          "actions": "{ type: 'consent' | 'conference', id, title, dueAt | bookingClosesAt, href }[]"
+        }
+      },
+      "requirementIds": ["FR-9", "FR-10", "FR-11", "FR-12", "FR-13", "FR-14", "FR-15", "FR-16", "FR-17", "FR-35", "NFR-2", "NFR-5"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/absence-notes",
+      "description": "Paginated and scoped by role. PARENT sees notes for linked children. A homeroom TEACHER sees their own section's students. ADMIN sees all. A non-homeroom TEACHER gets 403 NOT_HOMEROOM. Default sort is createdAt:desc. ?q matches the student name.",
+      "requestSchema": { "query": { "status": "PENDING|APPROVED|REJECTED, optional", "studentId": "optional", "from": "yyyy-MM-dd, optional", "to": "yyyy-MM-dd, optional", "page": "int", "pageSize": "int ≤ 100", "sort": "createdAt|fromDate:asc|desc", "q": "string" } },
+      "responseSchema": { "data": "AbsenceNote[]", "meta": "{ page, pageSize, total }" },
+      "requirementIds": ["FR-20", "FR-21", "NFR-5", "NFR-10"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/absence-notes",
+      "description": "PARENT, for a linked child only. Creates a PENDING note and notifies the homeroom teacher and ADMINs with absence_note.submitted. Upload the file first via POST /api/files with context=absence-note.",
+      "requestSchema": "AbsenceNoteInput",
+      "responseSchema": { "status": 201, "data": "AbsenceNote" },
+      "requirementIds": ["FR-2", "FR-18", "FR-19", "FR-41", "FR-44", "NFR-8"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/absence-notes/:id",
+      "description": "Detail view for the parent, homeroom teacher or ADMIN. Reviewers also get the attendance records that already exist for the note's dates and periods.",
+      "requestSchema": {},
+      "responseSchema": {
+        "data": "AbsenceNote & { attendanceRecords?: { id, date, periodId | null, periodName | null, status, note | null }[] } (reviewers only)"
+      },
+      "requirementIds": ["FR-20", "FR-21", "FR-41", "NFR-5"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/absence-notes/:id/review",
+      "description": "Homeroom TEACHER or ADMIN. Runs a conditional update on a PENDING note. If the note is no longer PENDING, returns 409 ALREADY_REVIEWED. On APPROVED, covered ABSENT records and missing records become EXCUSED with the note 'Absence note #<id>', all in the same transaction. Then it calls audit({ request }) and notifies linked parents with absence_note.reviewed, including reviewNote.",
+      "requestSchema": { "decision": "APPROVED | REJECTED", "reviewNote": "string ≤ 1000. Required (min 1) when the decision is REJECTED." },
+      "responseSchema": { "data": { "note": "AbsenceNote", "recordsExcused": "int", "recordsCreated": "int" } },
+      "requirementIds": ["FR-22", "FR-23", "FR-26", "FR-44", "NFR-3", "NFR-5"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/files",
+      "description": "EXISTING, extended. Adds the context 'absence-note': PDF, JPG or PNG only, sniffed with file-type. Read access goes to linked parents, the homeroom teacher and ADMIN, through the resolver in src/server/files/contexts.ts. The multipart contract is unchanged.",
+      "requestSchema": { "multipart": { "context": "'absence-note' (sent before file)", "file": "binary, application/pdf | image/jpeg | image/png" } },
+      "responseSchema": { "status": 201, "data": { "id": "string", "name": "string", "size": "int", "mimeType": "string" } },
+      "requirementIds": ["FR-18", "FR-41"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/conferences",
+      "description": "Lists events by role. ADMIN sees all. TEACHER sees events whose eligible grade levels include students they teach. PARENT sees events eligible for any linked child. Paginated, default sort date:desc, ?q matches the title.",
+      "requestSchema": { "query": { "page": "int", "pageSize": "int ≤ 100", "sort": "date|title:asc|desc", "q": "string", "upcoming": "boolean, optional" } },
+      "responseSchema": { "data": "ConferenceEvent[]", "meta": "{ page, pageSize, total }" },
+      "requirementIds": ["FR-28", "FR-42", "NFR-10"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/conferences",
+      "description": "ADMIN. Creates an event, notifies teachers of eligible students with conference.slots_requested, and calls audit({ request }).",
+      "requestSchema": "ConferenceEventInput",
+      "responseSchema": { "status": 201, "data": "ConferenceEvent" },
+      "requirementIds": ["FR-2", "FR-28", "FR-44", "NFR-3"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/conferences/:id",
+      "description": "Event detail, visible to the same audience as the list. TEACHER callers also get mySlotCount. PARENT callers get the child's teachers that have slots.",
+      "requestSchema": {},
+      "responseSchema": { "data": "ConferenceEvent & { mySlotCount?: int, teachers?: { id, name, subjects: string[] }[] }" },
+      "requirementIds": ["FR-28", "FR-30"]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/conferences/:id",
+      "description": "ADMIN. Partial ConferenceEventInput. Changing slotMinutes or date while booked slots exist returns 409 SLOT_BOOKED. Calls audit({ request }).",
+      "requestSchema": "Partial<ConferenceEventInput>",
+      "responseSchema": { "data": "ConferenceEvent" },
+      "requirementIds": ["FR-2", "FR-28", "NFR-3"]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/conferences/:id/availability",
+      "description": "TEACHER, for their own availability. In one transaction it deletes the caller's unbooked, unblocked slots and inserts slots generated from the ranges (generateSlots, slotMinutes). Booked and blocked slots stay. Ranges must lie within the event date and must not overlap.",
+      "requestSchema": { "ranges": "{ start: 'HH:mm', end: 'HH:mm' }[], 1..10, times in the school timezone on the event date", "location": "string ≤ 200, optional" },
+      "responseSchema": { "data": { "slots": "ConferenceSlot[]", "created": "int", "removed": "int", "kept": "int" } },
+      "requirementIds": ["FR-29", "NFR-8"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/conferences/:id/slots",
+      "description": "PARENT: slots of the selected child's teachers. The child comes from ?studentId, else sh_child via getSelectedChild. TEACHER: their own slots, with ?view=day returning only booked slots ordered by startsAt for the printable day view. ADMIN: all slots, filterable by teacherId. The view returns all slots, not a paginated list.",
+      "requestSchema": { "query": { "studentId": "optional (PARENT)", "teacherId": "optional (ADMIN)", "view": "'day', optional (TEACHER/ADMIN)" } },
+      "responseSchema": { "data": "ConferenceSlot[]" },
+      "requirementIds": ["FR-5", "FR-29", "FR-30", "FR-34", "NFR-1", "NFR-5"]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/conference-slots/:id",
+      "description": "The slot's TEACHER, or ADMIN. Blocks or unblocks a slot, or edits its location. Blocking a booked slot returns 409 SLOT_BOOKED.",
+      "requestSchema": { "blocked": "boolean, optional", "location": "string ≤ 200 | null, optional" },
+      "responseSchema": { "data": "ConferenceSlot" },
+      "requirementIds": ["FR-29"]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/conference-slots/:id",
+      "description": "The slot's TEACHER, or ADMIN. Removes an unbooked slot. A booked slot returns 409 SLOT_BOOKED.",
+      "requestSchema": {},
+      "responseSchema": { "data": { "id": "string" } },
+      "requirementIds": ["FR-29"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/conference-slots/:id/book",
+      "description": "PARENT, for a linked child. Only allowed while now is within [bookingOpensAt, bookingClosesAt], else 400 OUTSIDE_BOOKING_WINDOW. In one transaction: an overlap check against the parent's other bookings (409 OVERLAP), then updateMany where {id, bookedByParentId: null, blocked: false} (count 0 returns 409 SLOT_TAKEN), with P2002 on (eventId, teacherId, bookedForStudentId) returning 409 ONE_PER_TEACHER. After commit it sends conference.booked to the parent and teacher, with an ics link.",
+      "requestSchema": { "studentId": "string", "parentNote": "string ≤ 500, optional" },
+      "responseSchema": { "data": "ConferenceSlot", "errors": { "409": "{ error: { code: 'CONFLICT', message: 'That slot was just taken' | 'You already have a meeting with <teacher> at <time>' | ..., details: { reason } } }" } },
+      "requirementIds": ["FR-2", "FR-30", "FR-31", "FR-32", "FR-33", "NFR-1", "NFR-5"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/conference-slots/:id/cancel",
+      "description": "The booking PARENT (403 NOT_BOOKER otherwise) or ADMIN. Only allowed before bookingClosesAt, else 400 OUTSIDE_BOOKING_WINDOW. Clears the booking fields and sends conference.cancelled to the parent and teacher. To reschedule, the client cancels and then books.",
+      "requestSchema": {},
+      "responseSchema": { "data": "ConferenceSlot" },
+      "requirementIds": ["FR-32", "FR-33", "FR-44"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/conference-slots/:id/ics",
+      "description": "The booking parent, the slot's teacher, or ADMIN. Returns a single VEVENT built with src/server/calendar/ical.ts.",
+      "requestSchema": {},
+      "responseSchema": { "contentType": "text/calendar; charset=utf-8", "body": "VCALENDAR with one VEVENT (UID slot-<id>@schoolhub, DTSTART/DTEND UTC, SUMMARY, LOCATION)" },
+      "requirementIds": ["FR-33", "FR-35"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent-forms",
+      "description": "PARENT: forms whose audience includes a linked child, with children[] response status. ?pending=true filters to forms not yet answered for some child. TEACHER: forms they created. ADMIN: all forms. Paginated, default sort dueAt:asc, ?q matches the title.",
+      "requestSchema": { "query": { "pending": "boolean, optional", "studentId": "optional (PARENT)", "page": "int", "pageSize": "int ≤ 100", "sort": "dueAt|createdAt:asc|desc", "q": "string" } },
+      "responseSchema": { "data": "ConsentForm[]", "meta": "{ page, pageSize, total }" },
+      "requirementIds": ["FR-16", "FR-37", "FR-42", "NFR-5", "NFR-10"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent-forms",
+      "description": "ADMIN can target any audience. TEACHER can only target COURSE audiences they manage, checked by canTargetAudience per row. Creates the form and notifies parents of resolved audience students with consent.requested.",
+      "requestSchema": "ConsentFormInput",
+      "responseSchema": { "status": 201, "data": "ConsentForm & { notifiedParents: int }" },
+      "requirementIds": ["FR-36", "FR-44", "NFR-5"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent-forms/:id",
+      "description": "The audience's parents (with their own children[]), the creator, or ADMIN. Anyone else gets 404.",
+      "requestSchema": {},
+      "responseSchema": { "data": "ConsentForm" },
+      "requirementIds": ["FR-36", "FR-37", "NFR-5"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent-forms/:id/responses",
+      "description": "PARENT, for a linked child in the audience. Only allowed while now < dueAt, else 400 PAST_DUE. The signature must match the caller's full name case-insensitively, else 400 SIGNATURE_MISMATCH. Upserts by (formId, studentId), so any linked parent overwrites the single response. Calls audit({ before, after, request }) on create and on every change.",
+      "requestSchema": "ConsentResponseInput",
+      "responseSchema": { "data": { "formId": "string", "studentId": "string", "value": "GRANTED | DECLINED", "respondedBy": "{ id, name }", "comment": "string | null", "updatedAt": "ISO", "changed": "boolean (true if it overwrote a previous response)" } },
+      "requirementIds": ["FR-37", "FR-38", "NFR-3", "NFR-5"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent-forms/:id/tracking",
+      "description": "The creator or ADMIN (assertConsentOwnerOrAdmin, 403 NOT_FORM_OWNER otherwise). Returns one row per audience student. ?format=csv returns the whole filtered set as CSV via src/server/csv.ts, without pagination.",
+      "requestSchema": { "query": { "status": "GRANTED|DECLINED|NO_RESPONSE, optional", "format": "'csv', optional", "page": "int", "pageSize": "int ≤ 100", "sort": "studentName|status|respondedAt:asc|desc", "q": "string (student name)" } },
+      "responseSchema": {
+        "data": [ { "student": "{ id, firstName, lastName, sectionName }", "status": "GRANTED | DECLINED | NO_RESPONSE", "respondedBy": "{ id, name } | null", "respondedAt": "ISO | null", "comment": "string | null" } ],
+        "meta": "{ page, pageSize, total, counts: { granted, declined, noResponse } }",
+        "csv": "columns: Student, Section, Status, Responded by, Responded at, Comment"
+      },
+      "requirementIds": ["FR-39", "NFR-5", "NFR-10"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent-forms/:id/remind",
+      "description": "The creator or ADMIN. Claims the throttle with updateMany where {id, lastRemindedAt null or < now − 24h}. A count of 0 returns 429 RATE_LIMITED with details.retryAfterMs. Otherwise sends consent.reminder to parents of non-responding students. A form past dueAt returns 400 PAST_DUE.",
+      "requestSchema": {},
+      "responseSchema": { "data": { "notifiedParents": "int", "remindedAt": "ISO" } },
+      "requirementIds": ["FR-39", "FR-44"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/timetable",
+      "description": "EXISTING, extended. When a PARENT omits studentId, it defaults to getSelectedChild (sh_child, then the first child) instead of erroring or asking. An explicit ?studentId= still overrides it. /assignments and /grades pages use the same default server-side. The response shape is unchanged.",
+      "requestSchema": { "query": { "studentId": "optional override" } },
+      "responseSchema": { "data": "unchanged existing timetable shape" },
+      "requirementIds": ["FR-5", "FR-4"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/attendance/register",
+      "description": "EXISTING, extended (getRegister). For each student covered by an APPROVED note, it pre-fills status EXCUSED when no record exists and adds absence-note fields. The teacher can still change the status.",
+      "requestSchema": { "query": "unchanged" },
+      "responseSchema": { "data": "existing register shape; each student row gains { absenceNoteId: string | null, excusable: boolean, prefilled: boolean }" },
+      "requirementIds": ["FR-24", "FR-25"]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/attendance/register",
+      "description": "EXISTING, extended (saveRegister). EXCUSED is accepted if the caller is ADMIN or an APPROVED note covers the student/date/period. Otherwise it returns 403 with details.reason='NO_APPROVED_NOTE'. attendance.absent notifications skip students covered by a PENDING or APPROVED note.",
+      "requestSchema": "unchanged",
+      "responseSchema": { "data": "unchanged" },
+      "requirementIds": ["FR-25", "FR-27"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/internal/email/dispatch",
+      "description": "EXISTING cron route, extended. Adds an isolated try-block that calls sendConsentDueReminders(now). For each form with dueAt in (now, now+48h] and a null dueReminderSentAt, it claims the form and sends consent.reminder to non-responders. A failure is logged and does not abort the other jobs.",
+      "requestSchema": "unchanged (internal auth)",
+      "responseSchema": { "data": "existing summary & { consentReminders: { forms: int, notified: int } }" },
+      "requirementIds": ["FR-40", "FR-44", "NFR-8"]
+    }
+  ],
+
+  "nonHttpContracts": [
+    {
+      "name": "NOTIFICATION_TYPES additions (src/server/notifications/types.ts)",
+      "shape": "absence_note.submitted (email false), absence_note.reviewed (email true), conference.slots_requested, conference.booked, conference.cancelled, consent.requested (email true), consent.reminder (email true)",
+      "requirementIds": ["FR-19", "FR-26", "FR-28", "FR-33", "FR-36", "FR-40", "FR-44"]
+    },
+    {
+      "name": "getSelectedChild(user, searchParams?) → { studentId, firstName } | null",
+      "shape": "React cache(). Checks a linked ?studentId first, then a linked sh_child cookie, then the first linked child. Never throws on a bad cookie.",
+      "requirementIds": ["FR-3", "FR-4", "FR-5", "NFR-5"]
+    },
+    {
+      "name": "Pure helpers",
+      "shape": "coversRecord(note, { date, periodId }) → boolean; generateSlots(ranges, slotMinutes) → { startsAt, endsAt }[]; overlaps(a, b) → boolean; signatureMatches(typed, fullName) → boolean",
+      "requirementIds": ["FR-23", "FR-29", "FR-31", "FR-37", "FR-46"]
+    }
+  ],
+
+  "status": "complete"
+}

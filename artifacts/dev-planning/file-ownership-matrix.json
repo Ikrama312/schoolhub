@@ -1,6 +1,6 @@
 {
-  "ticketId": "SH-15",
-  "timestamp": "2026-11-10T14:00:00Z",
+  "ticketId": "SH-16",
+  "timestamp": "2026-11-10T15:00:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "entries": [
@@ -10,403 +10,408 @@
       "operation": "MODIFY"
     },
     {
-      "path": "prisma/migrations/20261114000000_prd15_parent_portal/migration.sql",
+      "path": "prisma/migrations/20261115000000_add_student_risk_snapshot/migration.sql",
       "taskId": "TASK-1",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/absence-notes.ts",
+      "path": "src/server/dashboards/risk-rules.ts",
       "taskId": "TASK-2",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/conferences.ts",
+      "path": "tests/unit/dashboards/risk-rules.test.ts",
       "taskId": "TASK-2",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/consent-forms.ts",
-      "taskId": "TASK-2",
+      "path": "src/lib/dates.ts",
+      "taskId": "TASK-3",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "tests/unit/dates.test.ts",
+      "taskId": "TASK-3",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/dashboards/missing-work.ts",
+      "taskId": "TASK-4",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/absence-notes/absence-coverage.ts",
-      "taskId": "TASK-3",
+      "path": "src/server/assignments/reminders.ts",
+      "taskId": "TASK-4",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "tests/integration/dashboards/missing-work.test.ts",
+      "taskId": "TASK-4",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/conferences/conference-slots.ts",
-      "taskId": "TASK-3",
+      "path": "src/server/gradebook/batch-grades.ts",
+      "taskId": "TASK-5",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/consent-forms/signature.ts",
-      "taskId": "TASK-3",
+      "path": "tests/integration/gradebook/batch-grades.test.ts",
+      "taskId": "TASK-5",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/absence-notes/absence-coverage.test.ts",
-      "taskId": "TASK-3",
+      "path": "src/lib/validators/dashboards.ts",
+      "taskId": "TASK-6",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/conferences/conference-slots.test.ts",
-      "taskId": "TASK-3",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/unit/consent-forms/signature.test.ts",
-      "taskId": "TASK-3",
+      "path": "src/lib/validators/reports.ts",
+      "taskId": "TASK-6",
       "operation": "CREATE"
     },
     {
       "path": "src/server/notifications/types.ts",
-      "taskId": "TASK-4",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/files/contexts.ts",
-      "taskId": "TASK-4",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/files/validate.ts",
-      "taskId": "TASK-4",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/parent/selected-child.ts",
-      "taskId": "TASK-5",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/me/selected-child/route.ts",
-      "taskId": "TASK-5",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/ChildSwitcher/ChildSwitcher.tsx",
-      "taskId": "TASK-6",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/shell.tsx",
-      "taskId": "TASK-6",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/app/(app)/layout.tsx",
-      "taskId": "TASK-6",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/config/navigation.ts",
-      "taskId": "TASK-6",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/absence-notes/absence-notes-service.ts",
       "taskId": "TASK-7",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/app/api/absence-notes/route.ts",
+      "path": "src/server/dashboards/insights.ts",
       "taskId": "TASK-8",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/absence-notes/[id]/route.ts",
+      "path": "src/server/dashboards/announcements.ts",
       "taskId": "TASK-8",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/absence-notes/[id]/review/route.ts",
-      "taskId": "TASK-8",
+      "path": "src/server/dashboards/risk.ts",
+      "taskId": "TASK-9",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/attendance/attendance-service.ts",
-      "taskId": "TASK-9",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/lib/validators/attendance.ts",
-      "taskId": "TASK-9",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/app/(app)/attendance/take/RegisterForm.tsx",
-      "taskId": "TASK-9",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/app/(app)/my-children/[studentId]/absence/new/page.tsx",
+      "path": "tests/integration/dashboards/risk.test.ts",
       "taskId": "TASK-10",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/my-children/[studentId]/absence/new/AbsenceNoteForm.tsx",
-      "taskId": "TASK-10",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/my-children/[studentId]/absence/page.tsx",
-      "taskId": "TASK-10",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/attendance/absence-notes/page.tsx",
+      "path": "src/server/dashboards/teacher.ts",
       "taskId": "TASK-11",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/attendance/absence-notes/AbsenceNotesReviewClient.tsx",
-      "taskId": "TASK-11",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/conferences/conferences-service.ts",
+      "path": "src/server/dashboards/student.ts",
       "taskId": "TASK-12",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/conferences/route.ts",
+      "path": "src/server/dashboards/admin.ts",
       "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conferences/[id]/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conferences/[id]/availability/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conferences/[id]/slots/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conference-slots/[id]/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conference-slots/[id]/book/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conference-slots/[id]/cancel/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conference-slots/[id]/ics/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/conferences/page.tsx",
-      "taskId": "TASK-14",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/conferences/ConferenceEventsClient.tsx",
-      "taskId": "TASK-14",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/conferences/page.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/conferences/[id]/availability/page.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/conferences/[id]/availability/AvailabilityClient.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/conferences/[id]/day/page.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/conferences/[id]/page.tsx",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/conferences/[id]/BookingClient.tsx",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/consent-forms/consent-forms-service.ts",
-      "taskId": "TASK-17",
       "operation": "CREATE"
     },
     {
       "path": "src/app/api/internal/email/dispatch/route.ts",
-      "taskId": "TASK-17",
+      "taskId": "TASK-14",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/api/consent-forms/route.ts",
-      "taskId": "TASK-18",
+      "path": "tests/integration/email-dispatch.test.ts",
+      "taskId": "TASK-14",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/components/Widget/Widget.tsx",
+      "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/consent-forms/[id]/route.ts",
-      "taskId": "TASK-18",
+      "path": "src/components/Widget/WidgetErrorBoundary.tsx",
+      "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/consent-forms/[id]/responses/route.ts",
-      "taskId": "TASK-18",
+      "path": "src/components/charts/ChartA11y.tsx",
+      "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/consent-forms/[id]/tracking/route.ts",
-      "taskId": "TASK-18",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/consent-forms/[id]/remind/route.ts",
-      "taskId": "TASK-18",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/consent-forms/page.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/consent-forms/new/page.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/consent-forms/new/ConsentFormForm.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/consent-forms/[id]/page.tsx",
-      "taskId": "TASK-20",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/consent-forms/[id]/ConsentResponseForm.tsx",
-      "taskId": "TASK-20",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/consent-forms/[id]/tracking/page.tsx",
-      "taskId": "TASK-20",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/consent-forms/[id]/tracking/ConsentTrackingClient.tsx",
-      "taskId": "TASK-20",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/parent/overview-service.ts",
-      "taskId": "TASK-21",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/me/children/summary/route.ts",
-      "taskId": "TASK-22",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/students/[id]/overview/route.ts",
-      "taskId": "TASK-22",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/my-children/page.tsx",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/my-children/[studentId]/page.tsx",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/my-children/[studentId]/OverviewCards.tsx",
-      "taskId": "TASK-23",
+      "path": "tests/unit/WidgetErrorBoundary.test.tsx",
+      "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
       "path": "src/app/(app)/dashboard/page.tsx",
+      "taskId": "TASK-16",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/GreetingHeader.tsx",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/RefreshButton.tsx",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/TeacherDashboard.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/TodaysClassesWidget.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/ToGradeWidget.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/UpcomingDeadlinesWidget.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/AtRiskWidget.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/TeacherMessagesWidget.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/QuickActionsWidget.tsx",
+      "taskId": "TASK-17",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/StudentDashboard.tsx",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/StudentTodayWidget.tsx",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/DueSoonWidget.tsx",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/RecentGradesWidget.tsx",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/MyCoursesWidget.tsx",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/AnnouncementsWidget.tsx",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/TermAttendanceWidget.tsx",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/AdminDashboard.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/KpiRowWidget.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/AttendanceTrendWidget.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/EnrollmentByGradeWidget.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/GradeDistributionWidget.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/RiskSummaryWidget.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/UpcomingEventsWidget.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/RecentActivityWidget.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/dashboard/teacher/route.ts",
+      "taskId": "TASK-20",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/dashboard/student/route.ts",
+      "taskId": "TASK-20",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/dashboard/admin/route.ts",
+      "taskId": "TASK-20",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/dashboard/refresh/route.ts",
+      "taskId": "TASK-20",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/integration/dashboards/dashboard-api.test.ts",
+      "taskId": "TASK-20",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/insights/at-risk/route.ts",
+      "taskId": "TASK-21",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/insights/at-risk/page.tsx",
+      "taskId": "TASK-21",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/insights/at-risk/_components/AtRiskFilters.tsx",
+      "taskId": "TASK-21",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/students/[id]/insights/route.ts",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/students/[id]/insights/page.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/config/student-tabs.ts",
+      "taskId": "TASK-22",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/reports/enrollment.ts",
       "taskId": "TASK-23",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/assignments/page.tsx",
-      "taskId": "TASK-24",
-      "operation": "MODIFY"
+      "path": "src/server/reports/attendance.ts",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/assignments/AssignmentList.tsx",
-      "taskId": "TASK-24",
-      "operation": "MODIFY"
+      "path": "src/server/reports/performance.ts",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/grades/page.tsx",
+      "path": "src/server/reports/completion.ts",
       "taskId": "TASK-24",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/grades/GradesClient.tsx",
+      "path": "src/server/reports/engagement.ts",
       "taskId": "TASK-24",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/api/me/timetable/route.ts",
+      "path": "src/server/reports/workload.ts",
       "taskId": "TASK-24",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/reports/index.ts",
+      "taskId": "TASK-25",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/integration/reports/reports.test.ts",
+      "taskId": "TASK-25",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/reports/[reportKey]/route.ts",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/reports/page.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/reports/[reportKey]/page.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/reports/[reportKey]/_components/ReportFilters.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/config/navigation.ts",
+      "taskId": "TASK-27",
       "operation": "MODIFY"
     },
     {
       "path": "prisma/seed.ts",
-      "taskId": "TASK-25",
+      "taskId": "TASK-28",
       "operation": "MODIFY"
     },
     {
-      "path": "tests/integration/absence-notes/absence-approval.test.ts",
-      "taskId": "TASK-26",
+      "path": "prisma/seed-large.ts",
+      "taskId": "TASK-29",
       "operation": "CREATE"
     },
     {
-      "path": "tests/integration/conferences/concurrent-booking.test.ts",
-      "taskId": "TASK-26",
+      "path": "package.json",
+      "taskId": "TASK-29",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "tests/e2e/dashboard.spec.ts",
+      "taskId": "TASK-30",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "tests/e2e/insights.spec.ts",
+      "taskId": "TASK-30",
       "operation": "CREATE"
     },
     {
-      "path": "tests/e2e/absence-notes.spec.ts",
-      "taskId": "TASK-27",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/e2e/conferences.spec.ts",
-      "taskId": "TASK-27",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/e2e/consent-forms.spec.ts",
-      "taskId": "TASK-27",
+      "path": "tests/e2e/reports.spec.ts",
+      "taskId": "TASK-30",
       "operation": "CREATE"
     }
   ]

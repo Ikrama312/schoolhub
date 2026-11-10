@@ -16,4 +16,6 @@ export const studentTabs: StudentTab[] = [
   // PRD-11 FR-26 / FR-36
   { key: 'grades', label: 'Grades', href: (id) => `/students/${id}/grades`, roles: ALL_ROLES },
   { key: 'report-cards', label: 'Report cards', href: (id) => `/students/${id}/report-cards`, roles: ALL_ROLES },
+  // PRD-16 FR-31
+  { key: 'insights', label: 'Insights', href: (id) => `/students/${id}/insights`, roles: ['ADMIN', 'TEACHER'] },
 ];

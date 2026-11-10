@@ -1,6 +1,6 @@
 {
-  "ticketId": "SH-15",
-  "timestamp": "2026-11-10T14:00:00Z",
+  "ticketId": "SH-16",
+  "timestamp": "2026-11-10T15:00:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "modules": [
@@ -9,125 +9,176 @@
       "dependsOn": []
     },
     {
+      "name": "src/lib/dates.ts",
+      "dependsOn": []
+    },
+    {
       "name": "src/lib/validators",
-      "dependsOn": [
-        "prisma"
-      ]
+      "dependsOn": []
     },
     {
       "name": "src/server/notifications",
-      "dependsOn": []
-    },
-    {
-      "name": "src/server/files",
       "dependsOn": [
-        "src/server/auth",
-        "src/server/absence-notes"
+        "prisma"
       ]
     },
     {
-      "name": "src/server/parent",
+      "name": "src/server/gradebook",
       "dependsOn": [
-        "src/server/auth",
+        "prisma"
+      ]
+    },
+    {
+      "name": "src/server/dashboards/risk-rules.ts",
+      "dependsOn": []
+    },
+    {
+      "name": "src/server/dashboards",
+      "dependsOn": [
+        "prisma",
+        "src/lib/dates.ts",
+        "src/server/gradebook",
         "src/server/attendance",
         "src/server/assignments",
-        "src/server/gradebook",
-        "src/server/timetable",
-        "src/server/calendar",
-        "src/server/announcements",
-        "src/server/conferences",
-        "src/server/consent-forms",
-        "prisma"
-      ]
-    },
-    {
-      "name": "src/server/absence-notes",
-      "dependsOn": [
-        "src/server/auth",
-        "src/server/notifications",
-        "src/server/audit.ts",
-        "src/server/attendance",
-        "src/lib/validators",
-        "prisma"
-      ]
-    },
-    {
-      "name": "src/server/attendance",
-      "dependsOn": [
-        "src/server/absence-notes",
-        "src/server/notifications",
-        "prisma"
-      ]
-    },
-    {
-      "name": "src/server/conferences",
-      "dependsOn": [
-        "src/server/auth",
-        "src/server/notifications",
-        "src/server/audit.ts",
-        "src/server/calendar",
-        "src/lib/validators",
-        "prisma"
-      ]
-    },
-    {
-      "name": "src/server/consent-forms",
-      "dependsOn": [
-        "src/server/auth",
-        "src/server/notifications",
-        "src/server/audit.ts",
-        "src/server/announcements",
-        "src/server/csv.ts",
-        "src/lib/validators",
-        "prisma"
-      ]
-    },
-    {
-      "name": "src/app/api",
-      "dependsOn": [
-        "src/server/http.ts",
         "src/server/parent",
-        "src/server/absence-notes",
-        "src/server/conferences",
-        "src/server/consent-forms",
-        "src/server/attendance",
-        "src/lib/validators"
+        "src/server/messaging",
+        "src/server/calendar",
+        "src/server/notifications",
+        "src/server/auth",
+        "src/server/audit.ts"
       ]
     },
     {
-      "name": "src/components/ChildSwitcher",
+      "name": "src/server/assignments",
       "dependsOn": [
-        "src/components/UserAvatar"
+        "prisma",
+        "src/server/dashboards/missing-work.ts"
       ]
     },
     {
-      "name": "src/config/navigation.ts",
+      "name": "src/server/reports",
+      "dependsOn": [
+        "prisma",
+        "src/lib/validators",
+        "src/server/gradebook",
+        "src/server/attendance",
+        "src/server/dashboards/missing-work.ts"
+      ]
+    },
+    {
+      "name": "src/components/Widget",
+      "dependsOn": [
+        "src/components/LoadingSkeleton"
+      ]
+    },
+    {
+      "name": "src/components/charts",
       "dependsOn": []
     },
     {
-      "name": "src/app/(app)",
+      "name": "src/app/(app)/dashboard",
       "dependsOn": [
-        "src/components",
-        "src/config/navigation.ts",
-        "src/server/parent",
-        "src/server/absence-notes",
-        "src/server/conferences",
-        "src/server/consent-forms",
-        "src/lib/validators"
+        "src/server/dashboards",
+        "src/components/Widget",
+        "src/components/charts",
+        "src/components/StatCard",
+        "src/components/EmptyState",
+        "src/components/Toast",
+        "src/lib/dates.ts",
+        "src/server/auth"
       ]
     },
     {
-      "name": "tests",
+      "name": "src/app/(app)/insights/at-risk",
       "dependsOn": [
-        "src/server/absence-notes",
-        "src/server/conferences",
-        "src/server/consent-forms",
-        "src/server/attendance"
+        "src/server/dashboards",
+        "src/lib/validators",
+        "src/components/DataTable",
+        "src/components/PageHeader",
+        "src/server/auth"
+      ]
+    },
+    {
+      "name": "src/app/(app)/students/[id]/insights",
+      "dependsOn": [
+        "src/server/dashboards",
+        "src/config",
+        "src/server/auth"
+      ]
+    },
+    {
+      "name": "src/app/(app)/admin/reports",
+      "dependsOn": [
+        "src/server/reports",
+        "src/lib/validators",
+        "src/components/charts",
+        "src/components/DataTable",
+        "src/components/PageHeader",
+        "src/server/auth"
+      ]
+    },
+    {
+      "name": "src/app/api/dashboard",
+      "dependsOn": [
+        "src/server/dashboards",
+        "src/server/http.ts",
+        "src/server/auth",
+        "src/server/audit.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/insights",
+      "dependsOn": [
+        "src/server/dashboards",
+        "src/lib/validators",
+        "src/server/http.ts",
+        "src/server/csv.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/students/[id]/insights",
+      "dependsOn": [
+        "src/server/dashboards",
+        "src/lib/validators",
+        "src/server/http.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/reports",
+      "dependsOn": [
+        "src/server/reports",
+        "src/lib/validators",
+        "src/server/http.ts",
+        "src/server/csv.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/internal/email/dispatch",
+      "dependsOn": [
+        "src/server/dashboards"
+      ]
+    },
+    {
+      "name": "src/config",
+      "dependsOn": []
+    },
+    {
+      "name": "prisma/seed.ts",
+      "dependsOn": [
+        "prisma",
+        "src/server/dashboards"
+      ]
+    },
+    {
+      "name": "prisma/seed-large.ts",
+      "dependsOn": [
+        "prisma",
+        "src/server/dashboards"
       ]
     }
   ],
   "notes": [
-    "src/server/absence-notes depends on src/server/attendance only for the pure attendance-rules.ts helpers (schoolToday, addDays); attendance-service.ts imports findCovering/coversRecord from absence-notes. absence-notes-service must never import attendance-service.ts (keeps the file-level graph acyclic).",
-    "src/server/files/contexts.ts imports homeroom lookup from absence-notes-service lazily (contexts are registered lazily by access.ts)."
+    "src/server/dashboards/missing-work.ts must not import the rest of src/server/dashboards. assignments/reminders.ts imports it, so keeping it standalone avoids an import cycle.",
+    "risk-rules.ts has no imports (pure). risk.ts imports tag constants from insights.ts, and insights.ts must not import risk.ts."
   ]
 }

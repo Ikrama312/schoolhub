@@ -16,6 +16,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:large": "tsx prisma/seed-large.ts",
     "db:reset": "prisma migrate reset --force",
     "worker:email": "tsx scripts/worker-email.ts",
     "gradebook:backfill": "tsx scripts/gradebook-backfill.ts",

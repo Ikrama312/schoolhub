@@ -1,11 +1,11 @@
 {
-  "ticketId": "SH-15",
-  "timestamp": "2026-11-10T13:35:00Z",
+  "ticketId": "SH-16",
+  "timestamp": "2026-11-10T14:35:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "status": "complete",
-  "endpointCount": 29,
+  "endpointCount": 7,
   "blockers": [],
   "artifacts": [
     "artifacts/architect/tech-stack-decisions.md",
@@ -14,14 +14,14 @@
     "artifacts/architect/api-contracts.json"
   ],
   "notes": [
-    "There are 29 endpoints. 24 are new routes from system-design §2.3. 5 are existing routes that get extended: POST /api/files (absence-note context), GET /api/me/timetable (sh_child default), GET and PUT /api/attendance/register (EXCUSED pre-fill and rule, absent-notification suppression) and POST /api/internal/email/dispatch (consentReminders). There are also 3 non-HTTP contracts: the notification types, getSelectedChild, and the pure helpers.",
-    "The base path is /api, not /api/v1. Envelopes, paginated() meta and error codes come from src/server/http.ts. http.ts has no 422, so system-design's '422' business-rule failures map to 400 VALIDATION_ERROR with details.reason (OUTSIDE_BOOKING_WINDOW, PAST_DUE, SIGNATURE_MISMATCH, DATE_WINDOW).",
-    "Error policy: an unviewable student or resource returns 404. A visible resource the caller may not act on returns 403 with details.reason. Races return 409 with details.reason (SLOT_TAKEN, OVERLAP, ONE_PER_TEACHER, ALREADY_REVIEWED, SLOT_BOOKED). The remind throttle returns 429 with retryAfterMs.",
-    "Decisions made beyond system-design: GET /api/conferences/:id/slots?view=day serves the teacher day view (FR-34). Slot booking details are hidden from anyone except the booker, the teacher and ADMIN. GET /api/students/:id/overview accepts ?cards= to limit which cards load. PATCH /api/conferences/:id returns 409 if booked slots exist and slotMinutes or date changes. The tracking CSV ignores pagination.",
-    "Partial requirements carried from system-design: FR-13 (announcements returns []), FR-35 and the calendar part of FR-5 (no PRD-14 calendar page). Neither is a blocker.",
-    "Three schema columns go beyond the PRD (ADR-3): ConferenceSlot.blocked, ConsentForm.lastRemindedAt and ConsentForm.dueReminderSentAt. The migration also adds a raw-SQL partial unique index on ConferenceSlot(eventId, teacherId, bookedForStudentId).",
-    "src/lib/validators/{absence-notes,conferences,consent-forms}.ts should mirror the input shapes in api-contracts.json `components`.",
-    "artifacts/architect/threat-model-notes.json is still the stale SH-14 file. No architect sub-task owns it, so treat it as out of date."
+    "There are 7 HTTP endpoints, all new: GET /api/dashboard/{teacher,student,admin}, POST /api/dashboard/refresh, GET /api/insights/at-risk, GET /api/students/:id/insights and GET /api/reports/:reportKey. There are also 4 non-HTTP contracts: recomputeRiskSnapshots, the insights.student_high_risk notification type, the pure risk-rules, and missingWork.",
+    "The base path is /api, not /api/v1. Envelopes, paginated() meta and error codes come from src/server/http.ts. CSV goes through src/server/csv.ts toCsv and ignores pagination.",
+    "Error policy: an unknown reportKey returns 404. assertCanViewStudent returns 403 for a denied ADMIN/TEACHER (existing helper behaviour). Out-of-scope filters on /api/insights/at-risk return an empty 200 list, never 403.",
+    "Decisions made beyond system-design: the at-risk list meta adds computedAt; refresh returns studentsComputed and skipped; the admin payload omits openSafeguardingReports unless the caller is a safeguarding lead; the reportFilters block fixes per-report filters and row shapes.",
+    "Dependency gaps carried from system-design (not blockers): announcements (FR-8, FR-14, FR-38) return [] with announcementsAvailable=false, and FR-21 reads CalendarEvent directly.",
+    "src/lib/validators/{dashboards,reports}.ts should mirror the query shapes in api-contracts.json.",
+    "artifacts/architect/threat-model-notes.json is still the stale SH-14 file. No architect sub-task owns it, so treat it as out of date.",
+    "The SH-15 api-contracts.json and handoff were moved to artifacts/architect/.prev-SH-15/."
   ],
   "nextPhase": "dev-planning"
 }

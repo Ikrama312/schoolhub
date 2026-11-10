@@ -1,648 +1,806 @@
 {
-  "ticketId": "SH-15",
+  "ticketId": "SH-16",
   "version": "1.0",
-  "timestamp": "2026-11-10T14:00:00Z",
+  "timestamp": "2026-11-10T15:00:00Z",
   "phase": "dev-planning",
   "tasks": [
     {
       "id": "TASK-1",
-      "description": "Prisma: add enums AbsenceNoteStatus/AbsenceReason/ConsentResponseValue and models AbsenceNote, ConferenceEvent, ConferenceSlot (+blocked), ConsentForm (+lastRemindedAt, +dueReminderSentAt, eventId FK to CalendarEvent), ConsentAudience (reuses AudienceType), ConsentResponse @@unique(formId,studentId); @db.Date for date-only fields; index AbsenceNote(studentId,status,fromDate). Migration adds raw-SQL partial unique index ConferenceSlot(eventId,teacherId,bookedForStudentId) WHERE bookedForStudentId IS NOT NULL. Run prisma generate.",
+      "description": "Prisma: add enum RiskLevel {MEDIUM HIGH} and model StudentRiskSnapshot (studentId, termId, level?, previousLevel?, reasons Json, signals Json, history Json @default(\"[]\"), highNotifiedAt?, computedAt, createdAt/updatedAt; @@unique([studentId, termId]), @@index([termId, level]), @@index([termId, computedAt])) with back-relations on User and Term. Migration add_student_risk_snapshot. Run prisma generate. Do not add the AuditLog index (ADR-7, only if EXPLAIN shows it is needed).",
       "files": [
         "prisma/schema.prisma",
-        "prisma/migrations/20261114000000_prd15_parent_portal/migration.sql"
+        "prisma/migrations/20261115000000_add_student_risk_snapshot/migration.sql"
       ],
       "dependencies": [],
-      "estimateHours": 3,
+      "estimateHours": 1.5,
       "requirementIds": [
-        "FR-1",
-        "FR-29",
-        "FR-31",
-        "FR-39",
-        "FR-40",
-        "NFR-8"
+        "FR-27",
+        "FR-28",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-2",
-      "description": "Zod validators shared by forms and handlers, mirroring api-contracts.json components: absence note (toDate>=fromDate, span<=30d, details<=1000, periodIds only when partialDay, -14/+60 day window via superRefine), review (reject requires note), conference event (slotMinutes 5-60, window ordering), availability ranges, slot patch, booking (parentNote<=500), consent form (audience types GRADE_LEVEL/SECTION/COURSE only), consent response (value, signature, comment); list query schemas with page/pageSize<=100/sort/q.",
+      "description": "Pure risk rules with no Prisma import: attendanceSignal(pct, threshold) (< threshold → MEDIUM, < 80 → HIGH, null pct → null), gradesSignal(coursePcts) (any < 60 → MEDIUM; ≥2 < 60 or any < 50 → HIGH; null percents ignored), missingSignal(count) (3–4 → MEDIUM, ≥5 → HIGH), overallLevel(signals) (any HIGH or ≥2 MEDIUM → HIGH, exactly one MEDIUM → MEDIUM, else null), formatReason → labels 'Attendance 78 %', '2 courses < 60 %', '6 missing'. Vitest table tests for every boundary: 90/89.9, 80/79.9, 60/59.9, 50/49.9, missing 2/3/4/5, MEDIUM+MEDIUM → HIGH, threshold override.",
       "files": [
-        "src/lib/validators/absence-notes.ts",
-        "src/lib/validators/conferences.ts",
-        "src/lib/validators/consent-forms.ts"
+        "src/server/dashboards/risk-rules.ts",
+        "tests/unit/dashboards/risk-rules.test.ts"
       ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 2.5,
+      "dependencies": [],
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-2",
-        "FR-18",
-        "FR-22",
-        "FR-28",
-        "FR-36",
-        "FR-37",
-        "NFR-7",
-        "NFR-10"
+        "FR-25",
+        "FR-26",
+        "NFR-9",
+        "NFR-11"
       ]
     },
     {
       "id": "TASK-3",
-      "description": "Pure helpers (no Prisma) + FR-46 unit tests: coversRecord(note,{date,periodId}) (whole-day, partial periods, multi-day, null periodId = daily homeroom covered by any note on that date); generateSlots(ranges,slotMinutes) + overlaps(a,b); signatureMatches(typed,fullName) via trim().toLowerCase().",
+      "description": "Date helpers in src/lib/dates.ts next to the existing ones: greetingFor(now, tz) → 'Good morning' / 'Good afternoon' / 'Good evening' by school-timezone hour, and schoolDaysBack(n, tz) → the last n dates that have at least one AttendanceSession (yyyy-MM-dd). Extend the existing dates unit test with the hour boundaries for greetingFor.",
       "files": [
-        "src/server/absence-notes/absence-coverage.ts",
-        "src/server/conferences/conference-slots.ts",
-        "src/server/consent-forms/signature.ts",
-        "tests/unit/absence-notes/absence-coverage.test.ts",
-        "tests/unit/conferences/conference-slots.test.ts",
-        "tests/unit/consent-forms/signature.test.ts"
+        "src/lib/dates.ts",
+        "tests/unit/dates.test.ts"
       ],
       "dependencies": [],
-      "estimateHours": 2.5,
+      "estimateHours": 1.5,
       "requirementIds": [
-        "FR-23",
-        "FR-29",
-        "FR-31",
-        "FR-37",
-        "FR-46"
+        "FR-3",
+        "FR-17",
+        "NFR-7"
       ]
     },
     {
       "id": "TASK-4",
-      "description": "Register notification types (absence_note.submitted email false, absence_note.reviewed true, conference.slots_requested, conference.booked, conference.cancelled, consent.requested true, consent.reminder true); register 'absence-note' file context resolver (any linked parent, homeroom teacher of the student's current section, ADMIN); restrict 'absence-note' uploads to PDF/JPG/PNG in checkType.",
+      "description": "Extract the shared missing-work predicate: missingWork({ studentIds, from, to, now }) → Map<studentId, {assignmentId, dueAt, courseId}[]>. An assignment counts when it is published (visibleWhere(now)), dueAt ∈ [from, min(to, now)), submissionType ≠ NO_SUBMISSION, the student is actively enrolled, and there is no Submission and no GradeExemption. Use one window query, then subtract in memory. Refactor assignments/reminders.ts to call it with its own 8-day window without changing its behaviour. The integration test covers the window edges, exemptions and NO_SUBMISSION.",
       "files": [
-        "src/server/notifications/types.ts",
-        "src/server/files/contexts.ts",
-        "src/server/files/validate.ts"
+        "src/server/dashboards/missing-work.ts",
+        "src/server/assignments/reminders.ts",
+        "tests/integration/dashboards/missing-work.test.ts"
       ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 1.5,
+      "dependencies": [],
+      "estimateHours": 2.5,
       "requirementIds": [
-        "FR-18",
-        "FR-19",
-        "FR-26",
-        "FR-28",
-        "FR-33",
-        "FR-36",
-        "FR-40",
-        "FR-41",
-        "FR-44"
+        "FR-11",
+        "FR-25",
+        "FR-37",
+        "NFR-8"
       ]
     },
     {
       "id": "TASK-5",
-      "description": "Child context: getSelectedChild(user, searchParams?) wrapped in React cache() — linked ?studentId ▸ linked sh_child cookie ▸ first linked child (never throws on bad cookie); setSelectedChildCookie validates ParentStudentLink then sets httpOnly/sameSite=lax/path=//1y cookie. POST /api/me/selected-child route (PARENT only, unlinked id → 404).",
+      "description": "Batch grade loader loadTermPercents(termId, studentIds?) → Map<studentId, {courseId, percent, letter}[]>. Use about 5 queries (courses and scales, grade items, grades, categories, overrides), group in memory, and call the existing pure computeStudentTerm for each (student, course). Never query per student. The integration test asserts parity with getStudentGrades for seeded students.",
       "files": [
-        "src/server/parent/selected-child.ts",
-        "src/app/api/me/selected-child/route.ts"
+        "src/server/gradebook/batch-grades.ts",
+        "tests/integration/gradebook/batch-grades.test.ts"
       ],
       "dependencies": [],
-      "estimateHours": 1.5,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-3",
-        "FR-4",
-        "FR-5",
-        "FR-6",
-        "NFR-5"
+        "FR-13",
+        "FR-19",
+        "FR-25",
+        "FR-36",
+        "NFR-1",
+        "NFR-8"
       ]
     },
     {
       "id": "TASK-6",
-      "description": "Top-bar ChildSwitcher (MUI Select + UserAvatar; one child = name only, no dropdown; change POSTs /api/me/selected-child then router.refresh()); app layout loads linked children + selected child and a homeroom flag; shell renders switcher for PARENT; navigation entries — Parent: My children, Absence notes, Conferences, Consent forms; Teacher: Absence notes (requires homeroom), Conferences; Admin: Conferences, Consent forms, Absence notes. mui-mcp lookup per component.",
+      "description": "Zod validators that mirror api-contracts.json. dashboards.ts holds the at-risk query (level, reason, gradeLevel, sectionId, page, pageSize clamped to 100, format=csv) and the student insights params. reports.ts holds REPORT_KEYS as a z.enum of the six keys, the shared academicYearId/termId selector, and the per-report filter schemas from api-contracts.reportFilters (date ranges where from ≤ to, plus format=csv).",
       "files": [
-        "src/components/ChildSwitcher/ChildSwitcher.tsx",
-        "src/app/(app)/shell.tsx",
-        "src/app/(app)/layout.tsx",
-        "src/config/navigation.ts"
+        "src/lib/validators/dashboards.ts",
+        "src/lib/validators/reports.ts"
       ],
-      "dependencies": [
-        "TASK-5"
-      ],
-      "estimateHours": 3,
+      "dependencies": [],
+      "estimateHours": 1.5,
       "requirementIds": [
-        "FR-3",
-        "FR-6",
+        "FR-30",
+        "FR-33",
         "FR-42",
-        "NFR-4"
+        "FR-44",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-7",
-      "description": "absence-notes-service: submit (PENDING, assertCanViewStudent, fileId with absence-note context, notify absence_note.submitted to homeroom teacher + ADMINs), list (role-scoped, paginated), getForReview (joins AttendanceRecords for the date range), review ($transaction: updateMany status PENDING→decision count 0 → 409 ALREADY_REVIEWED; on APPROVE convert covered ABSENT records to EXCUSED with note 'Absence note #<id>' and create EXCUSED records for existing sessions without one; after commit audit({request}) and notify absence_note.reviewed with reviewNote), findCovering(studentIds, dateRange, statuses), homeroomTeacherOf, assertHomeroomOrAdmin.",
+      "description": "Register the notification type 'insights.student_high_risk' in NOTIFICATION_TYPES (category ACADEMIC, recipient TEACHER, email default true) so notify() and preferences accept it.",
       "files": [
-        "src/server/absence-notes/absence-notes-service.ts"
+        "src/server/notifications/types.ts"
+      ],
+      "dependencies": [],
+      "estimateHours": 0.5,
+      "requirementIds": [
+        "FR-32"
+      ]
+    },
+    {
+      "id": "TASK-8",
+      "description": "Cache layer and announcements stub. insights.ts exports the tag constants (dashboard:admin, dashboard:teacher, insights:at-risk) and a cached(fn, keyParts, {revalidate, tags}) helper over unstable_cache that returns { data, computedAt: ISO } with no Date or Decimal values. It also exports getRiskSummary(user) (counts by level and by reason, cached 3600 s with key ['risk','admin'] or ['risk','teacher',userId]) and getTopAtRisk(user, n), both reading StudentRiskSnapshot intersected with getAccessibleStudentIds. announcements.ts exports ANNOUNCEMENTS_AVAILABLE = false and latestAnnouncements() → [].",
+      "files": [
+        "src/server/dashboards/insights.ts",
+        "src/server/dashboards/announcements.ts"
+      ],
+      "dependencies": [
+        "TASK-1"
+      ],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "FR-7",
+        "FR-8",
+        "FR-14",
+        "FR-20",
+        "FR-23",
+        "FR-24",
+        "FR-38",
+        "NFR-3",
+        "NFR-12"
+      ]
+    },
+    {
+      "id": "TASK-9",
+      "description": "Risk engine in risk.ts. loadRiskInputs(term, studentIds) is batched: AttendanceRecord groupBy → attendanceRate, loadTermPercents, and missingWork over the last 30 days. recomputeRiskSnapshots({ force }) skips with 'no-term', or with 'fresh' when max(computedAt) is under 60 minutes old and force is false. It upserts in chunked $transactions of about 100 rows. When the level changes it sets previousLevel and prepends to history, capped at 10. When a student moves to HIGH it claims highNotifiedAt atomically with updateMany (14-day window) and calls notify(homeroomTeacher, 'insights.student_high_risk'); with no homeroom teacher it logs logger.warn. It then calls revalidateTag('insights:at-risk') and returns { studentsComputed, skipped }. listAtRisk(user, filters, page) intersects the scope with the filters, sorts HIGH first, then by reason count, then by name, computes the trend from previousLevel, and returns all rows when CSV is requested. getStudentInsights(user, studentId) uses assertCanViewStudent and returns signals, level and history. Export AT_RISK_COLUMNS for the CSV.",
+      "files": [
+        "src/server/dashboards/risk.ts"
       ],
       "dependencies": [
         "TASK-1",
         "TASK-2",
+        "TASK-4",
+        "TASK-5",
+        "TASK-7",
+        "TASK-8"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-25",
+        "FR-26",
+        "FR-27",
+        "FR-28",
+        "FR-29",
+        "FR-30",
+        "FR-32",
+        "FR-42",
+        "FR-43",
+        "NFR-1",
+        "NFR-3"
+      ]
+    },
+    {
+      "id": "TASK-10",
+      "description": "Integration tests for the risk engine. The hourly gate skips when the data is fresh and force bypasses it. History is appended only when the level changes and is capped at 10. The 14-day HIGH notification claim fires once. A teacher filtering by an out-of-scope section gets 0 rows (empty 200). Sort order and trend arrows are correct.",
+      "files": [
+        "tests/integration/dashboards/risk.test.ts"
+      ],
+      "dependencies": [
+        "TASK-9"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-27",
+        "FR-28",
+        "FR-32",
+        "FR-42",
+        "NFR-3",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-11",
+      "description": "Teacher dashboard service. getTodaysClasses(user) wraps attendance-service getToday and nowAndNext, includes taken/not-taken status, and is live (not cached). getToGrade(user) returns the count and the 5 oldest ungraded submissions and manual-grading quiz attempts. getUpcomingDeadlines(user) covers assignments and quizzes due in the next 7 school-tz days, with submission rate = submissions / active enrolments from one grouped query. getTeacherMessages(user) returns messaging unreadCount plus latestAnnouncements. getToGrade and getUpcomingDeadlines are cached through insights.cached with userId in the key and the dashboard:teacher tag.",
+      "files": [
+        "src/server/dashboards/teacher.ts"
+      ],
+      "dependencies": [
         "TASK-3",
+        "TASK-8"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-4",
+        "FR-5",
+        "FR-6",
+        "FR-8",
+        "FR-23",
+        "NFR-3",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-12",
+      "description": "Student dashboard service, uncached. getStudentToday → parent/overview-service getToday(user, user.id) and is holiday-aware. getDueSoon covers assignments and open quizzes due in the next 7 days plus missingWork from term start to now; overdue items come first with overdue: true. getRecentGrades → overview-service, last 5. getMyCourses uses getStudentGrades for percent and letter, the LessonProgress ratio, and the first incomplete visible lesson. getTermAttendance uses countStatuses + attendanceRate over the term range.",
+      "files": [
+        "src/server/dashboards/student.ts"
+      ],
+      "dependencies": [
         "TASK-4"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "FR-15",
+        "NFR-7",
+        "NFR-8"
+      ]
+    },
+    {
+      "id": "TASK-13",
+      "description": "Admin dashboard service. getKpis() is cached and covers active students, active teachers, today's rate with the delta vs the same weekday 7 days earlier (attendance-service getOverview), missing registers today and pending absence notes. getSafeguardingCount(user) is never cached and only called when isSafeguardingLead. getAttendanceTrend() uses schoolDaysBack(30) and returns the threshold. getEnrollmentByGrade() groups by grade level × gender. getGradeDistribution(termId) builds 10 % buckets from loadTermPercents, plus the average and median. getUpcomingEvents() returns the next 5 school-wide CalendarEvents, with recurrences expanded through calendar/recurrence.expandOccurrences. getRecentActivity() returns the latest 10 AuditLog rows whose action starts with user., report_card. or settings., joined to the actor. The cached ones use the dashboard:admin tag with revalidate 900.",
+      "files": [
+        "src/server/dashboards/admin.ts"
+      ],
+      "dependencies": [
+        "TASK-3",
+        "TASK-5",
+        "TASK-8"
+      ],
+      "estimateHours": 3.5,
+      "requirementIds": [
+        "FR-16",
+        "FR-17",
+        "FR-18",
+        "FR-19",
+        "FR-21",
+        "FR-22",
+        "FR-23",
+        "NFR-1",
+        "NFR-3",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-14",
+      "description": "Hook the hourly risk recompute into the internal dispatch cron as an isolated try { await recomputeRiskSnapshots() } catch → logger.error block. The gate lives in the database inside recomputeRiskSnapshots. Extend the email-dispatch integration test so that a fresh snapshot is skipped and a failure does not break the other passes.",
+      "files": [
+        "src/app/api/internal/email/dispatch/route.ts",
+        "tests/integration/email-dispatch.test.ts"
+      ],
+      "dependencies": [
+        "TASK-9"
+      ],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-27",
+        "NFR-12"
+      ]
+    },
+    {
+      "id": "TASK-15",
+      "description": "Shared UI. Widget.tsx is a server wrapper: an MUI Card with a title, an optional 'Updated N min ago' caption from computedAt, WidgetErrorBoundary and Suspense with a LoadingSkeleton fallback. WidgetErrorBoundary.tsx is a client class component using getDerivedStateFromError; it shows an Alert 'This widget could not load' and a 'Retry' Button that resets state and calls router.refresh(). ChartA11y.tsx is a client component that wraps an x-charts chart with aria-label={summary} and a visuallyHidden MUI Table of the same rows. Before using any MUI component, look it up through mui-mcp (useMuiDocs + fetchDocs, 9.5.0); if MCP is unavailable, report a blocker. Add a unit test that the error boundary renders the fallback and that Retry resets it.",
+      "files": [
+        "src/components/Widget/Widget.tsx",
+        "src/components/Widget/WidgetErrorBoundary.tsx",
+        "src/components/charts/ChartA11y.tsx",
+        "tests/unit/WidgetErrorBoundary.test.tsx"
+      ],
+      "dependencies": [],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "FR-2",
+        "FR-24",
+        "NFR-2",
+        "NFR-4",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-16",
+      "description": "Dashboard shell. In page.tsx, keep the PARENT → /my-children redirect, switch on role to AdminDashboard, TeacherDashboard or StudentDashboard, and call notFound() for any other role. Render GreetingHeader immediately: greetingFor + first name, the school-tz date and getCurrentTerm().name. RefreshButton is a client component shown to ADMIN only; it POSTs /api/dashboard/refresh, shows a toast through useToast, and calls router.refresh().",
+      "files": [
+        "src/app/(app)/dashboard/page.tsx",
+        "src/app/(app)/dashboard/_components/GreetingHeader.tsx",
+        "src/app/(app)/dashboard/_components/RefreshButton.tsx"
+      ],
+      "dependencies": [
+        "TASK-3",
+        "TASK-17",
+        "TASK-18",
+        "TASK-19"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-1",
+        "FR-3",
+        "FR-24",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-17",
+      "description": "Teacher dashboard. TeacherDashboard.tsx lays out an MUI Grid of Widgets. The widgets are async server components that call dashboards/teacher and insights. TodaysClassesWidget shows Now/Next Chips, taken/not-taken status, a 'Take attendance' action and a course link. ToGradeWidget shows the count and top 5 with links. UpcomingDeadlinesWidget shows submission rates. AtRiskWidget shows the top 5 with reason chips and a link to /insights/at-risk. TeacherMessagesWidget shows the unread count, and EmptyState 'Announcements not available yet' when ANNOUNCEMENTS_AVAILABLE is false. QuickActionsWidget has links for New assignment, Take attendance and New quiz; 'New announcement' is hidden while ANNOUNCEMENTS_AVAILABLE is false. Use MUI only, looked up through mui-mcp.",
+      "files": [
+        "src/app/(app)/dashboard/_components/TeacherDashboard.tsx",
+        "src/app/(app)/dashboard/_components/widgets/TodaysClassesWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/ToGradeWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/UpcomingDeadlinesWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/AtRiskWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/TeacherMessagesWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/QuickActionsWidget.tsx"
+      ],
+      "dependencies": [
+        "TASK-11",
+        "TASK-15",
+        "TASK-8"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-2",
+        "FR-4",
+        "FR-5",
+        "FR-6",
+        "FR-7",
+        "FR-8",
+        "FR-9",
+        "NFR-4",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-18",
+      "description": "Student dashboard. StudentDashboard.tsx lays out an MUI Grid of Widgets. StudentTodayWidget shows the schedule with Now/Next Chips, or a holiday message. DueSoonWidget lists overdue items first, highlighted with error colour plus an 'Overdue' text label (not colour alone). RecentGradesWidget shows the last 5. MyCoursesWidget shows course Cards with percent and letter, a LinearProgress bar and a next-lesson link. AnnouncementsWidget shows EmptyState while ANNOUNCEMENTS_AVAILABLE is false. TermAttendanceWidget shows an x-charts Gauge inside ChartA11y. Use MUI only, looked up through mui-mcp.",
+      "files": [
+        "src/app/(app)/dashboard/_components/StudentDashboard.tsx",
+        "src/app/(app)/dashboard/_components/widgets/StudentTodayWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/DueSoonWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/RecentGradesWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/MyCoursesWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/AnnouncementsWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/TermAttendanceWidget.tsx"
+      ],
+      "dependencies": [
+        "TASK-12",
+        "TASK-15",
+        "TASK-8"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-2",
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-15",
+        "NFR-2",
+        "NFR-4",
+        "NFR-5"
+      ]
+    },
+    {
+      "id": "TASK-19",
+      "description": "Admin dashboard. AdminDashboard.tsx lays out an MUI Grid with a RefreshButton slot. KpiRowWidget renders StatCards, including the safeguarding card only for leads (uncached call). AttendanceTrendWidget is a LineChart with a ChartsReferenceLine at the threshold. EnrollmentByGradeWidget is a BarChart stacked by gender. GradeDistributionWidget is a BarChart histogram captioned with the average and median. RiskSummaryWidget shows counts by level and reason and a link to the full list. UpcomingEventsWidget shows the next 5 events. RecentActivityWidget shows the last 10 audit entries. Charts receive serialisable props and are wrapped in ChartA11y with a server-built aria summary. Series use labels or patterns, not colour alone. Use MUI only, looked up through mui-mcp.",
+      "files": [
+        "src/app/(app)/dashboard/_components/AdminDashboard.tsx",
+        "src/app/(app)/dashboard/_components/widgets/KpiRowWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/AttendanceTrendWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/EnrollmentByGradeWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/GradeDistributionWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/RiskSummaryWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/UpcomingEventsWidget.tsx",
+        "src/app/(app)/dashboard/_components/widgets/RecentActivityWidget.tsx"
+      ],
+      "dependencies": [
+        "TASK-13",
+        "TASK-15",
+        "TASK-8"
       ],
       "estimateHours": 5,
       "requirementIds": [
+        "FR-2",
+        "FR-16",
+        "FR-17",
         "FR-18",
         "FR-19",
         "FR-20",
         "FR-21",
         "FR-22",
-        "FR-23",
-        "FR-26",
-        "FR-41",
-        "NFR-3",
-        "NFR-5",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-8",
-      "description": "Absence notes API: GET/POST /api/absence-notes, GET /api/absence-notes/:id, POST /api/absence-notes/:id/review — withHandler → requireRole → Zod → service → ok/paginated per api-contracts.json.",
-      "files": [
-        "src/app/api/absence-notes/route.ts",
-        "src/app/api/absence-notes/[id]/route.ts",
-        "src/app/api/absence-notes/[id]/review/route.ts"
-      ],
-      "dependencies": [
-        "TASK-7"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-20",
-        "FR-21",
-        "FR-22",
-        "FR-43",
-        "NFR-5",
-        "NFR-10"
-      ]
-    },
-    {
-      "id": "TASK-9",
-      "description": "Attendance integration (edit in place): getRegister pre-fills EXCUSED + noteId/excusable for students covered by an APPROVED note; saveRegister (~line 219) allows EXCUSED for ADMIN or when an APPROVED note covers the record; before notifyStudentAndParents (~line 299) drop attendance.absent for students covered by PENDING/APPROVED notes. Update the attendance validator comment on the EXCUSED rule. RegisterForm shows 'Absence note' Chip badge and enables EXCUSED per excusable.",
-      "files": [
-        "src/server/attendance/attendance-service.ts",
-        "src/lib/validators/attendance.ts",
-        "src/app/(app)/attendance/take/RegisterForm.tsx"
-      ],
-      "dependencies": [
-        "TASK-7"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-23",
-        "FR-24",
-        "FR-25",
-        "FR-27",
-        "NFR-6"
-      ]
-    },
-    {
-      "id": "TASK-10",
-      "description": "Parent absence UI: /my-children/[studentId]/absence/new form (RHF + shared Zod, DatePicker from/to, RadioGroup whole day/periods, Checkbox group from bell-schedule Periods, reason, details, FileUpload context absence-note, useToast) and /my-children/[studentId]/absence list (DataTable + status Chip). Server pages assertCanViewStudent.",
-      "files": [
-        "src/app/(app)/my-children/[studentId]/absence/new/page.tsx",
-        "src/app/(app)/my-children/[studentId]/absence/new/AbsenceNoteForm.tsx",
-        "src/app/(app)/my-children/[studentId]/absence/page.tsx"
-      ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-5",
-        "TASK-8"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-18",
-        "FR-20",
+        "NFR-2",
         "NFR-4",
         "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-11",
-      "description": "Review queue /attendance/absence-notes (homeroom TEACHER own section, ADMIN all): DataTable with status/date filters; detail Dialog with note, document link, existing attendance records, Approve (optional note) / Reject (note required); toasts on 409.",
-      "files": [
-        "src/app/(app)/attendance/absence-notes/page.tsx",
-        "src/app/(app)/attendance/absence-notes/AbsenceNotesReviewClient.tsx"
-      ],
-      "dependencies": [
-        "TASK-8"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-21",
-        "FR-22",
-        "NFR-4",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-12",
-      "description": "conferences-service: createEvent/updateEvent (ADMIN, notify conference.slots_requested to teachers of eligible grade levels; PATCH 409 if booked slots exist and date/slotMinutes change; audit), setAvailability ($transaction delete unbooked&unblocked, insert generateSlots), setSlotBlocked, removeSlot (unbooked only), listBookable(event, child), book (window guard → 400 OUTSIDE_BOOKING_WINDOW; in $transaction overlap check → 409 OVERLAP 'You already have a meeting with <teacher> at <time>'; updateMany where bookedByParentId null & blocked false, count 0 → 409 SLOT_TAKEN 'That slot was just taken'; P2002 → 409 ONE_PER_TEACHER), cancel (before bookingClosesAt), notify conference.booked/cancelled with ics link, teacherDay, listMyMeetings, slotIcs via calendar/ical.ts.",
-      "files": [
-        "src/server/conferences/conferences-service.ts"
-      ],
-      "dependencies": [
-        "TASK-1",
-        "TASK-2",
-        "TASK-3",
-        "TASK-4"
-      ],
-      "estimateHours": 6,
-      "requirementIds": [
-        "FR-28",
-        "FR-29",
-        "FR-30",
-        "FR-31",
-        "FR-32",
-        "FR-33",
-        "FR-34",
-        "FR-35",
-        "NFR-1",
-        "NFR-3",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-13",
-      "description": "Conferences API: GET/POST /api/conferences, GET/PATCH /api/conferences/:id, PUT /api/conferences/:id/availability, GET /api/conferences/:id/slots (?view=day), PATCH/DELETE /api/conference-slots/:id, POST /api/conference-slots/:id/book, POST /api/conference-slots/:id/cancel, GET /api/conference-slots/:id/ics (text/calendar).",
-      "files": [
-        "src/app/api/conferences/route.ts",
-        "src/app/api/conferences/[id]/route.ts",
-        "src/app/api/conferences/[id]/availability/route.ts",
-        "src/app/api/conferences/[id]/slots/route.ts",
-        "src/app/api/conference-slots/[id]/route.ts",
-        "src/app/api/conference-slots/[id]/book/route.ts",
-        "src/app/api/conference-slots/[id]/cancel/route.ts",
-        "src/app/api/conference-slots/[id]/ics/route.ts"
-      ],
-      "dependencies": [
-        "TASK-12"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-28",
-        "FR-29",
-        "FR-30",
-        "FR-32",
-        "FR-33",
-        "FR-34",
-        "FR-43",
-        "NFR-1",
-        "NFR-5",
-        "NFR-10"
-      ]
-    },
-    {
-      "id": "TASK-14",
-      "description": "Admin conference UI /admin/conferences: DataTable of events, create/edit Dialog form (title, DatePicker date, DateTimePicker booking window, slot length, Autocomplete grade levels).",
-      "files": [
-        "src/app/(app)/admin/conferences/page.tsx",
-        "src/app/(app)/admin/conferences/ConferenceEventsClient.tsx"
-      ],
-      "dependencies": [
-        "TASK-13"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-28",
-        "NFR-4"
-      ]
-    },
-    {
-      "id": "TASK-15",
-      "description": "Conference pages for teachers and the role-based list: /conferences event list per role; /conferences/[id]/availability (time-range rows, location TextField, slot list with remove/block IconButtons); /conferences/[id]/day printable Table of booked slots (student, parent, note) with @media print via sx.",
-      "files": [
-        "src/app/(app)/conferences/page.tsx",
-        "src/app/(app)/conferences/[id]/availability/page.tsx",
-        "src/app/(app)/conferences/[id]/availability/AvailabilityClient.tsx",
-        "src/app/(app)/conferences/[id]/day/page.tsx"
-      ],
-      "dependencies": [
-        "TASK-13"
-      ],
-      "estimateHours": 4,
-      "requirementIds": [
-        "FR-29",
-        "FR-34",
-        "FR-42",
-        "NFR-4"
-      ]
-    },
-    {
-      "id": "TASK-16",
-      "description": "Parent booking page /conferences/[id]: for the selected child, one section per teacher with slot Buttons/ToggleButtons, optional note Dialog, own booking with Cancel (reschedule = cancel + book), 409 → toast + refetch slots.",
-      "files": [
-        "src/app/(app)/conferences/[id]/page.tsx",
-        "src/app/(app)/conferences/[id]/BookingClient.tsx"
-      ],
-      "dependencies": [
-        "TASK-5",
-        "TASK-13"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-5",
-        "FR-30",
-        "FR-31",
-        "FR-32",
-        "NFR-1",
-        "NFR-4"
-      ]
-    },
-    {
-      "id": "TASK-17",
-      "description": "consent-forms-service: create (canTargetAudience per row, insert form+audiences, notify consent.requested to linked parents of resolved audience students), list (staff own/all; parent per child with pending/responded), get, respond (assertCanViewStudent, dueAt guard → 400 PAST_DUE, signatureMatches → 400 SIGNATURE_MISMATCH, upsert by (formId,studentId), audit before/after with request), tracking (Granted/Declined/No response, filters, CSV via src/server/csv.ts), remind (claim lastRemindedAt 24h else 429 with retryAfterMs; notify consent.reminder to non-responders), sendConsentDueReminders(now) (dueAt in (now,now+48h], claim dueReminderSentAt). assertConsentOwnerOrAdmin. Wire sendConsentDueReminders into the cron dispatch route as an isolated try-block.",
-      "files": [
-        "src/server/consent-forms/consent-forms-service.ts",
-        "src/app/api/internal/email/dispatch/route.ts"
-      ],
-      "dependencies": [
-        "TASK-1",
-        "TASK-2",
-        "TASK-3",
-        "TASK-4"
-      ],
-      "estimateHours": 5,
-      "requirementIds": [
-        "FR-36",
-        "FR-37",
-        "FR-38",
-        "FR-39",
-        "FR-40",
-        "NFR-3",
-        "NFR-5",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-18",
-      "description": "Consent forms API: GET/POST /api/consent-forms, GET /api/consent-forms/:id, POST /api/consent-forms/:id/responses, GET /api/consent-forms/:id/tracking[?format=csv], POST /api/consent-forms/:id/remind.",
-      "files": [
-        "src/app/api/consent-forms/route.ts",
-        "src/app/api/consent-forms/[id]/route.ts",
-        "src/app/api/consent-forms/[id]/responses/route.ts",
-        "src/app/api/consent-forms/[id]/tracking/route.ts",
-        "src/app/api/consent-forms/[id]/remind/route.ts"
-      ],
-      "dependencies": [
-        "TASK-17"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-36",
-        "FR-37",
-        "FR-38",
-        "FR-39",
-        "FR-43",
-        "NFR-5",
-        "NFR-10"
-      ]
-    },
-    {
-      "id": "TASK-19",
-      "description": "Consent list + create UI: /consent-forms (parent: pending/responded per selected child; staff: own/all forms) and /consent-forms/new (title, MarkdownEditor description, due date, Autocomplete CalendarEvent link, audience picker following the announcements audience UI pattern).",
-      "files": [
-        "src/app/(app)/consent-forms/page.tsx",
-        "src/app/(app)/consent-forms/new/page.tsx",
-        "src/app/(app)/consent-forms/new/ConsentFormForm.tsx"
-      ],
-      "dependencies": [
-        "TASK-5",
-        "TASK-18"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-5",
-        "FR-36",
-        "FR-37",
-        "NFR-4"
       ]
     },
     {
       "id": "TASK-20",
-      "description": "Consent detail + tracking UI: /consent-forms/[id] (MarkdownView description, respond form: RadioGroup Granted/Declined, signature TextField, comment; editable until dueAt) and /consent-forms/[id]/tracking (creator/ADMIN only: DataTable with status filter, CSV export link, 'Remind non-responders' Button with 429 toast).",
+      "description": "Dashboard API routes, thin: withHandler → requireRole → service → ok. GET /api/dashboard/teacher (TEACHER), /student (STUDENT) and /admin (ADMIN) return the widget payloads from api-contracts. The admin payload omits openSafeguardingReports unless the caller is a safeguarding lead. POST /api/dashboard/refresh (ADMIN) calls recomputeRiskSnapshots({ force: true }), runs revalidateTag on all tags, and audits 'dashboard.refresh'; it returns { refreshedAt, studentsComputed, skipped }. The integration test checks the role guards and that refresh changes computedAt.",
       "files": [
-        "src/app/(app)/consent-forms/[id]/page.tsx",
-        "src/app/(app)/consent-forms/[id]/ConsentResponseForm.tsx",
-        "src/app/(app)/consent-forms/[id]/tracking/page.tsx",
-        "src/app/(app)/consent-forms/[id]/tracking/ConsentTrackingClient.tsx"
+        "src/app/api/dashboard/teacher/route.ts",
+        "src/app/api/dashboard/student/route.ts",
+        "src/app/api/dashboard/admin/route.ts",
+        "src/app/api/dashboard/refresh/route.ts",
+        "tests/integration/dashboards/dashboard-api.test.ts"
       ],
       "dependencies": [
-        "TASK-18"
-      ],
-      "estimateHours": 3.5,
-      "requirementIds": [
-        "FR-37",
-        "FR-38",
-        "FR-39",
-        "NFR-4",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-21",
-      "description": "overview-service: getChildrenSummary(parent) (term attendance rate, missing-assignment count, average grade per child) and one function per card — getToday (timetable + holidays), getAttendanceSummary (rate, absences, lates, last 5 marks), getAssignmentsSummary (missing + due next 7 days), getRecentGrades (last 5 visible + current percent per course), listUnreadAnnouncements (returns [] — PRD-12 absent), getUpcomingEvents (next 5 CalendarEvents via audienceWhereForUser + recurrence, plus 'My meetings'), getTeachers, getActionItems (pending consent + open conferences). Reuse existing services; schoolToday for date rules.",
-      "files": [
-        "src/server/parent/overview-service.ts"
-      ],
-      "dependencies": [
-        "TASK-1",
+        "TASK-9",
+        "TASK-11",
         "TASK-12",
-        "TASK-17"
+        "TASK-13"
       ],
-      "estimateHours": 5,
+      "estimateHours": 2.5,
       "requirementIds": [
-        "FR-7",
-        "FR-9",
-        "FR-10",
-        "FR-11",
-        "FR-12",
-        "FR-13",
-        "FR-14",
-        "FR-15",
-        "FR-16",
-        "FR-35",
-        "NFR-2",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-22",
-      "description": "Overview API: GET /api/me/children/summary, GET /api/students/:id/overview (?cards= filter; assertCanViewStudent).",
-      "files": [
-        "src/app/api/me/children/summary/route.ts",
-        "src/app/api/students/[id]/overview/route.ts"
-      ],
-      "dependencies": [
-        "TASK-21"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-7",
-        "FR-9",
-        "FR-17",
-        "FR-43",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-23",
-      "description": "Overview UI: /my-children (one child → redirect to overview; else summary Cards), /my-children/[studentId] server page (assertCanViewStudent, header paints first, 8 async cards each in <Suspense fallback={<LoadingSkeleton/>}> with 'View all' links to /students/[id] tabs, /assignments, /grades, absence form, /consent-forms, /conferences; Announcements → EmptyState); /dashboard redirects PARENT to /my-children.",
-      "files": [
-        "src/app/(app)/my-children/page.tsx",
-        "src/app/(app)/my-children/[studentId]/page.tsx",
-        "src/app/(app)/my-children/[studentId]/OverviewCards.tsx",
-        "src/app/(app)/dashboard/page.tsx"
-      ],
-      "dependencies": [
-        "TASK-5",
-        "TASK-21"
-      ],
-      "estimateHours": 5,
-      "requirementIds": [
-        "FR-7",
-        "FR-8",
-        "FR-9",
-        "FR-10",
-        "FR-11",
-        "FR-12",
-        "FR-13",
-        "FR-14",
-        "FR-15",
-        "FR-16",
-        "FR-17",
-        "NFR-2",
-        "NFR-4"
-      ]
-    },
-    {
-      "id": "TASK-24",
-      "description": "Adopt sh_child default on existing parent pages: /assignments and /grades resolve studentId via getSelectedChild (?studentId= stays an override) and drop their per-page child selectors; /api/me/timetable defaults PARENT target to the selected child.",
-      "files": [
-        "src/app/(app)/assignments/page.tsx",
-        "src/app/(app)/assignments/AssignmentList.tsx",
-        "src/app/(app)/grades/page.tsx",
-        "src/app/(app)/grades/GradesClient.tsx",
-        "src/app/api/me/timetable/route.ts"
-      ],
-      "dependencies": [
-        "TASK-5"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-5"
-      ]
-    },
-    {
-      "id": "TASK-25",
-      "description": "Seed (extend prisma/seed.ts in place, idempotent): Grade 7 one PENDING + one APPROVED absence note; 'Autumn conferences' 3 weeks out for Grade 7 with Tom and Tina slots 15:00–17:00 at 10 min, two booked; 'Science Museum Trip' consent form for Grade 7 due in 10 days linked to a seeded CalendarEvent with ~40% responses.",
-      "files": [
-        "prisma/seed.ts"
-      ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-45",
+        "FR-23",
+        "FR-24",
+        "FR-41",
+        "NFR-3",
         "NFR-6"
       ]
     },
     {
-      "id": "TASK-26",
-      "description": "Integration tests (Vitest + DB): approval converts ABSENT→EXCUSED and leaves PRESENT untouched; future-register pre-fill; attendance.absent suppressed while a PENDING note covers the student; two concurrent book() calls via Promise.all → exactly one success, other 409.",
+      "id": "TASK-21",
+      "description": "At-risk list. GET /api/insights/at-risk (ADMIN, TEACHER) parses the dashboards validator, calls listAtRisk, and returns paginated() JSON, or toCsv(AT_RISK_COLUMNS, allRows) as an attachment when format=csv. The /insights/at-risk server page uses requireRole(['ADMIN','TEACHER']), reads filters from searchParams, and renders PageHeader and the shared DataTable: a level Chip with text, reason Chips, a trend icon with aria-label, an 'Open student' link to /students/[id]/insights, a 'Message parents' link into the existing PRD-13 new-conversation flow, and a CSV button that carries the current filters. AtRiskFilters is a client component with MUI Selects for level, reason, grade level and section that update the URL.",
       "files": [
-        "tests/integration/absence-notes/absence-approval.test.ts",
-        "tests/integration/conferences/concurrent-booking.test.ts"
+        "src/app/api/insights/at-risk/route.ts",
+        "src/app/(app)/insights/at-risk/page.tsx",
+        "src/app/(app)/insights/at-risk/_components/AtRiskFilters.tsx"
       ],
       "dependencies": [
-        "TASK-7",
-        "TASK-9",
-        "TASK-12"
+        "TASK-6",
+        "TASK-9"
       ],
       "estimateHours": 3,
       "requirementIds": [
-        "FR-23",
-        "FR-24",
-        "FR-27",
-        "FR-46",
-        "NFR-1"
+        "FR-29",
+        "FR-30",
+        "FR-42",
+        "NFR-3",
+        "NFR-4",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-22",
+      "description": "Student Insights tab. GET /api/students/[id]/insights (ADMIN, or the student's TEACHER) calls getStudentInsights, which returns 403 via assertCanViewStudent and 404 for an unknown student. The /students/[id]/insights server page shows the signal values (attendance %, courses below 60 %, missing count), a level Chip and a history List from snapshot.history. Append { key: 'insights', label: 'Insights', href, roles: ['ADMIN','TEACHER'] } to studentTabs.",
+      "files": [
+        "src/app/api/students/[id]/insights/route.ts",
+        "src/app/(app)/students/[id]/insights/page.tsx",
+        "src/config/student-tabs.ts"
+      ],
+      "dependencies": [
+        "TASK-6",
+        "TASK-9"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-28",
+        "FR-31",
+        "FR-43",
+        "NFR-3"
+      ]
+    },
+    {
+      "id": "TASK-23",
+      "description": "Reports, part 1. Each module exports { title, columns, run(filters) → { chart, rows, summary } }. enrollment.ts covers active students by grade level × section × gender, and new enrollments and archives by month using $queryRaw with date_trunc in the school timezone. attendance.ts calls attendance-service getReport and rolls the rows up by grade level, section or course, with a daily trend and the 20 lowest students. performance.ts uses loadTermPercents and letterFor to give the average and letter distribution by course and by subject, plus a section comparison for the same grade × subject. Use tagged $queryRaw only.",
+      "files": [
+        "src/server/reports/enrollment.ts",
+        "src/server/reports/attendance.ts",
+        "src/server/reports/performance.ts"
+      ],
+      "dependencies": [
+        "TASK-5",
+        "TASK-6"
+      ],
+      "estimateHours": 5,
+      "requirementIds": [
+        "FR-34",
+        "FR-35",
+        "FR-36",
+        "NFR-1",
+        "NFR-7",
+        "NFR-8"
+      ]
+    },
+    {
+      "id": "TASK-24",
+      "description": "Reports, part 2, with the same module shape. completion.ts gives on-time, late (submittedAt vs dueAt) and missing (missingWork) rates by course and by teacher for a date range. engagement.ts gives lesson completion by course from LessonProgress and distinct parents signed in over the last 7 and 30 days from AuditLog 'auth.login.success', with User.lastLoginAt as a fallback; the announcement read rate is omitted with a 'not available' note. workload.ts gives, per teacher, courses, distinct students, weekly TimetableSlot count and the grading backlog.",
+      "files": [
+        "src/server/reports/completion.ts",
+        "src/server/reports/engagement.ts",
+        "src/server/reports/workload.ts"
+      ],
+      "dependencies": [
+        "TASK-4",
+        "TASK-6"
+      ],
+      "estimateHours": 4.5,
+      "requirementIds": [
+        "FR-37",
+        "FR-38",
+        "FR-39",
+        "NFR-1",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-25",
+      "description": "Report registry. index.ts exports REPORTS, keyed by the six report keys, with title, filterSchema (from validators/reports), columns and run. The page, the API and the CSV all read this one registry. The integration test runs each report on the default seed, asserts known totals, checks that CSV rows equal table rows (FR-35 AC 7), and checks that an unknown key is rejected.",
+      "files": [
+        "src/server/reports/index.ts",
+        "tests/integration/reports/reports.test.ts"
+      ],
+      "dependencies": [
+        "TASK-23",
+        "TASK-24"
+      ],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "FR-33",
+        "FR-35",
+        "FR-44",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-26",
+      "description": "Reports centre. GET /api/reports/[reportKey] (ADMIN) returns 404 NOT_FOUND for an unknown key, parses filterSchema, and returns ok() or a CSV attachment. /admin/reports lists the six reports. The /admin/reports/[reportKey] server page calls notFound() for an unknown key and renders the year/term selector and filters from the URL, then a chart (LineChart or BarChart inside ChartA11y), a DataTable and a CSV link. ReportFilters is a client component using x-date-pickers for the date range and Selects for academic year, term and the report-specific filters.",
+      "files": [
+        "src/app/api/reports/[reportKey]/route.ts",
+        "src/app/(app)/admin/reports/page.tsx",
+        "src/app/(app)/admin/reports/[reportKey]/page.tsx",
+        "src/app/(app)/admin/reports/[reportKey]/_components/ReportFilters.tsx"
+      ],
+      "dependencies": [
+        "TASK-15",
+        "TASK-25"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-33",
+        "FR-34",
+        "FR-35",
+        "FR-36",
+        "FR-37",
+        "FR-38",
+        "FR-39",
+        "FR-44",
+        "NFR-2",
+        "NFR-4",
+        "NFR-5",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-27",
-      "description": "Playwright specs: absence note → approve → register shows EXCUSED; book a conference slot; sign a consent form.",
+      "description": "Navigation. Keep 'Dashboard' first for every role. Add 'Reports' (/admin/reports, ADMIN) and 'At-risk students' (/insights/at-risk, ADMIN and TEACHER).",
       "files": [
-        "tests/e2e/absence-notes.spec.ts",
-        "tests/e2e/conferences.spec.ts",
-        "tests/e2e/consent-forms.spec.ts"
+        "src/config/navigation.ts"
       ],
       "dependencies": [
-        "TASK-10",
-        "TASK-11",
-        "TASK-9",
+        "TASK-21",
+        "TASK-26"
+      ],
+      "estimateHours": 0.5,
+      "requirementIds": [
+        "FR-40"
+      ]
+    },
+    {
+      "id": "TASK-28",
+      "description": "Default seed. Plant at least 3 students for each of High, Medium and none by seeding attendance, grades and missing work that cross the FR-25 thresholds. Give the High students a homeroom teacher. At the end, call recomputeRiskSnapshots({ force: true }). The seed stays small.",
+      "files": [
+        "prisma/seed.ts"
+      ],
+      "dependencies": [
+        "TASK-9"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-46",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-29",
+      "description": "Large seed. prisma/seed-large.ts uses an inline mulberry32 PRNG with a fixed seed and fixed name lists. It creates 600 students across Grades 6–8 (8 sections), 40 teachers, full timetables, 60 school days of attendance, assignments, submissions and grades, using createMany in batches of 1,000, then calls recomputeRiskSnapshots({ force: true }). Add \"seed:large\": \"tsx prisma/seed-large.ts\" to package.json. No new dependencies.",
+      "files": [
+        "prisma/seed-large.ts",
+        "package.json"
+      ],
+      "dependencies": [
+        "TASK-9"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-45",
+        "NFR-1"
+      ]
+    },
+    {
+      "id": "TASK-30",
+      "description": "End-to-end tests with Playwright and axe. Extend dashboard.spec.ts with one test per role dashboard (Admin, Teacher, Student) plus the PARENT redirect, each with an axe scan. insights.spec.ts covers /insights/at-risk filters, the CSV download and the student Insights tab. reports.spec.ts covers /admin/reports/attendance with a CSV download and an axe scan.",
+      "files": [
+        "tests/e2e/dashboard.spec.ts",
+        "tests/e2e/insights.spec.ts",
+        "tests/e2e/reports.spec.ts"
+      ],
+      "dependencies": [
         "TASK-16",
-        "TASK-20",
-        "TASK-25"
+        "TASK-21",
+        "TASK-22",
+        "TASK-26",
+        "TASK-27",
+        "TASK-28"
       ],
       "estimateHours": 3,
       "requirementIds": [
-        "FR-46"
+        "FR-1",
+        "FR-29",
+        "FR-30",
+        "FR-31",
+        "FR-35",
+        "NFR-2",
+        "NFR-9",
+        "NFR-10"
       ]
     }
   ],
   "fileStructure": {
+    "./": [
+      "package.json"
+    ],
     "prisma/": [
       "schema.prisma",
-      "seed.ts"
+      "seed.ts",
+      "seed-large.ts"
     ],
-    "prisma/migrations/": [
-      "20261114000000_prd15_parent_portal/"
+    "prisma/migrations/20261115000000_add_student_risk_snapshot/": [
+      "migration.sql"
     ],
-    "src/app/": [
-      "(app)/",
-      "api/"
+    "src/app/(app)/admin/reports/": [
+      "page.tsx"
     ],
-    "src/components/": [
-      "ChildSwitcher/"
+    "src/app/(app)/admin/reports/[reportKey]/": [
+      "page.tsx"
+    ],
+    "src/app/(app)/admin/reports/[reportKey]/_components/": [
+      "ReportFilters.tsx"
+    ],
+    "src/app/(app)/dashboard/": [
+      "page.tsx"
+    ],
+    "src/app/(app)/dashboard/_components/": [
+      "GreetingHeader.tsx",
+      "RefreshButton.tsx",
+      "TeacherDashboard.tsx",
+      "StudentDashboard.tsx",
+      "AdminDashboard.tsx"
+    ],
+    "src/app/(app)/dashboard/_components/widgets/": [
+      "TodaysClassesWidget.tsx",
+      "ToGradeWidget.tsx",
+      "UpcomingDeadlinesWidget.tsx",
+      "AtRiskWidget.tsx",
+      "TeacherMessagesWidget.tsx",
+      "QuickActionsWidget.tsx",
+      "StudentTodayWidget.tsx",
+      "DueSoonWidget.tsx",
+      "RecentGradesWidget.tsx",
+      "MyCoursesWidget.tsx",
+      "AnnouncementsWidget.tsx",
+      "TermAttendanceWidget.tsx",
+      "KpiRowWidget.tsx",
+      "AttendanceTrendWidget.tsx",
+      "EnrollmentByGradeWidget.tsx",
+      "GradeDistributionWidget.tsx",
+      "RiskSummaryWidget.tsx",
+      "UpcomingEventsWidget.tsx",
+      "RecentActivityWidget.tsx"
+    ],
+    "src/app/(app)/insights/at-risk/": [
+      "page.tsx"
+    ],
+    "src/app/(app)/insights/at-risk/_components/": [
+      "AtRiskFilters.tsx"
+    ],
+    "src/app/(app)/students/[id]/insights/": [
+      "page.tsx"
+    ],
+    "src/app/api/dashboard/admin/": [
+      "route.ts"
+    ],
+    "src/app/api/dashboard/refresh/": [
+      "route.ts"
+    ],
+    "src/app/api/dashboard/student/": [
+      "route.ts"
+    ],
+    "src/app/api/dashboard/teacher/": [
+      "route.ts"
+    ],
+    "src/app/api/insights/at-risk/": [
+      "route.ts"
+    ],
+    "src/app/api/internal/email/dispatch/": [
+      "route.ts"
+    ],
+    "src/app/api/reports/[reportKey]/": [
+      "route.ts"
+    ],
+    "src/app/api/students/[id]/insights/": [
+      "route.ts"
+    ],
+    "src/components/Widget/": [
+      "Widget.tsx",
+      "WidgetErrorBoundary.tsx"
+    ],
+    "src/components/charts/": [
+      "ChartA11y.tsx"
     ],
     "src/config/": [
+      "student-tabs.ts",
       "navigation.ts"
     ],
     "src/lib/": [
-      "validators/"
+      "dates.ts"
     ],
-    "src/server/": [
-      "absence-notes/",
-      "attendance/",
-      "conferences/",
-      "consent-forms/",
-      "files/",
-      "notifications/",
-      "parent/"
+    "src/lib/validators/": [
+      "dashboards.ts",
+      "reports.ts"
+    ],
+    "src/server/assignments/": [
+      "reminders.ts"
+    ],
+    "src/server/dashboards/": [
+      "risk-rules.ts",
+      "missing-work.ts",
+      "insights.ts",
+      "announcements.ts",
+      "risk.ts",
+      "teacher.ts",
+      "student.ts",
+      "admin.ts"
+    ],
+    "src/server/gradebook/": [
+      "batch-grades.ts"
+    ],
+    "src/server/notifications/": [
+      "types.ts"
+    ],
+    "src/server/reports/": [
+      "enrollment.ts",
+      "attendance.ts",
+      "performance.ts",
+      "completion.ts",
+      "engagement.ts",
+      "workload.ts",
+      "index.ts"
     ],
     "tests/e2e/": [
-      "absence-notes.spec.ts",
-      "conferences.spec.ts",
-      "consent-forms.spec.ts"
+      "dashboard.spec.ts",
+      "insights.spec.ts",
+      "reports.spec.ts"
     ],
     "tests/integration/": [
-      "absence-notes/",
-      "conferences/"
+      "email-dispatch.test.ts"
+    ],
+    "tests/integration/dashboards/": [
+      "missing-work.test.ts",
+      "risk.test.ts",
+      "dashboard-api.test.ts"
+    ],
+    "tests/integration/gradebook/": [
+      "batch-grades.test.ts"
+    ],
+    "tests/integration/reports/": [
+      "reports.test.ts"
     ],
     "tests/unit/": [
-      "absence-notes/",
-      "conferences/",
-      "consent-forms/"
+      "dates.test.ts",
+      "WidgetErrorBoundary.test.tsx"
+    ],
+    "tests/unit/dashboards/": [
+      "risk-rules.test.ts"
     ]
   },
-  "totalEstimateHours": 83.5,
+  "totalEstimateHours": 81.5,
   "nxpPatterns": [],
+  "status": "complete",
   "notes": [
-    "NFR-4: every MUI component must be looked up with mui-mcp (useMuiDocs + fetchDocs) before use; MCP unreachable = blocker. No banned imports.",
-    "NFR-7 gates after every task: npm run lint && npm run typecheck && npm run test; logger, never console.log.",
-    "NFR-9 scope: no Announcement model (FR-13 partial), no calendar page/filter (FR-35 and FR-5 calendar part partial) — ADR-11.",
-    "422 business-rule failures map to 400 VALIDATION_ERROR with details.reason (http.ts has no 422). Unviewable resource → 404; forbidden action → 403; races → 409; remind throttle → 429.",
-    "No new dependencies (ADR-1). Migration timestamp 20261114000000 follows the latest existing 20261113000000_add_calendar."
-  ],
-  "status": "complete"
+    "Where the architect files disagree, system-design.md wins over the earlier tech-stack-decisions.md: WidgetErrorBoundary lives in src/components/Widget/, the pure rules live in risk-rules.ts (not risk.ts), and the FR-21 events expand recurrences through calendar/recurrence.expandOccurrences.",
+    "Chart widgets render @mui/x-charts directly inside the client ChartA11y wrapper and pass only serialisable props, so no separate client chart files are planned. Format labels and values on the server instead of passing functions such as valueFormatter. Every new file must be in the ownership matrix.",
+    "NFR-5 is a process step: look up every MUI component through mui-mcp before using it. If mui-mcp is unavailable, that is a dev blocker.",
+    "Dependency gaps (not blockers): announcements (FR-8, FR-14, FR-38) are gated by ANNOUNCEMENTS_AVAILABLE=false in src/server/dashboards/announcements.ts.",
+    "Run npm run lint && npm run typecheck && npm run test after each task group (NFR-10)."
+  ]
 }

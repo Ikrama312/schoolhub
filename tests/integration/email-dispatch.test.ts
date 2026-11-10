@@ -7,6 +7,20 @@ vi.hoisted(() => {
   process.env.DATABASE_URL ??= 'postgresql://unused@localhost/unused';
   process.env.APP_URL ??= 'http://localhost:3000';
   process.env.AUTH_SECRET ??= 'test-secret';
+  process.env.CRON_SECRET ??= 'test-cron-secret';
+});
+
+// PRD-16: the risk pass is real unless a test flips failRisk.
+const risk = vi.hoisted(() => ({ failRisk: false }));
+vi.mock('@/server/dashboards/risk', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/server/dashboards/risk')>();
+  return {
+    ...actual,
+    recomputeRiskSnapshots: vi.fn(async (opts?: { force?: boolean }) => {
+      if (risk.failRisk) throw new Error('risk boom');
+      return actual.recomputeRiskSnapshots(opts);
+    }),
+  };
 });
 
 const sent: string[] = [];
@@ -20,6 +34,8 @@ vi.mock('@/server/email/transport', () => ({
 
 import { prisma } from '@/server/db';
 import { dispatchEmails } from '@/server/email/dispatch';
+import { currentTerm } from '@/server/dashboards/insights';
+import { POST as dispatchRoute } from '@/app/api/internal/email/dispatch/route';
 
 const MARK = '@dispatch-it.test';
 
@@ -75,5 +91,43 @@ describe.runIf(process.env.TEST_DATABASE_URL)('dispatchEmails (integration)', ()
     });
     await dispatchEmails();
     expect((await prisma.emailOutbox.findUniqueOrThrow({ where: { id: row.id } })).status).toBe('SENDING');
+  });
+});
+
+describe.runIf(process.env.TEST_DATABASE_URL)('dispatch route: PRD-16 risk pass (integration)', () => {
+  const call = async () => {
+    const res = await dispatchRoute(
+      new Request('http://localhost/api/internal/email/dispatch', { method: 'POST', headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }),
+    );
+    return { status: res.status, body: (await res.json()) as { data: Record<string, unknown> } };
+  };
+
+  it('skips the recompute while snapshots are fresh (FR-27, NFR-12)', async () => {
+    const term = await currentTerm();
+    if (!term) return; // no current term → the pass reports no-term; nothing to gate
+    const student = await prisma.user.create({ data: { email: `risk-gate${MARK}`, firstName: 'Gate', lastName: 'Fixture', role: 'STUDENT', status: 'ACTIVE' } });
+    try {
+      await prisma.studentRiskSnapshot.create({ data: { studentId: student.id, termId: term.id, reasons: [], signals: {}, computedAt: new Date() } });
+      const { status, body } = await call();
+      expect(status).toBe(200);
+      expect(body.data.riskSnapshots).toEqual({ skipped: 'fresh', studentsComputed: 0 });
+    } finally {
+      await prisma.user.delete({ where: { id: student.id } });
+    }
+  });
+
+  it('a failing risk pass does not break the other passes', async () => {
+    await prisma.emailOutbox.create({ data: { toEmail: `risk${MARK}`, subject: 'Risk', html: '<p>x</p>', text: 'x', nextAttemptAt: new Date(Date.now() - 1000) } });
+    risk.failRisk = true;
+    try {
+      const { status, body } = await call();
+      expect(status).toBe(200);
+      expect(body.data.riskSnapshots).toBeNull();
+      expect(body.data).toHaveProperty('consentReminders');
+      expect(sent).toContain(`risk${MARK}`);
+    } finally {
+      risk.failRisk = false;
+      await prisma.emailOutbox.deleteMany({ where: { toEmail: `risk${MARK}` } });
+    }
   });
 });
