@@ -1,6 +1,6 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T17:26:49.339Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-09T18:56:01.219Z",
   "phase": "architect",
   "version": "1.0",
   "consideredKeywords": [
@@ -14,6 +14,7 @@
   "missingConsiderations": [
     "authentication",
     "authorization",
+    "encryption",
     "pii",
     "secrets",
     "input validation"

@@ -1,11 +1,11 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T22:42:00Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-10T00:12:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "status": "complete",
-  "endpointCount": 23,
+  "endpointCount": 18,
   "blockers": [],
   "artifacts": [
     "artifacts/architect/tech-stack-decisions.md",
@@ -14,12 +14,13 @@
     "artifacts/architect/api-contracts.json"
   ],
   "notes": [
-    "There are 23 endpoints. 21 are new routes from system-design §3.3. 2 are existing routes that get extended: PATCH /api/users/:id (isSafeguardingLead, FR-2) and POST /api/internal/email/dispatch (processPendingMessageEmails, FR-20). The file routes gain the 'message' context with no contract change (FR-27).",
-    "The base path is /api, not /api/v1. Envelopes and error codes come from src/server/http.ts. VALIDATION_ERROR maps to 400, not 422, so the 422 mentioned for isSafeguardingLead in system-design §1 should be read as 400 VALIDATION_ERROR.",
-    "Error policy: a non-participant or a participant who has left gets 404. Contact rules, relationship ended, the edit window and safeguarding access give 403 with details.reason. A duplicate OPEN report or reviewing a non-OPEN report gives 409. The rate limit gives 429 with details.retryAfterMs.",
-    "Decisions made beyond system-design: leave refusals use details.reason 'ONE_TO_ONE' or 'CREATOR_OF_STUDENT_GROUP'. A review requires a note; a dismissal does not. Safeguarding GET /conversations/:id returns 404 when involvesStudent is false. The message poll returns hasMore only in initial and 'before' mode. The dispatch summary gains messageEmails {sent, deferred, dropped}.",
-    "Carried risks from system-design §1: there is no user-admin UI for isSafeguardingLead; mui-mcp must be used in dev (NFR-5); the rate limiter is per-process; students/[id] needs a new layout.tsx.",
-    "src/lib/validators/messaging.ts should mirror the DTOs in api-contracts.json `components`."
+    "There are 18 endpoints. 14 are new routes from system-design §2.5. 4 are existing routes that get extended: GET /api/attendance/today (noSchoolReason), GET /api/attendance/register (noSchoolReason), PUT /api/attendance/register (holidayOverride, D-8) and POST /api/internal/email/dispatch (sendRsvpReminders). There are also 4 non-HTTP contracts: getUpcomingEventsForUser, getPublicEvents, isSchoolDay and the notification types.",
+    "The base path is /api, not /api/v1. Envelopes and error codes come from src/server/http.ts, where VALIDATION_ERROR maps to 400. The feed, the single-event .ics and the RSVP CSV return raw bodies. An unknown feed token returns 404 text/plain.",
+    "Error policy: an event the caller cannot see, or a studentId they cannot view, returns 404. Not the creator, an admin-only field, a disallowed audience, or not in the audience returns 403 with details.reason. RSVP disabled or closed returns 409. Rate limits return 429 with details.retryAfterMs and Retry-After.",
+    "Decisions made beyond system-design: all-day input is startDate/endDate (yyyy-MM-dd, inclusive end) and output is an exclusive UTC end. audiences is limited to 1..20 entries. rsvpDeadline must be ≤ the first occurrence's start. Occurrence ids are '<eventId>:<startISO>', and all /api/events/:id routes take the plain eventId. GET /api/attendance/register also gains noSchoolReason (system-design names only getToday/getOverview). Term breaks send no event.created notifications and return {created, skipped, events}. The dispatch summary gains rsvpReminders {events, notified}.",
+    "Carried risks from system-design §4: R1 beta @mui/x-scheduler API drift (exact pin, MUI MCP lookup is mandatory, NFR-2), R2 import cycle (calendar-service must never import timetable-service), R3 DST across 4 code paths, R4 audience resolver parity test.",
+    "artifacts/architect/threat-model-notes.json is still the stale SH-13 file. No architect sub-task owns it in this phase, so treat it as out of date.",
+    "src/lib/validators/calendar.ts should mirror the input shapes in api-contracts.json `components` (EventInput, RsvpInput, AudienceInput)."
   ],
   "nextPhase": "dev-planning"
 }

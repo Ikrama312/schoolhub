@@ -1,64 +1,47 @@
-# Coverage Report — SH-13 (PRD-13 Direct Messaging)
+# Coverage Report — SH-14 (PRD-14 School Calendar, Events & Holidays)
 
-- ticketId: SH-13
-- timestamp: 2026-11-09T18:03:21Z
-- method: **function-level mapping, done by hand.** No coverage provider is installed (`@vitest/coverage-v8` is not in `devDependencies`), and QA did not add a dependency. Each exported function or component below was traced to the tests that execute it.
+> This file replaces the SH-13 coverage report.
+>
+> **Method.** `@vitest/coverage-v8` is not installed. QA did not add a dependency just to measure coverage. Instead, every exported function in the code Dev shipped was mapped by hand to the tests that execute it. Integration tests ran against real Postgres, with `TEST_DATABASE_URL` set to the dev database.
 
-## Test inventory (SH-13)
+## Scope: what Dev actually shipped
 
-| File | Author | Tests | Result |
-|---|---|---|---|
-| `tests/unit/messaging/contact-rules.test.ts` | Dev | 43 | ✅ 43/43 |
-| `tests/unit/messaging/quiet-hours.test.ts` | Dev | 9 | ✅ 9/9 |
-| `tests/integration/messaging/messaging.test.ts` | Dev | 9 | ✅ 9/9 |
-| `tests/integration/messaging/email.test.ts` | Dev | 4 | ✅ 4/4 |
-| `tests/integration/messaging/safeguarding.test.ts` | Dev | 4 | ✅ 4/4 |
-| `tests/e2e/messaging.spec.ts` | Dev | 2 | ✅ 2/2 (QA re-ran it on a fresh `next dev -p 3100`) |
-| **`tests/integration/messaging/qa-sh13.test.ts`** | **QA (new)** | 12 | ✅ 12/12 |
-| **`tests/unit/messaging/composer-qa.test.tsx`** | **QA (new)** | 9 | ✅ 9/9 |
-| **Total** | | **92** | **✅ 92/92** |
+Dev finished TASK-1 to TASK-7 of 27 tasks. **TASK-8 to TASK-27 have no code at all.** That covers every service, API route, page, seed change and the integration and E2E suites. The "not built" table below lists those files.
 
-The integration tests run against the real migrated Postgres. Set `TEST_DATABASE_URL` to the `.env` `DATABASE_URL` to run them.
+| File | Change | Exported functions / units | Covered by | Function coverage |
+|---|---|---|---|---|
+| `src/lib/dates.ts` (+18 lines) | MODIFY | `schoolMidnight`, `schoolDateOf`, `addDateDays` | `tests/unit/dates.test.ts` (4 SH-14 cases, including DST week) | 3/3 |
+| `src/lib/validators/calendar.ts` (211) | CREATE | `audienceInputSchema`, `eventInputSchema`/`checkEvent`, `eventPatchSchema`, `rsvpSchema`, `calendarQuerySchema`, `schoolDayQuerySchema`, `publicEventsQuerySchema` | `tests/unit/calendar/validators.test.ts` (12), `tests/unit/calendar/qa-sh14.test.ts` (3) | 7/7 |
+| `src/server/calendar/recurrence.ts` (85) | CREATE | `expandOccurrences` (plus internal `naive`, `fromNaive`, `overlaps`) | `recurrence.test.ts` (6), `qa-sh14.test.ts` (3) | 1/1 |
+| `src/server/calendar/ical.ts` (160) | CREATE | `escapeText`, `foldLine`, `vtimezone`, `vevent`, `buildCalendar` | `ical.test.ts` (10, parsed with node-ical), `qa-sh14.test.ts` (3) | 5/5 |
+| `src/server/announcements/audience.ts` (221) | CREATE | `audienceClausesForUser`, `audienceWhereForUser`, `audienceMatchesClauses`, `isUserInAudience`, `resolveAudienceUserIds`, `canTargetAudience` | `tests/unit/calendar/audience.test.ts` (6, mocked DB), **`tests/integration/calendar/qa-sh14.test.ts` (7, real Postgres, QA)** | 6/6 |
+| `src/server/notifications/types.ts` (+33) | MODIFY | 4 `event.*` registrations | `tests/unit/calendar/qa-sh14.test.ts` (QA) | 4/4 |
+| `prisma/schema.prisma` and migration `20261113000000_add_calendar` | MODIFY/CREATE | 4 enums, 4 models | `prisma migrate status` reports the schema up to date. `tests/integration/calendar/qa-sh14.test.ts` checks defaults, the composite RSVP PK, cascades and the unique token hash. | 4/4 models exercised |
+| `src/theme/theme.ts` (+2) | MODIFY | scheduler theme augmentation (type-only) | `npm run typecheck` ✅ | n/a |
+| `package.json` / lock | MODIFY | `@mui/x-scheduler@9.0.0-beta.15`, `node-ical@0.27.6`, scoped override | `npm ls @mui/x-internals` shows 9.17.0 overridden | n/a |
 
-## Server code (`src/server/messaging/*`): 42 of 46 exported functions executed by tests (≈91%; the other 4 are `canMessage`, `messageableIds`, and the two route/page guards)
+**Shipped code: 26 of 26 exported functions/units have at least one executing test (100% function coverage).**
 
-| File | Covered | Not covered |
-|---|---|---|
-| `contact-rules.ts` | `canMessageWith`, `checkNewConversation`, `canSendInWith` (unit). `loadRelations`, `validateNewConversation`, `canSendIn` (integration) | `canMessage` (has no callers in `src/`, so it is dead code). `messageableIds` (only `students/[id]/layout.tsx` uses it, and no test renders that layout) |
-| `messages.ts` | `toMessageDTO`, `assertRateLimit`, `listMessages` (`after`/`since` and `before` paging, hasMore, empty poll), `insertMessage` (including attachments), `sendMessage`, `editMessage`, `deleteMessage` | — |
-| `conversations.ts` | `listConversations` (tabs, search, preview, unread), `getConversation`, `createConversation`, `markRead`, `setMuted`, `setArchived`, `leave` (all branches), `unreadCount` | — |
-| `access.ts` | `getParticipation`, `isSafeguardingLead`, `assertSafeguardingLead` | `requireSafeguardingLead` and `requirePageSafeguardingLead` are covered only by QA's live probes: anonymous API call → 401, anonymous page → 307 to `/login`. No signed-in non-lead route test exists. The service-level 403 is tested. |
-| `quiet-hours.ts` | `isInQuietHours`, `quietHoursEnd` (wrap-midnight, DST), `getSettings`, `putSettings` | — |
-| `notifications.ts` | `onMessageSent` (collapse, mute, pending email), `onMessageReported` | — |
-| `email.ts` | `processPendingMessageEmails` (send, drop on read, drop when muted, quiet-hours deferral) | Two drop branches have no test: participant left, conversation missing |
-| `contacts.ts` | `listContacts`: STUDENT, PARENT and TEACHER groups, `?q=` filter, DROPPED exclusion | ADMIN branch (Staff/Students/Parents groups) and the TEACHER homeroom branch |
-| `reports.ts` | `reportMessage` (own message 403, duplicate 409, leads notified) | — |
-| `safeguarding.ts` | `listReports`, `getReport`, `reviewReport`, `searchConversations`, `getConversationForSafeguarding` (plus the audit rows) | The `from`/`to` date filters in `searchConversations` |
-| `src/server/files/contexts.ts` → `messageResolver` | participant, ex-participant, lead, non-lead admin, anonymous (QA) | — |
-| `src/server/services/users.ts` (isSafeguardingLead) | `updateUser` ADMIN-only plus audit (Dev safeguarding test) | — |
-| `src/lib/validators/messaging.ts` | send/create/report/settings/list-query schemas (QA) | `reviewReportSchema` and `safeguardingConversationsQuery` are tested only indirectly, through the services |
+### Branches still uncovered in shipped code
+- `audience.ts` `resolveOne`: `ROLE` with a null `refId`, and `GRADE_LEVEL` with `includeTeachers` only. Teacher clauses for courses outside the current year.
+- `audience.ts` `isUserInAudience([])`, the empty-audience early return.
+- `recurrence.ts`: the `MAX_STEPS` guard is never reached. A one-year weekly series yields 53 steps, which QA asserts.
+- `ical.ts` `vevent`: an all-day **series** (DATE-valued `UNTIL`) is not tested.
 
-## API route handlers (`src/app/api/{conversations,messages,messaging,safeguarding,me/messaging-settings}`): 15 files
+## Not built (0% coverage, files missing)
 
-- These are thin `withHandler` wrappers: guard, then Zod parse, then service. No test calls the handlers directly.
-- QA confirmed on a live dev server that every handler group returns **401 UNAUTHENTICATED** without a session (conversations, messages POST, unread-count, safeguarding/reports, me/messaging-settings).
-- The E2E calls `POST /api/conversations` (403 for student→student) and drives the send and poll routes through the UI.
-- **Gap:** there is no handler-level test of the 403 for a signed-in non-lead calling `/api/safeguarding/*`. The service throws that 403 and the service is tested.
-
-## UI (`src/components/messaging/*`, pages): about 25% unit-tested, the rest is E2E-exercised or untested
-
-| Component | Coverage |
+| Task | Missing files |
 |---|---|
-| `Composer.tsx` | ✅ Unit (QA): Enter / Shift+Enter, blank, counter >4,500, FR-7 blocked state |
-| `MessagesLayout`, `ConversationList`, `MessageThread`, `NewConversationDialog`, `usePolling`, `/messages` pages | E2E only: parent→teacher round trip <6 s, student picker. No unit tests |
-| `ConversationMenu`, `MessagesNavBadge`, `StudentMessageActions`, `RosterTable`, `QuietHoursSection`, `SafeguardingReports`, `SafeguardingConversations`, `/admin/safeguarding` pages, `students/[id]/layout.tsx` | **No automated tests.** Verified only by reading the code. Their server logic is covered. |
+| TASK-8 | `src/server/calendar/calendar-service.ts` |
+| TASK-9 | `src/server/calendar/sources.ts` |
+| TASK-10 | `src/server/calendar/maintenance.ts`. The dispatch route was not modified. |
+| TASK-11–13 | No changes to `timetable-service.ts`, `attendance-service.ts`, attendance validator, register route or page, `RegisterForm.tsx` |
+| TASK-14 | `src/app/api/events/route.ts`, `[id]/route.ts`, `[id]/ics`, `[id]/rsvp`, `[id]/rsvps` |
+| TASK-15 | `src/app/api/calendar/route.ts`, `src/app/api/school-day/route.ts`, `academic-years/[id]/term-breaks/route.ts` |
+| TASK-16 | `me/calendar-feed` (plus `reset`), `calendar/feed/[token]`, `public/events`. `public-routes.ts` was not modified. |
+| TASK-17–22 | `AudienceBuilder.tsx`, `EventEditorDialog.tsx`, `EventDrawer.tsx`, `calendar/page.tsx`, `CalendarView.tsx`, `SourceChips.tsx`, `account/calendar/*`, `admin/academic-years/[id]/*`. `navigation.ts` was not modified. |
+| TASK-23 | No warnings in `AssignmentForm.tsx` or `QuizSettingsPanel.tsx` |
+| TASK-24 | `prisma/seed.ts` has no calendar events |
+| TASK-25–27 | `tests/integration/calendar/{calendar-merge,audience-parity,school-day,events-rsvp,feed-token}.test.ts`, `tests/e2e/calendar.spec.ts` |
 
-## Seed (`prisma/seed.ts` `seedMessaging`)
-
-There is no test. The current dev DB has **0 courses**, so only the "Staff room" thread (4 messages) and Alice's `isSafeguardingLead=true` are present. The Pat↔Tom, MATH-7A and reported student threads were skipped by design (`logger.warn`).
-
-## Biggest coverage gaps (suggested next tests)
-1. A route-level test that a signed-in non-lead ADMIN gets 403 on `/api/safeguarding/*`.
-2. `listContacts` for ADMIN and for homeroom teachers.
-3. A component test for `ConversationMenu` (hide Leave when `canLeave` is false) and for `QuietHoursSection`.
-4. Run the seed against a DB that has courses, to confirm all four threads and the report.
+Across all of PRD-14, 16 of the 61 entries in the ownership matrix are done (all TASK-1 to TASK-7 files). 31 CREATE files are missing. The 14 existing files that later tasks were meant to MODIFY were not touched. By task, 7 of 27 planned tasks are done (about 26%).

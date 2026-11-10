@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatInSchoolTz, nextTeachingDayDueAt } from '@/lib/dates';
+import { addDateDays, formatInSchoolTz, nextTeachingDayDueAt, schoolDateOf, schoolMidnight } from '@/lib/dates';
 
 describe('formatInSchoolTz', () => {
   const utcDate = '2024-01-15T17:30:00.000Z';
@@ -59,5 +59,34 @@ describe('nextTeachingDayDueAt (FR-10, NFR-9)', () => {
 
   it('falls back to tomorrow when no day is teaching', () => {
     expect(local(nextTeachingDayDueAt(new Date('2026-09-18T09:00:00Z'), 'UTC', []), 'UTC')).toBe('Sat 2026-09-19 23:59');
+  });
+});
+
+describe('schoolMidnight / schoolDateOf (PRD-14 all-day conversion)', () => {
+  const tz = 'America/New_York';
+
+  it('maps a date to school-local midnight in UTC', () => {
+    expect(schoolMidnight('2026-11-10', tz).toISOString()).toBe('2026-11-10T05:00:00.000Z');
+    expect(schoolMidnight('2026-07-10', tz).toISOString()).toBe('2026-07-10T04:00:00.000Z');
+  });
+
+  it('all-day across the DST change (2026-11-01) keeps an exclusive next-midnight end', () => {
+    // Inclusive 2026-10-31..2026-11-01 → [Oct 31 00:00 EDT, Nov 2 00:00 EST)
+    const start = schoolMidnight('2026-10-31', tz);
+    const end = schoolMidnight(addDateDays('2026-11-01', 1), tz);
+    expect(start.toISOString()).toBe('2026-10-31T04:00:00.000Z');
+    expect(end.toISOString()).toBe('2026-11-02T05:00:00.000Z');
+    expect((end.getTime() - start.getTime()) / 3_600_000).toBe(49); // 25h day included
+    expect(schoolDateOf(start, tz)).toBe('2026-10-31');
+    expect(schoolDateOf(new Date(end.getTime() - 1), tz)).toBe('2026-11-01');
+  });
+
+  it('schoolDateOf uses the school timezone, not UTC', () => {
+    expect(schoolDateOf('2026-11-11T03:00:00Z', tz)).toBe('2026-11-10');
+  });
+
+  it('addDateDays crosses month and year ends', () => {
+    expect(addDateDays('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addDateDays('2026-03-01', -1)).toBe('2026-02-28');
   });
 });

@@ -1,5 +1,7 @@
 import { Roboto } from 'next/font/google';
 import { createTheme } from '@mui/material/styles';
+// PRD-14 FR-9: adds the scheduler's component keys to the theme types.
+import type {} from '@mui/x-scheduler/theme-augmentation';
 
 export const roboto = Roboto({
   weight: ['300', '400', '500', '700'],

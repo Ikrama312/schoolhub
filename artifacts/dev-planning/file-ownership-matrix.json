@@ -1,341 +1,311 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T23:10:00Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-10T00:30:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "entries": [
     {
-      "path": "prisma/schema.prisma",
+      "path": "package.json",
       "taskId": "TASK-1",
       "operation": "MODIFY"
     },
     {
-      "path": "prisma/migrations/20261112000000_add_direct_messaging/migration.sql",
+      "path": "package-lock.json",
       "taskId": "TASK-1",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/lib/messaging/constants.ts",
+      "path": "src/theme/theme.ts",
+      "taskId": "TASK-1",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "taskId": "TASK-2",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "prisma/migrations/20261113000000_add_calendar/migration.sql",
       "taskId": "TASK-2",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/messaging.ts",
-      "taskId": "TASK-2",
-      "operation": "CREATE"
+      "path": "src/lib/dates.ts",
+      "taskId": "TASK-3",
+      "operation": "MODIFY"
     },
     {
-      "path": "src/server/messaging/contact-rules.ts",
+      "path": "src/lib/validators/calendar.ts",
       "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/messaging/contact-rules.test.ts",
+      "path": "tests/unit/dates.test.ts",
+      "taskId": "TASK-3",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "tests/unit/calendar/validators.test.ts",
       "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/messaging/access.ts",
+      "path": "src/server/calendar/recurrence.ts",
       "taskId": "TASK-4",
       "operation": "CREATE"
     },
     {
+      "path": "tests/unit/calendar/recurrence.test.ts",
+      "taskId": "TASK-4",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/calendar/ical.ts",
+      "taskId": "TASK-5",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/unit/calendar/ical.test.ts",
+      "taskId": "TASK-5",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/announcements/audience.ts",
+      "taskId": "TASK-6",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/unit/calendar/audience.test.ts",
+      "taskId": "TASK-6",
+      "operation": "CREATE"
+    },
+    {
       "path": "src/server/notifications/types.ts",
-      "taskId": "TASK-5",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/notifications/notify.ts",
-      "taskId": "TASK-5",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/messaging/quiet-hours.ts",
-      "taskId": "TASK-6",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/unit/messaging/quiet-hours.test.ts",
-      "taskId": "TASK-6",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/messaging/notifications.ts",
-      "taskId": "TASK-7",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/messaging/email.ts",
-      "taskId": "TASK-7",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/internal/email/dispatch/route.ts",
       "taskId": "TASK-7",
       "operation": "MODIFY"
     },
     {
-      "path": "src/server/messaging/messages.ts",
+      "path": "src/server/calendar/calendar-service.ts",
       "taskId": "TASK-8",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/messaging/conversations.ts",
+      "path": "src/server/calendar/sources.ts",
       "taskId": "TASK-9",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/files/contexts.ts",
+      "path": "src/server/calendar/maintenance.ts",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/internal/email/dispatch/route.ts",
       "taskId": "TASK-10",
       "operation": "MODIFY"
     },
     {
-      "path": "src/server/messaging/contacts.ts",
+      "path": "src/server/timetable/timetable-service.ts",
       "taskId": "TASK-11",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/server/messaging/reports.ts",
+      "path": "src/server/attendance/attendance-service.ts",
       "taskId": "TASK-12",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/server/messaging/safeguarding.ts",
+      "path": "src/lib/validators/attendance.ts",
       "taskId": "TASK-12",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/app/api/conversations/route.ts",
+      "path": "src/app/api/attendance/register/route.ts",
+      "taskId": "TASK-12",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/(app)/attendance/take/page.tsx",
       "taskId": "TASK-13",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/app/api/conversations/[id]/route.ts",
+      "path": "src/app/(app)/attendance/take/RegisterForm.tsx",
       "taskId": "TASK-13",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/app/api/conversations/[id]/messages/route.ts",
+      "path": "tests/unit/attendance-register-form.test.tsx",
       "taskId": "TASK-13",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/app/api/conversations/[id]/read/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conversations/[id]/mute/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conversations/[id]/archive/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/conversations/[id]/leave/route.ts",
-      "taskId": "TASK-13",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/messages/[id]/route.ts",
+      "path": "src/app/api/events/route.ts",
       "taskId": "TASK-14",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/messages/[id]/report/route.ts",
+      "path": "src/app/api/events/[id]/route.ts",
       "taskId": "TASK-14",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/messaging/unread-count/route.ts",
+      "path": "src/app/api/events/[id]/ics/route.ts",
       "taskId": "TASK-14",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/messaging/contacts/route.ts",
+      "path": "src/app/api/events/[id]/rsvp/route.ts",
       "taskId": "TASK-14",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/me/messaging-settings/route.ts",
+      "path": "src/app/api/events/[id]/rsvps/route.ts",
       "taskId": "TASK-14",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/safeguarding/reports/route.ts",
+      "path": "src/app/api/calendar/route.ts",
       "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/safeguarding/reports/[id]/route.ts",
+      "path": "src/app/api/school-day/route.ts",
       "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/safeguarding/conversations/route.ts",
+      "path": "src/app/api/academic-years/[id]/term-breaks/route.ts",
       "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/safeguarding/conversations/[id]/route.ts",
-      "taskId": "TASK-15",
+      "path": "src/app/api/me/calendar-feed/route.ts",
+      "taskId": "TASK-16",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/users.ts",
+      "path": "src/app/api/me/calendar-feed/reset/route.ts",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/calendar/feed/[token]/route.ts",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/public/events/route.ts",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/config/public-routes.ts",
       "taskId": "TASK-16",
       "operation": "MODIFY"
     },
     {
-      "path": "src/server/services/users.ts",
+      "path": "tests/unit/public-routes.test.ts",
       "taskId": "TASK-16",
       "operation": "MODIFY"
     },
     {
-      "path": "prisma/seed.ts",
+      "path": "src/components/AudienceBuilder/AudienceBuilder.tsx",
       "taskId": "TASK-17",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "src/components/messaging/usePolling.ts",
+      "path": "src/app/(app)/calendar/EventEditorDialog.tsx",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/components/messaging/MessagesLayout.tsx",
-      "taskId": "TASK-18",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/messaging/ConversationList.tsx",
-      "taskId": "TASK-18",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/messaging/MessageThread.tsx",
+      "path": "src/app/(app)/calendar/EventDrawer.tsx",
       "taskId": "TASK-19",
       "operation": "CREATE"
     },
     {
-      "path": "src/components/messaging/Composer.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/messaging/ConversationMenu.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/messaging/NewConversationDialog.tsx",
+      "path": "src/app/(app)/calendar/page.tsx",
       "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/messages/layout.tsx",
-      "taskId": "TASK-21",
+      "path": "src/app/(app)/calendar/CalendarView.tsx",
+      "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/messages/page.tsx",
-      "taskId": "TASK-21",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/messages/[conversationId]/page.tsx",
-      "taskId": "TASK-21",
+      "path": "src/app/(app)/calendar/SourceChips.tsx",
+      "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
       "path": "src/config/navigation.ts",
-      "taskId": "TASK-22",
+      "taskId": "TASK-20",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/(app)/layout.tsx",
-      "taskId": "TASK-22",
-      "operation": "MODIFY"
+      "path": "src/app/(app)/account/calendar/page.tsx",
+      "taskId": "TASK-21",
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/shell.tsx",
-      "taskId": "TASK-22",
-      "operation": "MODIFY"
+      "path": "src/app/(app)/account/calendar/SubscribeCard.tsx",
+      "taskId": "TASK-21",
+      "operation": "CREATE"
     },
     {
-      "path": "src/components/messaging/MessagesNavBadge.tsx",
+      "path": "src/app/(app)/admin/academic-years/[id]/page.tsx",
       "taskId": "TASK-22",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/students/[id]/layout.tsx",
-      "taskId": "TASK-23",
+      "path": "src/app/(app)/admin/academic-years/[id]/TermBreaksButton.tsx",
+      "taskId": "TASK-22",
       "operation": "CREATE"
     },
     {
-      "path": "src/components/messaging/StudentMessageActions.tsx",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/courses/[courseId]/roster/page.tsx",
+      "path": "src/app/(app)/courses/[courseId]/assignments/AssignmentForm.tsx",
       "taskId": "TASK-23",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/(app)/courses/[courseId]/roster/RosterTable.tsx",
+      "path": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizSettingsPanel.tsx",
       "taskId": "TASK-23",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "src/components/messaging/QuietHoursSection.tsx",
-      "taskId": "TASK-24",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/account/notifications/page.tsx",
+      "path": "prisma/seed.ts",
       "taskId": "TASK-24",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/(app)/admin/safeguarding/page.tsx",
+      "path": "tests/integration/calendar/calendar-merge.test.ts",
       "taskId": "TASK-25",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/admin/safeguarding/conversations/[id]/page.tsx",
+      "path": "tests/integration/calendar/audience-parity.test.ts",
       "taskId": "TASK-25",
       "operation": "CREATE"
     },
     {
-      "path": "src/components/messaging/SafeguardingReports.tsx",
+      "path": "tests/integration/calendar/school-day.test.ts",
       "taskId": "TASK-25",
       "operation": "CREATE"
     },
     {
-      "path": "src/components/messaging/SafeguardingConversations.tsx",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/integration/messaging/messaging.test.ts",
+      "path": "tests/integration/calendar/events-rsvp.test.ts",
       "taskId": "TASK-26",
       "operation": "CREATE"
     },
     {
-      "path": "tests/integration/messaging/email.test.ts",
+      "path": "tests/integration/calendar/feed-token.test.ts",
       "taskId": "TASK-26",
       "operation": "CREATE"
     },
     {
-      "path": "tests/integration/messaging/safeguarding.test.ts",
-      "taskId": "TASK-26",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/e2e/messaging.spec.ts",
+      "path": "tests/e2e/calendar.spec.ts",
       "taskId": "TASK-27",
       "operation": "CREATE"
     }

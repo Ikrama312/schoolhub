@@ -1,0 +1,24 @@
+[admin] 02:39:09 login page
+[admin] 02:39:10 filled admin@schoolhub.test
+[admin] 02:49:35 ERROR TimeoutError: page.waitForURL: Timeout 45000ms exceeded.
+[admin] =========================== logs ===========================
+[admin] waiting for navigation until "load"
+[admin] ============================================================
+[teacher] 02:49:41 login page
+[teacher] 02:49:42 filled teacher@schoolhub.test
+[teacher] 02:56:59 ERROR TimeoutError: page.waitForURL: Timeout 45000ms exceeded.
+[teacher] =========================== logs ===========================
+[teacher] waiting for navigation until "load"
+[teacher] ============================================================
+[parent] 02:57:04 login page
+[parent] 02:57:04 filled parent@schoolhub.test
+[parent] 02:57:49 ERROR TimeoutError: page.waitForURL: Timeout 45000ms exceeded.
+[parent] =========================== logs ===========================
+[parent] waiting for navigation until "load"
+[parent] ============================================================
+[student] 02:57:54 login page
+[student] 02:57:54 filled student@schoolhub.test
+[student] 02:58:45 ERROR TimeoutError: page.waitForURL: Timeout 45000ms exceeded.
+[student] =========================== logs ===========================
+[student] waiting for navigation until "load"
+[student] ============================================================

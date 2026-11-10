@@ -183,6 +183,39 @@ export const NOTIFICATION_TYPES = {
     mandatoryInApp: true,
     roles: ['ADMIN'],
   },
+  // PRD-14 calendar (FR-23, FR-28, FR-29). holiday_created is the email-by-default variant (D-3).
+  'event.created': {
+    label: 'New school event',
+    description: 'An event for you or your child was added to the school calendar.',
+    category: 'COMMUNICATION',
+    defaultEmail: false,
+    mandatoryInApp: false,
+    roles: ALL,
+  },
+  'event.holiday_created': {
+    label: 'New holiday or term break',
+    description: 'A holiday or term break was added to the school calendar.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ALL,
+  },
+  'event.updated': {
+    label: 'Event changed',
+    description: 'The time or location of an upcoming event changed.',
+    category: 'COMMUNICATION',
+    defaultEmail: false,
+    mandatoryInApp: false,
+    roles: ALL,
+  },
+  'event.rsvp_reminder': {
+    label: 'RSVP reminder',
+    description: 'An event you were invited to closes RSVPs within 48 hours.',
+    category: 'COMMUNICATION',
+    defaultEmail: false,
+    mandatoryInApp: false,
+    roles: ALL,
+  },
 } as const satisfies Record<string, NotificationTypeDef>;
 
 export type NotificationType = keyof typeof NOTIFICATION_TYPES;

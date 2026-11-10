@@ -104,6 +104,10 @@ model User {
   messageReportsReviewed   MessageReport[]           @relation("MessageReportReviewer")
   messagingSettings        MessagingSettings?
   pendingMessageEmails     PendingMessageEmail[]
+  /// PRD-14 D-4
+  calendarEvents           CalendarEvent[]           @relation("CalendarEventCreator")
+  eventRsvps               EventRsvp[]
+  calendarFeedToken        CalendarFeedToken?
 
   @@index([lastName, firstName, email])
   @@index([role, status])
@@ -1221,4 +1225,111 @@ model PendingMessageEmail {
 
   @@unique([userId, conversationId])
   @@index([dueAt])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-14 School Calendar, Events & Holidays (FR-2, FR-3). Recurring events are
+// stored once and expanded at read time (src/server/calendar/recurrence.ts).
+// ---------------------------------------------------------------------------
+
+/// PRD-12 FR-1 values; owned here until PRD-12 (announcements) lands and adopts it.
+enum AudienceType {
+  SCHOOL
+  STAFF
+  ROLE
+  GRADE_LEVEL
+  SECTION
+  COURSE
+}
+
+enum EventCategory {
+  HOLIDAY
+  TERM_BREAK
+  EXAM
+  EVENT
+  MEETING
+  TRIP
+  SPORTS
+  DEADLINE
+  OTHER
+}
+
+enum Recurrence {
+  NONE
+  WEEKLY
+  MONTHLY
+}
+
+enum RsvpResponse {
+  YES
+  NO
+  MAYBE
+}
+
+/// All-day events run [school-tz midnight, next midnight) -- endAt is exclusive (FR-4).
+model CalendarEvent {
+  id                 String          @id @default(cuid())
+  title              String
+  description        String?
+  category           EventCategory
+  startAt            DateTime
+  endAt              DateTime
+  allDay             Boolean         @default(false)
+  location           String?
+  /// Stored, unused (NFR-11: no room booking).
+  roomId             String?
+  recurrence         Recurrence      @default(NONE)
+  recurrenceUntil    DateTime?       @db.Date
+  isNoSchool         Boolean         @default(false)
+  rsvpEnabled        Boolean         @default(false)
+  rsvpDeadline       DateTime?
+  /// D-1: the reminder's "once per event" claim.
+  rsvpReminderSentAt DateTime?
+  isPublic           Boolean         @default(false)
+  createdById        String
+  createdBy          User            @relation("CalendarEventCreator", fields: [createdById], references: [id])
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  audiences          EventAudience[]
+  rsvps              EventRsvp[]
+
+  @@index([startAt, endAt])
+}
+
+/// refId: gradeLevelId | sectionId | courseId | Role name (ROLE); null for SCHOOL/STAFF.
+model EventAudience {
+  id              String        @id @default(cuid())
+  eventId         String
+  event           CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type            AudienceType
+  refId           String?
+  includeStudents Boolean       @default(true)
+  includeParents  Boolean       @default(true)
+  includeTeachers Boolean       @default(true)
+
+  @@index([eventId])
+  @@index([type, refId])
+}
+
+/// One RSVP per user per series.
+model EventRsvp {
+  eventId   String
+  event     CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  response  RsvpResponse
+  guests    Int           @default(0)
+  note      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@id([eventId, userId])
+}
+
+/// Only sha256(raw token) is stored (NFR-5).
+model CalendarFeedToken {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
 }

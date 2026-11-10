@@ -50,3 +50,21 @@ export function nowAndNext<P extends { startTime: string; endTime: string }>(
 
 /** ISO weekday labels, index 1=Mon … 7=Sun (index 0 unused). */
 export const ISO_DAY_NAMES = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/**
+ * PRD-14 (FR-4, NFR-3): the UTC instant of 00:00 school-local on `dateStr` (yyyy-MM-dd).
+ * All-day events are stored as [schoolMidnight(start), schoolMidnight(end + 1 day)).
+ */
+export function schoolMidnight(dateStr: string, tz: string): Date {
+  return fromZonedTime(`${dateStr}T00:00:00`, tz);
+}
+
+/** PRD-14: the school-tz calendar date (yyyy-MM-dd) an instant falls on. */
+export function schoolDateOf(instant: Date | string, tz: string): string {
+  return formatInSchoolTz(instant, 'yyyy-MM-dd', tz);
+}
+
+/** Calendar-date arithmetic on yyyy-MM-dd strings (no timezone involved). */
+export function addDateDays(dateStr: string, days: number): string {
+  return new Date(Date.parse(`${dateStr}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}

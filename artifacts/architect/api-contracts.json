@@ -1,17 +1,17 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T22:40:00Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-10T00:10:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "conventions": {
-    "replaces": "This file replaces the stale SH-12 contracts.",
-    "basePath": "/api. This is the existing SchoolHub convention, not /api/v1. Route files are src/app/api/**/route.ts. (FR-28)",
-    "handlerPipeline": "withHandler → requireUser / requireRole, or requireSafeguardingLead for safeguarding routes → parseQuery / parseBody with schemas from src/lib/validators/messaging.ts → one service call in src/server/messaging/* → ok(data) / ok(data, {status:201}) / paginated(data, meta). (NFR-6)",
+    "replaces": "This file replaces the stale SH-13 contracts.",
+    "basePath": "/api. This is the existing SchoolHub convention, not /api/v1. Route files are src/app/api/**/route.ts. (NFR-8)",
+    "handlerPipeline": "withHandler → requireUser / requireRole (except the feed and public events) → parseQuery / parseBody with schemas from src/lib/validators/calendar.ts → one service call in src/server/calendar/* → ok(data) / ok(data, {status:201}). Reuse src/server/http.ts; do not hand-roll envelopes. (NFR-8, NFR-9)",
     "envelopes": {
       "success": "{ data: T }",
-      "list": "{ data: T[], meta: { page, pageSize, total } } for page-based lists. Pagination comes from parsePagination: default page size 20, max 100.",
-      "error": "{ error: { code, message, details? } }"
+      "error": "{ error: { code, message, details? } }",
+      "nonJson": "GET /api/events/:id/ics, GET /api/calendar/feed/:token and GET /api/events/:id/rsvps?format=csv return raw bodies (text/calendar or text/csv), not the JSON envelope."
     },
     "errorCodes": {
       "VALIDATION_ERROR": 400,
@@ -22,318 +22,359 @@
       "RATE_LIMITED": 429
     },
     "errorPolicy": [
-      "If the caller is not a participant, or has left (leftAt is set), the API returns 404 NOT_FOUND. A conversation cuid is never treated as authorisation. (NFR-1)",
-      "A contact-rule violation on create returns 403 FORBIDDEN, and nothing is written. (FR-6)",
-      "A send after the relationship has ended returns 403 FORBIDDEN with details.reason='RELATIONSHIP_ENDED'. (FR-7)",
-      "An edit or delete by someone other than the sender, more than 15 minutes after sending, or on an already-deleted message returns 403 FORBIDDEN. details.reason is 'NOT_SENDER', 'EDIT_WINDOW_EXPIRED' or 'ALREADY_DELETED'. (FR-15)",
-      "A rate-limit hit returns 429 RATE_LIMITED with details.retryAfterMs. (NFR-4)",
-      "A caller who is not an ADMIN with isSafeguardingLead=true (read from the database) gets 403 FORBIDDEN on /api/safeguarding/*. (FR-23, NFR-1)"
+      "An event the caller cannot see returns 404 NOT_FOUND, so its existence does not leak. An event cuid is never treated as authorisation. (NFR-5, NFR-7)",
+      "A visible event the caller may not change (not the creator and not ADMIN) returns 403 FORBIDDEN with details.reason='NOT_CREATOR'. (FR-8)",
+      "A non-admin who sends isNoSchool=true, isPublic=true or category HOLIDAY/TERM_BREAK gets 403 FORBIDDEN with details.reason='ADMIN_ONLY_FIELD' and details.field. (FR-6)",
+      "A teacher who targets an audience that fails canTargetAudience gets 403 FORBIDDEN with details.reason='AUDIENCE_NOT_ALLOWED' and details.index (the index in audiences[]). Nothing is written. (FR-7)",
+      "An RSVP on an event with rsvpEnabled=false returns 409 CONFLICT with details.reason='RSVP_DISABLED'. An RSVP at or after rsvpDeadline returns 409 CONFLICT with details.reason='RSVP_CLOSED'. A visible event where the caller is not in the audience (for example the creator, or an admin) returns 403 FORBIDDEN with details.reason='NOT_IN_AUDIENCE'. (FR-21)",
+      "studentId for a student the caller cannot view returns 404 NOT_FOUND. (FR-11, NFR-7)",
+      "A range with to − from > 100 days, or to ≤ from, returns 400 VALIDATION_ERROR. (FR-32)",
+      "A register save on a no-school date without holidayOverride=true returns 400 VALIDATION_ERROR with details.reason='HOLIDAY_OVERRIDE_REQUIRED' and details.noSchoolReason. (FR-18, D-8)",
+      "A rate-limit hit returns 429 RATE_LIMITED with details.retryAfterMs and a Retry-After header in seconds. (FR-27, D-9)",
+      "An unknown or reset feed token, or a token whose user is not ACTIVE, returns 404 text/plain 'Not found'. It does not use the JSON envelope, and it does not distinguish the cases. (FR-24, NFR-5)"
     ],
-    "ids": "All ids are cuid strings. All timestamps are ISO 8601 UTC strings. The client renders them in the school timezone. (NFR-6)"
+    "ids": "All ids are cuid strings. Timestamps are ISO 8601 UTC strings. Dates (yyyy-MM-dd) are calendar dates in the school timezone. The client renders times in SchoolSettings.timezone. (NFR-3, NFR-8)",
+    "allDay": "All-day input uses startDate/endDate as yyyy-MM-dd with an INCLUSIVE end. The server stores [schoolMidnight(startDate), schoolMidnight(endDate+1)). All-day output gives start/end as UTC instants with an EXCLUSIVE end, plus allDay=true. (FR-4, NFR-3)",
+    "occurrenceIds": "An expanded occurrence has id '<eventId>:<occurrenceStartISO>' and eventId '<eventId>'. Every /api/events/:id route takes the plain eventId. Edits apply to the whole series. (FR-15)"
   },
 
   "components": {
-    "UserSummary": { "id": "string", "name": "string", "role": "ADMIN|TEACHER|STUDENT|PARENT", "avatarUrl": "string|null" },
-    "Attachment": { "fileId": "string", "name": "string", "mimeType": "string", "size": "number", "url": "string (/api/files/:id, gated by the 'message' file context, FR-27)" },
-    "MessageDTO": {
+    "EventCategory": "HOLIDAY|TERM_BREAK|EXAM|EVENT|MEETING|TRIP|SPORTS|DEADLINE|OTHER",
+    "Recurrence": "NONE|WEEKLY|MONTHLY",
+    "RsvpResponse": "YES|NO|MAYBE",
+    "AudienceType": "SCHOOL|STAFF|ROLE|GRADE_LEVEL|SECTION|COURSE",
+    "CalendarSource": "events|holidays|assignments|quizzes|timetable",
+    "UserSummary": { "id": "string", "name": "string", "role": "ADMIN|TEACHER|STUDENT|PARENT" },
+    "AudienceInput": {
+      "type": "AudienceType",
+      "refId": "string|null (gradeLevelId | sectionId | courseId | role name for ROLE; must be null for SCHOOL/STAFF)",
+      "includeStudents": "boolean (default true)",
+      "includeParents": "boolean (default true)",
+      "includeTeachers": "boolean (default true)"
+    },
+    "AudienceDTO": "AudienceInput & { id: string, label: string (e.g. 'Grade 7 · parents', 'Robotics Club') }",
+    "EventInput": {
+      "title": "string, 1..150",
+      "description": "string|null, Markdown, ≤ 5000",
+      "category": "EventCategory",
+      "allDay": "boolean",
+      "startAt": "ISO datetime, required when allDay=false",
+      "endAt": "ISO datetime ≥ startAt, required when allDay=false",
+      "startDate": "yyyy-MM-dd, required when allDay=true",
+      "endDate": "yyyy-MM-dd ≥ startDate, inclusive, required when allDay=true",
+      "location": "string|null, ≤ 200",
+      "roomId": "string|null (stored, unused: NFR-11)",
+      "recurrence": "Recurrence (default NONE)",
+      "recurrenceUntil": "yyyy-MM-dd|null. Required for WEEKLY/MONTHLY, ≤ start + 1 year, ≥ start date. Must be null for NONE.",
+      "isNoSchool": "boolean, optional. ADMIN only. Defaults to category ∈ {HOLIDAY, TERM_BREAK} (FR-5).",
+      "rsvpEnabled": "boolean (default false)",
+      "rsvpDeadline": "ISO datetime|null. Required when rsvpEnabled, and must be ≤ the first occurrence's start.",
+      "isPublic": "boolean (default false). ADMIN only.",
+      "audiences": "AudienceInput[], 1..20"
+    },
+    "EventDTO": {
       "id": "string",
-      "conversationId": "string",
-      "sender": "UserSummary",
-      "body": "string|null (null when deleted)",
-      "deleted": "boolean",
-      "editedAt": "string|null",
+      "title": "string",
+      "description": "string|null",
+      "category": "EventCategory",
+      "allDay": "boolean",
+      "startAt": "string (series start for recurring events)",
+      "endAt": "string (exclusive when allDay)",
+      "location": "string|null",
+      "recurrence": "Recurrence",
+      "recurrenceUntil": "yyyy-MM-dd|null",
+      "isNoSchool": "boolean",
+      "isPublic": "boolean",
+      "rsvpEnabled": "boolean",
+      "rsvpDeadline": "string|null",
+      "rsvpOpen": "boolean (rsvpEnabled && now < rsvpDeadline)",
+      "audiences": "AudienceDTO[]",
+      "createdBy": "UserSummary",
       "createdAt": "string",
       "updatedAt": "string",
-      "attachments": "Attachment[] (empty when deleted)",
-      "isOwn": "boolean",
-      "canEdit": "boolean (isOwn, not deleted, and now - createdAt ≤ 15 min)"
+      "canEdit": "boolean (creator or ADMIN)",
+      "canRsvp": "boolean (rsvpOpen && caller is in the audience)",
+      "myRsvp": "RsvpDTO|null",
+      "rsvpTotals": "{ yes: number, no: number, maybe: number, guests: number } | null (null when rsvpEnabled=false)"
     },
-    "ConversationListItem": {
-      "id": "string",
-      "subject": "string|null",
-      "participants": "UserSummary[] (excluding the caller)",
-      "preview": "string|null ('<first name>: <body ≤80>' or 'This message was deleted')",
-      "lastMessageAt": "string",
-      "unreadCount": "number (capped at 99)",
-      "muted": "boolean",
-      "archived": "boolean"
+    "RsvpInput": {
+      "response": "RsvpResponse",
+      "guests": "integer 0..5 (default 0). The server forces 0 for non-PARENT callers.",
+      "note": "string|null, ≤ 500"
     },
-    "ConversationDetail": {
-      "id": "string",
-      "subject": "string|null",
-      "createdById": "string",
-      "involvesStudent": "boolean",
-      "lastMessageAt": "string",
-      "participants": "(UserSummary & { leftAt: string|null })[]",
-      "me": { "lastReadAt": "string|null", "muted": "boolean", "archived": "boolean" },
-      "canSend": "boolean (canSendIn result, FR-7)",
-      "canLeave": "boolean (false when ≤2 participants, or when the caller is the creator and involvesStudent is true, FR-14)"
+    "RsvpDTO": { "response": "RsvpResponse", "guests": "number", "note": "string|null", "updatedAt": "string" },
+    "RsvpListItem": "RsvpDTO & { user: UserSummary }",
+    "CalendarItem": {
+      "kind": "event|assignment|quiz|timetable",
+      "id": "string (occurrence id for events, '<kind>:<entityId>[:<studentId>]' for others, so the id stays unique per child)",
+      "eventId": "string|null (events only)",
+      "source": "CalendarSource",
+      "title": "string (deadlines for a parent get the prefix '<childName>: ')",
+      "start": "string",
+      "end": "string (exclusive when allDay; equals start for deadlines)",
+      "allDay": "boolean",
+      "category": "EventCategory|null (events only)",
+      "color": "string (category colour for events, course/subject colour for deadlines and timetable)",
+      "location": "string|null",
+      "href": "string|null (assignment/quiz page for deadlines, '/calendar?event=<eventId>' for events; FR-13)",
+      "childName": "string|null (PARENT deadlines only)",
+      "isNoSchool": "boolean"
     },
-    "ContactGroup": { "label": "string, e.g. 'My teachers', 'My child's teachers (Sam)', 'Students in MATH-7A', 'Parents of students in MATH-7A', 'Homeroom 7A', 'Staff', 'School office'", "contacts": "UserSummary[] (≤50 per group)" },
-    "SafeguardingMessageDTO": "MessageDTO with body always present (including deleted content), plus deletedAt: string|null and revisions: { body: string, createdAt: string }[] (NFR-3)",
-    "ReportDTO": {
-      "id": "string",
-      "status": "OPEN|REVIEWED|DISMISSED",
-      "reason": "string",
-      "reporter": "UserSummary",
-      "message": "SafeguardingMessageDTO",
-      "conversationId": "string",
-      "reviewedBy": "UserSummary|null",
-      "reviewedAt": "string|null",
-      "reviewNote": "string|null",
-      "createdAt": "string"
+    "SchoolDayResult": { "date": "yyyy-MM-dd", "isSchoolDay": "boolean", "reason": "string|null ('Not a teaching day' | 'Holiday: <title>')" },
+    "PublicEventDTO": {
+      "id": "string (occurrence id)",
+      "eventId": "string",
+      "title": "string",
+      "category": "EventCategory",
+      "start": "string",
+      "end": "string",
+      "allDay": "boolean",
+      "location": "string|null",
+      "description": "string|null"
     },
-    "MessagingSettings": { "quietStart": "HH:mm|null", "quietEnd": "HH:mm|null" }
+    "FeedStatus": {
+      "url": "string|null ('<APP_URL>/api/calendar/feed/<rawToken>.ics'; non-null only when the token was just created or reset; D-6)",
+      "hasToken": "boolean",
+      "createdAt": "string|null"
+    }
   },
 
   "endpoints": [
     {
       "method": "GET",
-      "path": "/api/conversations",
-      "description": "Returns the caller's conversations that they have not left, sorted by lastMessageAt desc. The Inbox tab sends archived=false (the default) and the Archived tab sends archived=true. q matches participant name or subject. Polled every 30 s.",
-      "auth": "any authenticated user",
-      "requestSchema": { "query": { "archived": "boolean? (default false)", "q": "string? ≤100", "page": "int? ≥1", "pageSize": "int? ≤100" } },
-      "responseSchema": { "status": 200, "body": { "data": "ConversationListItem[]", "meta": { "page": "number", "pageSize": "number", "total": "number" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED"],
-      "requirementIds": ["FR-9", "FR-13", "FR-28", "FR-31", "NFR-1"]
-    },
-    {
-      "method": "POST",
-      "path": "/api/conversations",
-      "description": "Creates a conversation, adding the caller as a participant automatically, together with its first message. The request must pass validateNewConversation: 2–25 participants including the caller, canMessage(creator, p) for every participant, and a TEACHER or ADMIN in any group that contains a STUDENT. involvesStudent is computed here. The send side effects of POST .../messages also apply.",
-      "auth": "any authenticated user; rateLimit('msg:'+uid, 30, 60_000)",
-      "requestSchema": { "body": { "participantIds": "cuid[] 1..24 (excluding the caller, deduplicated)", "subject": "string? ≤120", "body": "string, trimmed, 1..5000", "fileIds": "cuid[]? ≤5 (owned by the caller, unattached, context 'message')" } },
-      "responseSchema": { "status": 201, "body": { "data": { "conversation": "ConversationDetail", "message": "MessageDTO" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (contact rules, group without staff, more than 25 participants; nothing is created)", "429 RATE_LIMITED"],
-      "requirementIds": ["FR-6", "FR-11", "FR-12", "FR-16", "FR-17", "FR-28", "FR-30", "NFR-1", "NFR-4"]
-    },
-    {
-      "method": "GET",
-      "path": "/api/conversations/:id",
-      "description": "Returns the conversation header, the participants, the caller's state, canSend and canLeave.",
-      "auth": "participant who has not left",
-      "requestSchema": { "params": { "id": "cuid" } },
-      "responseSchema": { "status": 200, "body": { "data": "ConversationDetail" } },
-      "errors": ["401 UNAUTHENTICATED", "404 NOT_FOUND"],
-      "requirementIds": ["FR-7", "FR-14", "FR-28", "NFR-1"]
-    },
-    {
-      "method": "GET",
-      "path": "/api/conversations/:id/messages",
-      "description": "Keyset-paginated messages. Without a cursor it returns the latest page. 'before' loads older messages for the upward infinite scroll. 'after' (plus an optional 'since') is the 5-second poll, which returns new messages plus messages edited or deleted since the given time. A poll with nothing new returns empty arrays and is designed to respond in under 100 ms using @@index([conversationId, createdAt]).",
-      "auth": "participant who has not left",
+      "path": "/api/calendar",
+      "description": "Merged, expanded, audience-filtered calendar items for the caller, for any role. ADMIN sees every event. Others see events whose audience includes them (or their linked children, for parents) plus events they created. Holidays = HOLIDAY/TERM_BREAK/isNoSchool events; 'events' = all other events, with no overlap. timetable is projected only onto school days. Auth: requireUser. Service: getCalendarItems.",
       "requestSchema": {
-        "params": { "id": "cuid" },
-        "query": { "before": "cuid? (mutually exclusive with after)", "after": "cuid?", "since": "ISO datetime? (only with after)", "limit": "int? 1..30 (default 30)" }
-      },
-      "responseSchema": {
-        "status": 200,
-        "body": {
-          "data": {
-            "messages": "MessageDTO[] in ascending createdAt order",
-            "changed": "MessageDTO[] (only when after+since is sent; messages with createdAt ≤ cursor and updatedAt > since)",
-            "hasMore": "boolean (older messages exist; only in initial and 'before' mode)"
-          }
+        "query": {
+          "from": "ISO datetime, required",
+          "to": "ISO datetime, required, > from, to − from ≤ 100 days",
+          "sources": "comma-separated CalendarSource list, optional (default 'events,holidays,assignments,quizzes')",
+          "studentId": "string, optional. PARENT: a linked child. STUDENT: self only. ADMIN/TEACHER: any student they can view (resolveViewedStudent). Otherwise 404."
         }
       },
-      "errors": ["400 VALIDATION_ERROR (before and after both sent, or since without after)", "401 UNAUTHENTICATED", "404 NOT_FOUND (not a participant, or the cursor id is not in this conversation)"],
-      "requirementIds": ["FR-10", "FR-13", "FR-28", "NFR-1", "NFR-2", "NFR-3", "NFR-8"]
+      "responseSchema": {
+        "200": { "data": { "items": "CalendarItem[] sorted by start", "timezone": "string (SchoolSettings.timezone)" } },
+        "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "404 NOT_FOUND (studentId)"]
+      },
+      "requirementIds": ["FR-10", "FR-11", "FR-13", "FR-15", "FR-32", "NFR-4", "NFR-7"]
     },
     {
       "method": "POST",
-      "path": "/api/conversations/:id/messages",
-      "description": "Sends a message. Order: rate limit, participation, canSendIn (staff can always send; a non-staff sender needs a live relationship with at least one staff participant who has not left), attachment ownership, then a transaction that inserts the message, links the files, bumps lastMessageAt, sets the sender's lastReadAt and clears archivedAt for the other participants. After commit, onMessageSent runs for each other participant who has not muted or left: it deletes their older unread message.received row, notifies in-app and upserts PendingMessageEmail (dueAt = now + 10 min, create-only).",
-      "auth": "participant who has not left; rateLimit('msg:'+uid, 30, 60_000)",
-      "requestSchema": { "params": { "id": "cuid" }, "body": { "body": "string, trimmed, 1..5000", "fileIds": "cuid[]? ≤5" } },
-      "responseSchema": { "status": 201, "body": { "data": { "message": "MessageDTO" } } },
-      "errors": ["400 VALIDATION_ERROR (including invalid or foreign fileIds)", "401 UNAUTHENTICATED", "403 FORBIDDEN details.reason='RELATIONSHIP_ENDED'", "404 NOT_FOUND", "429 RATE_LIMITED details.retryAfterMs"],
-      "requirementIds": ["FR-7", "FR-11", "FR-19", "FR-20", "FR-27", "FR-28", "FR-31", "NFR-1", "NFR-4"]
+      "path": "/api/events",
+      "description": "Create an event and replace its audiences in one transaction. Applies the FR-5 isNoSchool default, the admin-only field check (FR-6) and canTargetAudience per audience (FR-7). After commit: if the first occurrence starts within 30 days, notify the resolved audience minus the creator with 'event.holiday_created' (HOLIDAY/TERM_BREAK) or 'event.created', link '/calendar?event=<id>'. Auth: requireRole('ADMIN','TEACHER'). Service: createEvent.",
+      "requestSchema": { "body": "EventInput" },
+      "responseSchema": {
+        "201": { "data": "EventDTO" },
+        "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (role | ADMIN_ONLY_FIELD | AUDIENCE_NOT_ALLOWED)"]
+      },
+      "requirementIds": ["FR-4", "FR-5", "FR-6", "FR-7", "FR-14", "FR-28", "FR-33"]
     },
     {
-      "method": "POST",
-      "path": "/api/conversations/:id/read",
-      "description": "Sets the caller's lastReadAt to now, marks the caller's unread message.received notification for this conversation as read, and deletes the caller's PendingMessageEmail row for it.",
-      "auth": "participant who has not left",
-      "requestSchema": { "params": { "id": "cuid" }, "body": {} },
-      "responseSchema": { "status": 200, "body": { "data": { "lastReadAt": "string" } } },
-      "errors": ["401 UNAUTHENTICATED", "404 NOT_FOUND"],
-      "requirementIds": ["FR-14", "FR-20", "FR-28", "NFR-1"]
-    },
-    {
-      "method": "POST",
-      "path": "/api/conversations/:id/mute",
-      "description": "Mutes or unmutes the conversation for the caller only. Muted participants get no message.received notification and no email.",
-      "auth": "participant who has not left",
-      "requestSchema": { "params": { "id": "cuid" }, "body": { "muted": "boolean" } },
-      "responseSchema": { "status": 200, "body": { "data": { "muted": "boolean" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "404 NOT_FOUND"],
-      "requirementIds": ["FR-14", "FR-19", "FR-28"]
-    },
-    {
-      "method": "POST",
-      "path": "/api/conversations/:id/archive",
-      "description": "Archives or unarchives the conversation for the caller only. A new message from someone else unarchives it.",
-      "auth": "participant who has not left",
-      "requestSchema": { "params": { "id": "cuid" }, "body": { "archived": "boolean" } },
-      "responseSchema": { "status": 200, "body": { "data": { "archived": "boolean" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "404 NOT_FOUND"],
-      "requirementIds": ["FR-9", "FR-14", "FR-28"]
-    },
-    {
-      "method": "POST",
-      "path": "/api/conversations/:id/leave",
-      "description": "Sets leftAt for the caller. After that the caller is treated as a non-participant (404, and no attachment access). Leaving is refused for conversations with 2 or fewer participants, and for the creator of a conversation where involvesStudent is true.",
-      "auth": "participant who has not left",
-      "requestSchema": { "params": { "id": "cuid" }, "body": {} },
-      "responseSchema": { "status": 200, "body": { "data": { "left": true } } },
-      "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN details.reason='ONE_TO_ONE'|'CREATOR_OF_STUDENT_GROUP'", "404 NOT_FOUND"],
-      "requirementIds": ["FR-14", "FR-28", "NFR-1"]
+      "method": "GET",
+      "path": "/api/events/:id",
+      "description": "One event (series) as seen by the caller, with myRsvp, rsvpTotals and canEdit/canRsvp. Visibility uses the same audience rule as GET /api/calendar with sources=['events','holidays']. Auth: requireUser. Service: getEvent.",
+      "requestSchema": { "params": { "id": "eventId (cuid)" } },
+      "responseSchema": {
+        "200": { "data": "EventDTO" },
+        "errors": ["401 UNAUTHENTICATED", "404 NOT_FOUND"]
+      },
+      "requirementIds": ["FR-12", "FR-22", "FR-33", "NFR-7"]
     },
     {
       "method": "PATCH",
-      "path": "/api/messages/:id",
-      "description": "Edits the caller's own message within 15 minutes of sending. In one transaction it inserts a MessageRevision holding the old body, then updates body and editedAt.",
-      "auth": "sender, a participant who has not left, within 15 minutes",
-      "requestSchema": { "params": { "id": "cuid" }, "body": { "body": "string, trimmed, 1..5000" } },
-      "responseSchema": { "status": 200, "body": { "data": { "message": "MessageDTO" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN details.reason='NOT_SENDER'|'EDIT_WINDOW_EXPIRED'|'ALREADY_DELETED'", "404 NOT_FOUND"],
-      "requirementIds": ["FR-3", "FR-15", "FR-28", "NFR-3"]
+      "path": "/api/events/:id",
+      "description": "Partial update of the whole series. Every field of EventInput is optional. If audiences is present it replaces the full set, and each entry is re-checked with canTargetAudience. If allDay changes, the matching start/end fields are required. After commit: audit() when an ADMIN edits someone else's event (FR-36). If startAt, endAt, allDay or location changed and the event has an occurrence ending after now, notify 'event.updated' once to the audience minus the editor. Auth: requireUser, then creator or ADMIN. Service: updateEvent.",
+      "requestSchema": { "params": { "id": "eventId" }, "body": "Partial<EventInput> (at least one field)" },
+      "responseSchema": {
+        "200": { "data": "EventDTO" },
+        "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (NOT_CREATOR | ADMIN_ONLY_FIELD | AUDIENCE_NOT_ALLOWED)", "404 NOT_FOUND"]
+      },
+      "requirementIds": ["FR-4", "FR-6", "FR-7", "FR-8", "FR-15", "FR-29", "FR-33", "FR-36"]
     },
     {
       "method": "DELETE",
-      "path": "/api/messages/:id",
-      "description": "Soft-deletes the caller's own message within 15 minutes by setting deletedAt. No hard delete is possible. The content stays visible to safeguarding leads.",
-      "auth": "sender, a participant who has not left, within 15 minutes",
-      "requestSchema": { "params": { "id": "cuid" } },
-      "responseSchema": { "status": 200, "body": { "data": { "message": "MessageDTO (deleted:true, body:null)" } } },
-      "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN details.reason='NOT_SENDER'|'EDIT_WINDOW_EXPIRED'|'ALREADY_DELETED'", "404 NOT_FOUND"],
-      "requirementIds": ["FR-15", "FR-28", "NFR-3"]
-    },
-    {
-      "method": "POST",
-      "path": "/api/messages/:id/report",
-      "description": "Reports another participant's message. After commit, every ACTIVE safeguarding lead gets a message.reported notification (mandatory in-app plus email, without the message text) linking to /admin/safeguarding?report=<id>. The client shows the toast 'Reported — the school will review this.'",
-      "auth": "participant who has not left, not the sender",
-      "requestSchema": { "params": { "id": "cuid" }, "body": { "reason": "string, trimmed, 1..1000" } },
-      "responseSchema": { "status": 201, "body": { "data": { "reportId": "string", "status": "OPEN" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (reporting your own message)", "404 NOT_FOUND", "409 CONFLICT (an OPEN report from this user on this message already exists)"],
-      "requirementIds": ["FR-22", "FR-26", "FR-28", "NFR-1"]
+      "path": "/api/events/:id",
+      "description": "Delete an event series. Audiences and RSVPs cascade. audit() when an ADMIN deletes someone else's event. No notification. Auth: requireUser, then creator or ADMIN. Service: deleteEvent.",
+      "requestSchema": { "params": { "id": "eventId" } },
+      "responseSchema": {
+        "200": { "data": { "id": "string", "deleted": true } },
+        "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN (NOT_CREATOR)", "404 NOT_FOUND"]
+      },
+      "requirementIds": ["FR-8", "FR-33", "FR-36"]
     },
     {
       "method": "GET",
-      "path": "/api/messaging/unread-count",
-      "description": "Returns the number of conversations the caller has not left where lastMessageAt > coalesce(lastReadAt, epoch). It runs as a single $queryRaw COUNT and backs the sidebar badge, which polls every 30 s.",
-      "auth": "any authenticated user",
-      "requestSchema": {},
-      "responseSchema": { "status": 200, "body": { "data": { "count": "number" } } },
-      "errors": ["401 UNAUTHENTICATED"],
-      "requirementIds": ["FR-13", "FR-18", "FR-28", "NFR-2"]
-    },
-    {
-      "method": "GET",
-      "path": "/api/messaging/contacts",
-      "description": "Returns only the users the caller can message (canMessage), in labelled groups. Users the caller cannot message are never returned.",
-      "auth": "any authenticated user",
-      "requestSchema": { "query": { "q": "string? ≤100 (case-insensitive name match)" } },
-      "responseSchema": { "status": 200, "body": { "data": { "groups": "ContactGroup[]" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED"],
-      "requirementIds": ["FR-5", "FR-8", "FR-12", "FR-16", "FR-28", "FR-32"]
-    },
-    {
-      "method": "GET",
-      "path": "/api/me/messaging-settings",
-      "description": "Returns the caller's quiet hours. Both values are null when none are set.",
-      "auth": "any authenticated user",
-      "requestSchema": {},
-      "responseSchema": { "status": 200, "body": { "data": "MessagingSettings" } },
-      "errors": ["401 UNAUTHENTICATED"],
-      "requirementIds": ["FR-21", "FR-28"]
+      "path": "/api/events/:id/ics",
+      "description": "Single-event iCalendar download ('Add to my calendar'). Recurring events are emitted as one VEVENT with RRULE, plus a VTIMEZONE. Auth: requireUser plus the same visibility as GET /api/events/:id. Service: getEvent → buildCalendar([event]).",
+      "requestSchema": { "params": { "id": "eventId" } },
+      "responseSchema": {
+        "200": {
+          "contentType": "text/calendar; charset=utf-8",
+          "headers": { "Content-Disposition": "attachment; filename=\"<slugified-title>.ics\"" },
+          "body": "RFC 5545 VCALENDAR (CRLF, lines folded at 75 octets, TEXT escaped)"
+        },
+        "errors": ["401 UNAUTHENTICATED", "404 NOT_FOUND"]
+      },
+      "requirementIds": ["FR-12", "FR-26", "FR-33", "NFR-3", "NFR-6"]
     },
     {
       "method": "PUT",
-      "path": "/api/me/messaging-settings",
-      "description": "Upserts the caller's quiet hours as HH:mm in the school timezone. The range may wrap midnight. quietStart and quietEnd must be both set or both null (null clears them), and start must not equal end.",
-      "auth": "any authenticated user",
-      "requestSchema": { "body": { "quietStart": "string /^([01]\\d|2[0-3]):[0-5]\\d$/ | null", "quietEnd": "string /^([01]\\d|2[0-3]):[0-5]\\d$/ | null" } },
-      "responseSchema": { "status": 200, "body": { "data": "MessagingSettings" } },
-      "errors": ["400 VALIDATION_ERROR (only one value set, bad format, or start == end)", "401 UNAUTHENTICATED"],
-      "requirementIds": ["FR-20", "FR-21", "FR-28"]
+      "path": "/api/events/:id/rsvp",
+      "description": "Create or replace the caller's RSVP for the series. Checks run in this order: visible (404), rsvpEnabled (409 RSVP_DISABLED), isUserInAudience (403 NOT_IN_AUDIENCE), now < rsvpDeadline (409 RSVP_CLOSED). guests is forced to 0 for non-parents. Upsert on (eventId, userId). Auth: requireUser. Service: upsertRsvp.",
+      "requestSchema": { "params": { "id": "eventId" }, "body": "RsvpInput" },
+      "responseSchema": {
+        "200": { "data": { "myRsvp": "RsvpDTO", "rsvpTotals": "{ yes, no, maybe, guests }" } },
+        "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN (NOT_IN_AUDIENCE)", "404 NOT_FOUND", "409 CONFLICT (RSVP_DISABLED | RSVP_CLOSED)"]
+      },
+      "requirementIds": ["FR-21", "NFR-7"]
     },
     {
       "method": "GET",
-      "path": "/api/safeguarding/reports",
-      "description": "The reports queue, with OPEN reports first and then by createdAt desc. The optional status filter narrows the list.",
-      "auth": "ADMIN with isSafeguardingLead (read from the database)",
-      "requestSchema": { "query": { "status": "OPEN|REVIEWED|DISMISSED?", "page": "int?", "pageSize": "int? ≤100" } },
-      "responseSchema": { "status": 200, "body": { "data": "(ReportDTO without the context fields)[]", "meta": { "page": "number", "pageSize": "number", "total": "number" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN"],
-      "requirementIds": ["FR-23", "FR-28", "NFR-1"]
+      "path": "/api/events/:id/rsvps",
+      "description": "Full RSVP list for the creator or an ADMIN. With format=csv it streams CSV through src/server/csv.ts, with columns name, role, response, guests, note, updatedAt. Auth: requireUser, then creator or ADMIN. Service: listRsvps.",
+      "requestSchema": { "params": { "id": "eventId" }, "query": { "format": "'json' | 'csv' (default json)" } },
+      "responseSchema": {
+        "200": {
+          "json": { "data": { "items": "RsvpListItem[] sorted by user name", "totals": "{ yes, no, maybe, guests }" } },
+          "csv": { "contentType": "text/csv; charset=utf-8", "headers": { "Content-Disposition": "attachment; filename=\"rsvps-<eventId>.csv\"" } }
+        },
+        "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN (NOT_CREATOR)", "404 NOT_FOUND", "409 CONFLICT (RSVP_DISABLED)"]
+      },
+      "requirementIds": ["FR-22"]
     },
     {
       "method": "GET",
-      "path": "/api/safeguarding/reports/:id",
-      "description": "Report detail: the reported message, the 5 messages before and the 5 after it (including deleted content and revisions), and the participants. Each call writes audit('safeguarding.conversation.view', entityType 'Conversation').",
-      "auth": "ADMIN with isSafeguardingLead",
-      "requestSchema": { "params": { "id": "cuid" } },
-      "responseSchema": { "status": 200, "body": { "data": { "report": "ReportDTO", "before": "SafeguardingMessageDTO[] (≤5)", "after": "SafeguardingMessageDTO[] (≤5)", "participants": "(UserSummary & { leftAt: string|null })[]" } } },
-      "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN", "404 NOT_FOUND"],
-      "requirementIds": ["FR-23", "FR-25", "FR-28", "NFR-1", "NFR-3"]
+      "path": "/api/me/calendar-feed",
+      "description": "The caller's feed status. If the caller has no token, one is created (32 random bytes, base64url) and its hash stored, and the URL is returned once. If a token already exists, url is null, because only the hash is stored (D-6). Auth: requireUser. Service: getOrCreateFeedToken.",
+      "requestSchema": {},
+      "responseSchema": {
+        "200": { "data": "FeedStatus" },
+        "errors": ["401 UNAUTHENTICATED"]
+      },
+      "requirementIds": ["FR-24", "FR-25", "NFR-5"]
     },
     {
-      "method": "PATCH",
-      "path": "/api/safeguarding/reports/:id",
-      "description": "Marks a report reviewed or dismissed. A review requires a note; for a dismissal the note is optional. Sets status, reviewedById, reviewedAt and reviewNote, and writes audit('safeguarding.report.review' or 'safeguarding.report.dismiss').",
-      "auth": "ADMIN with isSafeguardingLead",
-      "requestSchema": { "params": { "id": "cuid" }, "body": { "action": "'review'|'dismiss'", "note": "string? ≤1000 (required when action is 'review')" } },
-      "responseSchema": { "status": 200, "body": { "data": { "report": "ReportDTO" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN", "404 NOT_FOUND", "409 CONFLICT (report is no longer OPEN)"],
-      "requirementIds": ["FR-23", "FR-28", "NFR-11"]
-    },
-    {
-      "method": "GET",
-      "path": "/api/safeguarding/conversations",
-      "description": "Searches conversations where involvesStudent is true. Filters: a participant, and a createdAt or lastMessageAt range. Ordered by lastMessageAt desc.",
-      "auth": "ADMIN with isSafeguardingLead",
-      "requestSchema": { "query": { "participantId": "cuid?", "from": "ISO date?", "to": "ISO date?", "page": "int?", "pageSize": "int? ≤100" } },
-      "responseSchema": { "status": 200, "body": { "data": "{ id, subject, participants: UserSummary[], createdAt, lastMessageAt, messageCount, openReportCount }[]", "meta": { "page": "number", "pageSize": "number", "total": "number" } } },
-      "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED", "403 FORBIDDEN"],
-      "requirementIds": ["FR-24", "FR-28", "FR-30", "NFR-1"]
+      "method": "POST",
+      "path": "/api/me/calendar-feed/reset",
+      "description": "Replace the caller's token (upsert a new hash). The old URL returns 404 immediately. The new URL is returned once. The raw token is never logged. Auth: requireUser. Service: resetFeedToken.",
+      "requestSchema": { "body": "{} (empty)" },
+      "responseSchema": {
+        "200": { "data": "FeedStatus (url non-null, hasToken=true)" },
+        "errors": ["401 UNAUTHENTICATED"]
+      },
+      "requirementIds": ["FR-24", "FR-25", "NFR-5"]
     },
     {
       "method": "GET",
-      "path": "/api/safeguarding/conversations/:id",
-      "description": "Read-only view of the full thread, including deleted content (marked as deleted) and the original text of edited messages. Every call writes audit('safeguarding.conversation.view').",
-      "auth": "ADMIN with isSafeguardingLead",
-      "requestSchema": { "params": { "id": "cuid" } },
-      "responseSchema": { "status": 200, "body": { "data": { "conversation": "ConversationDetail without me/canSend/canLeave", "messages": "SafeguardingMessageDTO[] in ascending order" } } },
-      "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN", "404 NOT_FOUND (also returned when involvesStudent is false)"],
-      "requirementIds": ["FR-24", "FR-25", "FR-28", "NFR-1", "NFR-3"]
+      "path": "/api/calendar/feed/:token",
+      "description": "Private iCal subscription feed, authenticated by token. Route folder: src/app/api/calendar/feed/[token]/route.ts. The handler strips a trailing '.ics' from the param, then hashToken → CalendarFeedToken lookup → user ACTIVE → rateLimit('calfeed:'+tokenHash, 60, 3_600_000) → getCalendarItems(user, now−30d..now+365d, sources events/holidays/assignments/quizzes, series mode) → buildCalendar. Contents match what the user sees in the app. Parents get all their children's audiences and deadlines.",
+      "requestSchema": { "params": { "token": "'<base64url>.ics' or '<base64url>'" } },
+      "responseSchema": {
+        "200": {
+          "contentType": "text/calendar; charset=utf-8",
+          "headers": { "Cache-Control": "private, max-age=900" },
+          "body": "VCALENDAR with PRODID, X-WR-CALNAME 'SchoolHub', VTIMEZONE for the school tz, VEVENTs (UID '<id>@schoolhub', RRULE for series, VALUE=DATE for all-day with exclusive DTEND, URL on deadlines)"
+        },
+        "404": { "contentType": "text/plain", "body": "Not found" },
+        "429": { "body": "{ error: { code: 'RATE_LIMITED', message, details: { retryAfterMs } } }", "headers": { "Retry-After": "seconds" } }
+      },
+      "requirementIds": ["FR-26", "FR-27", "NFR-3", "NFR-5", "NFR-6"]
     },
     {
-      "method": "PATCH",
-      "path": "/api/users/:id",
-      "description": "EXISTING endpoint, extended with an optional isSafeguardingLead flag. Setting it to true on a non-ADMIN user is rejected. The change is audited in the existing user.update metadata. There is no admin form, so the API and the seed are the only way to set it (ADR-11).",
-      "auth": "ADMIN (unchanged)",
-      "requestSchema": { "params": { "id": "cuid" }, "body": { "...existing fields": "unchanged", "isSafeguardingLead": "boolean?" } },
-      "responseSchema": { "status": 200, "body": { "data": "existing user DTO + isSafeguardingLead: boolean" } },
-      "errors": ["400 VALIDATION_ERROR details.reason='SAFEGUARDING_LEAD_REQUIRES_ADMIN'", "401 UNAUTHENTICATED", "403 FORBIDDEN", "404 NOT_FOUND"],
-      "requirementIds": ["FR-2", "NFR-11"]
+      "method": "GET",
+      "path": "/api/school-day",
+      "description": "Is this date a school day, and if not, why. A new singular folder; the existing /api/school-days (PRD-06) is untouched. Auth: requireUser. Service: isSchoolDay.",
+      "requestSchema": { "query": { "date": "yyyy-MM-dd (school-tz calendar date), required" } },
+      "responseSchema": {
+        "200": { "data": "SchoolDayResult" },
+        "errors": ["400 VALIDATION_ERROR", "401 UNAUTHENTICATED"]
+      },
+      "requirementIds": ["FR-16", "FR-19", "FR-34"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/public/events",
+      "description": "Public events (isPublic=true), expanded, with public-safe fields only. This is a hook for PRD-18; no UI is added. Auth: none. rateLimit('pubcal:'+getClientIp, 120, 3_600_000). Service: getPublicEvents.",
+      "requestSchema": { "query": { "from": "ISO datetime, required", "to": "ISO datetime, required, > from, ≤ from + 100 days" } },
+      "responseSchema": {
+        "200": { "data": { "items": "PublicEventDTO[] sorted by start" } },
+        "errors": ["400 VALIDATION_ERROR", "429 RATE_LIMITED (details.retryAfterMs, Retry-After header)"]
+      },
+      "requirementIds": ["FR-30", "NFR-5", "NFR-11"]
+    },
+    {
+      "method": "POST",
+      "path": "/api/academic-years/:id/term-breaks",
+      "description": "Create an all-day TERM_BREAK event (isNoSchool=true, SCHOOL audience, title 'Term break') for each gap of at least one day between consecutive terms, from prev.endDate+1 to next.startDate (exclusive). Idempotent: a gap that already has a TERM_BREAK with the same span is skipped. Writes one audit() entry. Sends no event.created notifications. Auth: requireRole('ADMIN'). Service: createTermBreaks.",
+      "requestSchema": { "params": { "id": "academicYearId" }, "body": "{} (empty)" },
+      "responseSchema": {
+        "200": { "data": { "created": "number", "skipped": "number", "events": "EventDTO[] (created only)" } },
+        "errors": ["401 UNAUTHENTICATED", "403 FORBIDDEN", "404 NOT_FOUND (year)"]
+      },
+      "requirementIds": ["FR-20", "FR-36"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/attendance/today",
+      "description": "EXISTING route, extended. getToday adds noSchoolReason so the landing page can show 'No classes today — <reason>'. All other fields are unchanged.",
+      "requestSchema": {},
+      "responseSchema": { "200": { "data": "<existing shape> & { noSchoolReason: string|null }" } },
+      "requirementIds": ["FR-18"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/attendance/register",
+      "description": "EXISTING route, extended. The register response adds noSchoolReason for the requested date, which drives the RegisterForm warning Alert. All other fields are unchanged. This contract adds the field on top of system-design §2.4, which names only getToday/getOverview; RegisterForm needs it for the banner.",
+      "requestSchema": { "query": "<existing registerQuery>" },
+      "responseSchema": { "200": { "data": "<existing shape> & { noSchoolReason: string|null }" } },
+      "requirementIds": ["FR-18"]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/attendance/register",
+      "description": "EXISTING route, extended (D-8). registerPutBody gains an optional holidayOverride flag. If isSchoolDay(date) is false and holidayOverride !== true, the save is rejected and nothing is written.",
+      "requestSchema": { "body": "<existing registerPutBody> & { holidayOverride?: boolean (default false) }" },
+      "responseSchema": {
+        "200": { "data": "<existing shape>" },
+        "errors": ["400 VALIDATION_ERROR (details.reason='HOLIDAY_OVERRIDE_REQUIRED', details.noSchoolReason)"]
+      },
+      "requirementIds": ["FR-18", "NFR-7"]
     },
     {
       "method": "POST",
       "path": "/api/internal/email/dispatch",
-      "description": "EXISTING maintenance endpoint. Its request and response contract does not change. It also runs processPendingMessageEmails(now) in its own try/catch, processing at most 200 due rows per run. A user who has read, muted or left the conversation is dropped, a user in quiet hours is deferred to the end of quiet hours, and everyone else is sent the email with notify({inApp:false}).",
-      "auth": "CRON_SECRET (unchanged)",
+      "description": "EXISTING cron route, extended. Adds an isolated try/catch block that calls sendRsvpReminders(now). The summary gains rsvpReminders; a failure there is logged and does not fail the other blocks. Auth is unchanged.",
       "requestSchema": {},
-      "responseSchema": { "status": 200, "body": { "data": "existing summary + messageEmails: { sent: number, deferred: number, dropped: number }" } },
-      "errors": ["401 UNAUTHENTICATED"],
-      "requirementIds": ["FR-4", "FR-20"]
+      "responseSchema": { "200": { "data": "<existing summary> & { rsvpReminders: { events: number, notified: number } }" } },
+      "requirementIds": ["FR-23", "NFR-9"]
     }
   ],
 
-  "unchangedButAffected": [
-    { "path": "GET /api/files/:id", "note": "Adds registerFileAccess('message'). Participants who have not left and safeguarding leads are allowed; everyone else is denied. No contract change.", "requirementIds": ["FR-27"] },
-    { "path": "POST /api/files (upload)", "note": "Accepts context 'message' (unattached until sent). No other contract change.", "requirementIds": ["FR-11", "FR-27"] }
+  "nonHttpContracts": [
+    {
+      "name": "getUpcomingEventsForUser(user, limit = 5): Promise<CalendarItem[]>",
+      "module": "src/server/calendar/sources.ts",
+      "description": "Hook for PRD-16 dashboards: getCalendarItems(user, now..now+90d, ['events','holidays']), sorted, first `limit` items. No route or UI.",
+      "requirementIds": ["FR-31", "NFR-11"]
+    },
+    {
+      "name": "getPublicEvents(from: Date, to: Date): Promise<PublicEventDTO[]>",
+      "module": "src/server/calendar/sources.ts",
+      "description": "Shared by GET /api/public/events and PRD-18.",
+      "requirementIds": ["FR-30"]
+    },
+    {
+      "name": "isSchoolDay(date: Date | string): Promise<{ isSchoolDay: boolean, reason: string|null }>",
+      "module": "src/server/calendar/calendar-service.ts",
+      "description": "Called by timetable-service.getScheduleForDate (returns [] when false), attendance-service and GET /api/school-day.",
+      "requirementIds": ["FR-16", "FR-17", "FR-18"]
+    },
+    {
+      "name": "Notification types",
+      "module": "src/server/notifications/types.ts",
+      "description": "event.created (COMMUNICATION, defaultEmail false), event.holiday_created (COMMUNICATION, defaultEmail true), event.updated (COMMUNICATION, false) and event.rsvp_reminder (COMMUNICATION, false). Payload: { eventId, title, startAt, allDay, location }. Link: '/calendar?event=<eventId>'.",
+      "requirementIds": ["FR-23", "FR-28", "FR-29"]
+    }
   ],
 
   "status": "complete"

@@ -1,48 +1,81 @@
-# SH-13 — PRD-13 Direct Messaging: User Stories
+# SH-14 — PRD-14: School Calendar, Events & Holidays — User Stories
 
-## Data & rules
-- **FR-1, FR-2, FR-3, FR-4, FR-30, FR-31** — As the platform, I want conversations, participants, messages, attachments, reports, revisions, pending emails and quiet-hour settings stored, so that messaging is auditable and recoverable for safeguarding.
-- **FR-5, FR-32** — As the school, I want every sender→recipient pair checked against the contact matrix, so that students only reach their own teachers and never other students or parents.
-- **FR-6** — As a teacher, I want to message a student or a group of up to 25 students in my course, so that I can follow up on work, and the platform must refuse groups that break the rules.
-- **FR-7** — As the school, I want rules re-checked on every send, so that a student whose enrollment was dropped can no longer message that teacher.
-- **FR-8** — As a user, I want a grouped contact list of only the people I may message, so that I can find the right recipient quickly.
+Pipeline ticket SH-14 (PRD ref SCH-014). Run mode `--brownfield --tech-stack react`.
 
-## Inbox
-- **FR-9** — As a user, I want an inbox sorted by latest activity, with unread badges, search and an Archived tab, so that I respond promptly.
-- **FR-10** — As a user, I want a thread with day-grouped timestamps, attachments, and edited/deleted markers, so that I can follow the conversation.
-- **FR-11** — As a user, I want a composer with keyboard send, attachments and a length counter, so that I can write messages efficiently.
-- **FR-12** — As a user, I want a new-conversation dialog with a recipient picker, so that I can start private or group conversations.
-- **FR-13** — As a user, I want new messages to appear within seconds without refreshing, so that conversations feel live.
-- **FR-14** — As a user, I want to mute, archive, view participants or leave a group, so that I control my inbox.
-- **FR-15** — As a sender, I want to edit or delete my message within 15 minutes, so that I can fix mistakes.
+> **Dependency gap:** PRD-12 (AudienceType, `audience.ts`, audience builder) is not in the workspace. Stories that depend on it (FR-3, FR-7, FR-14) carry LOW/MEDIUM confidence. See `requirements.json` › `clarificationLog`.
 
-## Entry points
-- **FR-16** — As a parent, I want "Message teacher" on my child's page, so that I can contact their teacher in under 30 seconds. As a teacher, I want "Message parents", so that both guardians receive the same information.
-- **FR-17** — As a teacher, I want "Message selected students" on the course roster, so that I can message a group from the course.
-- **FR-18** — As a user, I want a "Messages" sidebar entry with an unread count, so that I notice new messages.
+## Setup & data
 
-## Notifications & quiet hours
-- **FR-19** — As a user, I want one in-app notification per conversation, so that my notifications don't pile up.
-- **FR-20, FR-4** — As a user, I want an email only if I haven't read a message within 10 minutes, so that I'm not spammed.
-- **FR-21** — As a teacher, I want quiet hours, so that I am not emailed about messages in the evening.
+- **FR-1:** As a developer, I want `@mui/x-scheduler` installed at an exact version I looked up through the MUI MCP, so that the calendar UI uses a documented, pinned beta API.
+- **FR-2 / FR-4 / FR-5:** As the platform, I want CalendarEvent, EventAudience, EventRsvp and CalendarFeedToken stored with validated fields (title ≤ 150, description ≤ 5,000, end ≥ start, all-day exclusive end, recurrence until ≤ 1 year, guests 0–5, HOLIDAY/TERM_BREAK no-school by default), so that every feature reads consistent data.
+- **FR-3 (LOW):** As the platform, I want event audiences to use the shared AudienceType, so that events and announcements target people in the same way.
 
-## Reporting & safeguarding
-- **FR-22** — As a user, I want to report an inappropriate message, so that the school can act.
-- **FR-23, FR-26** — As a safeguarding admin, I want to be notified of reports and work through a queue with surrounding context, so that students are protected.
-- **FR-24, FR-3, FR-25** — As a safeguarding admin, I want to review any conversation involving a student, including original edited and deleted content, with every view audited, so that review is thorough and accountable.
-- **FR-27** — As a participant or safeguarding lead, I want access to message attachments, so that I see what was shared, and nobody else can.
-- **FR-28** — As a client developer, I want a consistent REST API, so that the UI and tests can use messaging.
-- **FR-29** — As a developer/tester, I want seeded conversations and a reported message, so that I can demo and test the feature.
+## Permissions
+
+- **FR-6:** As an admin, I want to create any event, including holidays, term breaks, no-school days and public events, so that I control the school calendar.
+- **FR-7 (MEDIUM):** As a teacher, I want to create events for courses I manage or my homeroom section, so that my students and their parents see them. I must be refused (403) for SCHOOL-wide events.
+- **FR-8 / FR-36:** As a creator, I want to edit or delete my own events (admins can edit or delete any event, with an audit entry), so that mistakes can be fixed.
+
+## Calendar page (`/calendar`)
+
+- **FR-9:** As any user, I want month, week (07:00–19:00) and agenda views, with Today/previous/next and a date picker, so that I can browse at the right detail on desktop and mobile.
+- **FR-10:** As any user, I want toggleable source chips (School events, My assignments, My quizzes, My timetable, Holidays) that are remembered, so that I see only what I care about.
+- **FR-11:** As a parent, I want to filter by child and see deadlines labelled with each child's name, so that I know whose deadline it is.
+- **FR-12:** As any user, I want to click an event and see its details in a side drawer, with RSVP and "Add to my calendar", so that I can act on it.
+- **FR-13:** As a student or parent, I want clicking a deadline to open the assignment or quiz, so that I can go straight to the work.
+- **FR-14 (MEDIUM):** As an admin or teacher, I want a "New event" dialog with an audience builder, recurrence and RSVP options, so that I can create events for a chosen audience.
+- **FR-35 (MEDIUM):** As any user, I want Calendar in the sidebar, so that I can find it.
+
+## Recurrence
+
+- **FR-15:** As an organiser, I want weekly or monthly events stored once and shown on every occurrence until an end date, so that I don't create them one by one.
+
+## Holidays integration
+
+- **FR-16 / FR-34:** As the platform, I want `isSchoolDay(date)` and `GET /api/school-day`, so that every feature agrees on which days are holidays.
+- **FR-17:** As a student, I want my Today view to show "Holiday: Thanksgiving" instead of classes, so that I know school is closed.
+- **FR-18:** As a teacher, I want the register to say "No classes today — Thanksgiving" and to ask for extra confirmation before I record attendance on a holiday, so that I avoid mistakes.
+- **FR-19:** As a teacher, I want a non-blocking warning when an assignment due date or quiz close date falls on a holiday, so that I avoid mistakes but can still save.
+- **FR-20 (MEDIUM):** As an admin, I want "Add term breaks" on the academic year to create TERM_BREAK events for the gaps between terms, so that I don't enter them by hand.
+
+## RSVP
+
+- **FR-21:** As a parent, I want to RSVP Yes, No or Maybe with guests and a note before the deadline, so that the school can plan. After the deadline the controls are disabled.
+- **FR-22:** As an event creator or admin, I want to see all responses and export them as CSV, so that I can plan numbers.
+- **FR-23:** As an audience member who hasn't answered, I want one reminder 48 hours before the RSVP deadline, so that I don't forget.
+
+## iCal subscription
+
+- **FR-24 / FR-25:** As a parent, I want a private subscribe link on `/account/calendar` that I can copy, with setup instructions and a "Reset link" option, so that I can sync my phone calendar and revoke a leaked link.
+- **FR-26:** As a subscriber, I want the feed to include my school events and my children's deadlines (−30 to +365 days), with recurrence and the correct timezone, so that my phone calendar matches SchoolHub.
+- **FR-27:** As the school, I want the feed to be token-authenticated, rate limited (60 per hour) and privately cached, so that it can't be abused.
+
+## Notifications
+
+- **FR-28:** As an audience member, I want to be notified when an event starting within 30 days is created (holidays and term breaks also by email), so that I hear about it in time.
+- **FR-29:** As an audience member, I want to be notified when the time or location of an upcoming event changes, so that I don't turn up at the wrong time.
+
+## Hooks for later PRDs
+
+- **FR-30:** As the public website (PRD-18), I want `getPublicEvents` and `GET /api/public/events`, so that I can show public events.
+- **FR-31:** As dashboards (PRD-16), I want `getUpcomingEventsForUser`, so that I can list upcoming events.
+- **FR-32 / FR-33:** As a client, I want the calendar merge API (range ≤ 100 days) and the event CRUD, ICS, RSVP and RSVP-list endpoints, so that the UI and integrations work.
+
+## Seed
+
+- **FR-37:** As a demo user, I want the 2026–27 seed events (Thanksgiving, Winter break, exams, parent evening, science fair, chess club, sports day), so that the calendar is populated.
 
 ## Non-Functional Requirements
-- **NFR-1 Security** — participation, role and safeguarding-lead checks run on the server for every endpoint. Cuids are not authorisation.
-- **NFR-2 Performance** — polling responses take under 100 ms, use the index, and return empty arrays when nothing changed.
-- **NFR-3 Retention** — no hard deletes by users. Soft-deleted content and revisions are kept.
-- **NFR-4 Rate limit** — 30 messages/min/user, with 429 beyond that.
-- **NFR-5 UI component rule** — MUI only, every component looked up through mui-mcp, no banned libraries. QA verifies this.
-- **NFR-6 Conventions** — Zod validators, thin handlers, services under `src/server/messaging/`, standard response shapes, UTC storage with school-timezone display, logger.
-- **NFR-7 Responsive** — single pane with back navigation below 768 px.
-- **NFR-8 Near-real-time** — a message shows in another browser within 6 s via polling. No websockets.
-- **NFR-9 Scope guard** — no calls, typing indicators, reactions, E2E encryption, websockets or broadcast.
-- **NFR-10 Tests** — contact-matrix unit tests, integration tests (collapsing, quiet hours, revisions), Playwright round trip and student block. The existing suite stays green.
-- **NFR-11 Audit** — safeguarding mutations write AuditLog rows.
+
+- **NFR-1:** MUI-only UI, with no banned libraries. QA checks the imports.
+- **NFR-2:** Look up every MUI and MUI X Scheduler component through the MUI MCP before using it. If the MCP is unreachable, report a blocker.
+- **NFR-3:** All-day events and DST transitions show on the correct dates in both the UI and the feed, with tests for a DST-change week.
+- **NFR-4:** A parent's month view with 3 children loads in under 500 ms.
+- **NFR-5:** Feed tokens are 32 random bytes, stored hashed. The feed shows no more than the app does.
+- **NFR-6:** The feed passes an RFC 5545 validator test (`node-ical`).
+- **NFR-7:** Access is enforced server-side everywhere.
+- **NFR-8:** Follow the platform conventions (layout, response shapes, UTC storage, school timezone display, logger).
+- **NFR-9:** Reuse existing helpers. Don't re-scaffold or rename anything.
+- **NFR-10:** Lint, typecheck and tests stay green, and the new unit, integration and Playwright tests are added.
+- **NFR-11:** Scope is fixed: no room booking, no occurrence exceptions, no two-way sync.
+- **NFR-12:** Supports evergreen browsers, English-only UI, and a 768 px responsive breakpoint.

@@ -1,189 +1,199 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T23:10:00Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-10T00:30:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "modules": [
     {
-      "name": "prisma",
+      "name": "src/lib/dates.ts",
       "dependsOn": []
     },
     {
-      "name": "src/lib/messaging",
+      "name": "src/lib/validators/calendar.ts",
       "dependsOn": []
     },
     {
-      "name": "src/lib/validators",
-      "dependsOn": []
-    },
-    {
-      "name": "src/server/notifications",
+      "name": "src/server/announcements",
       "dependsOn": [
-        "prisma"
+        "prisma",
+        "src/server/courses",
+        "src/server/db.ts"
       ]
     },
     {
-      "name": "src/server/files",
+      "name": "src/server/calendar/recurrence.ts",
       "dependsOn": [
-        "prisma",
-        "src/server/messaging"
+        "src/lib/dates.ts"
       ]
     },
     {
-      "name": "src/server/messaging",
+      "name": "src/server/calendar/ical.ts",
+      "dependsOn": [
+        "src/server/calendar/recurrence.ts",
+        "src/lib/dates.ts"
+      ]
+    },
+    {
+      "name": "src/server/calendar/calendar-service.ts",
       "dependsOn": [
         "prisma",
-        "src/lib/validators",
-        "src/lib/messaging",
-        "src/server/notifications",
-        "src/server/auth",
-        "src/server/http.ts",
-        "src/server/rate-limit.ts",
-        "src/server/audit.ts",
         "src/lib/dates.ts",
-        "src/lib/logger.ts"
+        "src/lib/validators/calendar.ts",
+        "src/server/calendar/recurrence.ts",
+        "src/server/announcements",
+        "src/server/notifications",
+        "src/server/audit.ts",
+        "src/server/auth/tokens.ts",
+        "src/server/assignments (getSchoolTimezone)"
       ]
     },
     {
-      "name": "src/server/services",
+      "name": "src/server/calendar/sources.ts",
       "dependsOn": [
-        "prisma",
-        "src/lib/validators",
-        "src/server/audit.ts"
+        "src/server/calendar/calendar-service.ts",
+        "src/server/calendar/recurrence.ts",
+        "src/server/announcements",
+        "src/server/timetable",
+        "src/server/assignments",
+        "src/server/quiz"
       ]
     },
     {
-      "name": "src/app/api/conversations",
+      "name": "src/server/calendar/maintenance.ts",
       "dependsOn": [
-        "src/server/messaging",
-        "src/lib/validators",
-        "src/server/http.ts",
-        "src/server/auth"
+        "src/server/calendar/calendar-service.ts",
+        "src/server/announcements",
+        "src/server/notifications"
       ]
     },
     {
-      "name": "src/app/api/messages",
+      "name": "src/server/timetable",
       "dependsOn": [
-        "src/server/messaging",
-        "src/lib/validators",
-        "src/server/http.ts",
-        "src/server/auth"
+        "src/server/calendar/calendar-service.ts"
       ]
     },
     {
-      "name": "src/app/api/messaging",
+      "name": "src/server/attendance",
       "dependsOn": [
-        "src/server/messaging",
-        "src/lib/validators",
-        "src/server/http.ts",
-        "src/server/auth"
+        "src/server/timetable",
+        "src/server/calendar/calendar-service.ts"
       ]
     },
     {
-      "name": "src/app/api/me/messaging-settings",
+      "name": "src/app/api/events",
       "dependsOn": [
-        "src/server/messaging",
-        "src/lib/validators",
-        "src/server/http.ts",
-        "src/server/auth"
-      ]
-    },
-    {
-      "name": "src/app/api/safeguarding",
-      "dependsOn": [
-        "src/server/messaging",
-        "src/lib/validators",
+        "src/server/calendar/calendar-service.ts",
+        "src/server/calendar/ical.ts",
+        "src/server/csv.ts",
+        "src/lib/validators/calendar.ts",
         "src/server/http.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/calendar",
+      "dependsOn": [
+        "src/server/calendar/sources.ts",
+        "src/server/calendar/calendar-service.ts",
+        "src/server/calendar/ical.ts",
+        "src/server/rate-limit.ts",
+        "src/lib/validators/calendar.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/me/calendar-feed",
+      "dependsOn": [
+        "src/server/calendar/calendar-service.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/public/events",
+      "dependsOn": [
+        "src/server/calendar/sources.ts",
+        "src/server/rate-limit.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/school-day",
+      "dependsOn": [
+        "src/server/calendar/calendar-service.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/academic-years/[id]/term-breaks",
+      "dependsOn": [
+        "src/server/calendar/calendar-service.ts"
       ]
     },
     {
       "name": "src/app/api/internal/email/dispatch",
       "dependsOn": [
-        "src/server/messaging"
+        "src/server/calendar/maintenance.ts"
       ]
     },
     {
-      "name": "src/components/messaging",
+      "name": "src/components/AudienceBuilder",
       "dependsOn": [
-        "src/lib/messaging",
-        "src/lib/dates.ts",
-        "src/components/UserAvatar",
-        "src/components/FileUpload",
-        "src/components/FileList",
+        "src/lib/validators/calendar.ts"
+      ]
+    },
+    {
+      "name": "src/app/(app)/calendar",
+      "dependsOn": [
+        "@mui/x-scheduler",
+        "src/components/AudienceBuilder",
+        "src/components/MarkdownView",
+        "src/components/MarkdownEditor",
         "src/components/ConfirmDialog",
+        "src/components/DataTable",
         "src/components/Toast",
-        "src/components/EmptyState",
-        "src/components/DataTable"
+        "src/lib/validators/calendar.ts",
+        "src/lib/dates.ts"
       ]
     },
     {
-      "name": "src/config/navigation.ts",
-      "dependsOn": []
-    },
-    {
-      "name": "src/app/(app)/messages",
+      "name": "src/app/(app)/account/calendar",
       "dependsOn": [
-        "src/components/messaging",
-        "src/server/auth"
+        "src/components/ConfirmDialog",
+        "src/components/Toast"
       ]
     },
     {
-      "name": "src/app/(app)/admin/safeguarding",
+      "name": "src/app/(app)/admin/academic-years/[id]",
       "dependsOn": [
-        "src/components/messaging",
-        "src/server/messaging",
-        "src/components/PageHeader"
+        "src/components/ConfirmDialog",
+        "src/components/Toast"
       ]
     },
     {
-      "name": "src/app/(app)/students/[id]",
+      "name": "src/app/(app)/attendance/take",
       "dependsOn": [
-        "src/components/messaging",
-        "src/server/auth",
+        "src/server/attendance",
+        "src/components/ConfirmDialog"
+      ]
+    },
+    {
+      "name": "src/app/(app)/courses/[courseId] (AssignmentForm, QuizSettingsPanel)",
+      "dependsOn": [
+        "src/app/api/school-day"
+      ]
+    },
+    {
+      "name": "prisma/seed.ts",
+      "dependsOn": [
         "prisma"
       ]
+    }
+  ],
+  "forbiddenEdges": [
+    {
+      "from": "src/server/calendar/calendar-service.ts",
+      "to": "src/server/timetable",
+      "reason": "R2 import cycle"
     },
     {
-      "name": "src/app/(app)/courses/[courseId]/roster",
-      "dependsOn": [
-        "src/components/messaging"
-      ]
-    },
-    {
-      "name": "src/app/(app)/account/notifications",
-      "dependsOn": [
-        "src/components/messaging"
-      ]
-    },
-    {
-      "name": "src/app/(app) (layout.tsx, shell.tsx)",
-      "dependsOn": [
-        "src/config/navigation.ts",
-        "src/components/messaging"
-      ]
-    },
-    {
-      "name": "tests/unit/messaging",
-      "dependsOn": [
-        "src/server/messaging"
-      ]
-    },
-    {
-      "name": "tests/integration/messaging",
-      "dependsOn": [
-        "src/server/messaging",
-        "src/app/api/conversations",
-        "src/app/api/messages",
-        "src/app/api/safeguarding",
-        "prisma"
-      ]
-    },
-    {
-      "name": "tests/e2e",
-      "dependsOn": [
-        "src/app/(app)/messages",
-        "prisma/seed.ts"
-      ]
+      "from": "src/server/calendar/calendar-service.ts",
+      "to": "src/server/calendar/sources.ts",
+      "reason": "R2 import cycle"
     }
   ]
 }

@@ -1,604 +1,661 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T23:10:00Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-10T00:30:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "tasks": [
     {
       "id": "TASK-1",
-      "description": "Prisma: add ReportStatus enum, Conversation, ConversationParticipant, Message, MessageAttachment, MessageRevision, MessageReport, MessagingSettings, PendingMessageEmail, User.isSafeguardingLead and all back-relations (User, FileObject) with the indexes in system-design §2; write migration 20261112000000_add_direct_messaging and run prisma generate",
+      "description": "Install @mui/x-scheduler@9.0.0-beta.15 (--save-exact) with nested override {\"@mui/x-scheduler\": {\"@mui/x-internals\": \"9.17.0\"}} (fall back to global 9.17.0 if npm ignores nesting; verify with npm ls @mui/x-internals), node-ical@0.27.6 as exact devDependency, and add `import type {} from '@mui/x-scheduler/theme-augmentation'` beside the theme. Nothing else is added.",
       "files": [
-        "prisma/schema.prisma",
-        "prisma/migrations/20261112000000_add_direct_messaging/migration.sql"
+        "package.json",
+        "package-lock.json",
+        "src/theme/theme.ts"
       ],
       "dependencies": [],
-      "estimateHours": 3,
+      "estimateHours": 1,
       "requirementIds": [
         "FR-1",
-        "FR-2",
-        "FR-3",
-        "FR-4",
-        "FR-30",
-        "FR-31",
-        "NFR-2",
-        "NFR-3",
+        "NFR-1",
         "NFR-6"
       ]
     },
     {
       "id": "TASK-2",
-      "description": "Shared limits (BODY_MAX, COUNTER_FROM, MAX_FILES, MAX_PARTICIPANTS, EDIT_WINDOW_MS, THREAD_POLL_MS, LIST_POLL_MS, PAGE_SIZE) and all Zod schemas from system-design §3.2, mirroring api-contracts.json components",
+      "description": "Prisma: add enums AudienceType (PRD-12 values), EventCategory, Recurrence, RsvpResponse and models CalendarEvent (incl. rsvpReminderSentAt D-1), EventAudience (D-2 indexes), EventRsvp (@@id[eventId,userId]), CalendarFeedToken, User back-relations with cascades (D-4); generate migration 20261113000000_add_calendar.",
       "files": [
-        "src/lib/messaging/constants.ts",
-        "src/lib/validators/messaging.ts"
+        "prisma/schema.prisma",
+        "prisma/migrations/20261113000000_add_calendar/migration.sql"
       ],
       "dependencies": [],
-      "estimateHours": 2,
+      "estimateHours": 1.5,
       "requirementIds": [
-        "FR-11",
-        "FR-13",
-        "FR-15",
-        "FR-28",
-        "NFR-6"
+        "FR-2",
+        "FR-3",
+        "NFR-8"
       ]
     },
     {
       "id": "TASK-3",
-      "description": "Contact rules: pure canMessageWith + loadRelations batch loader (teacherId OR coTeacherIds, ACTIVE enrollments, current-year homeroom, ParentStudentLink, ACTIVE recipients), canMessage, messageableIds, validateNewConversation (2..25, student group needs staff), canSendIn (A4 rule); table-driven unit test over full role×role matrix",
+      "description": "Add schoolMidnight(dateStr, tz) and schoolDateOf(instant, tz) to src/lib/dates.ts; create client-safe Zod validators mirroring api-contracts components (EventInput, EventPatch, RsvpInput, AudienceInput 1..20, calendarQuery ≤100 days + sources subset, schoolDayQuery, publicEventsQuery). Unit tests incl. DST-week all-day conversion.",
       "files": [
-        "src/server/messaging/contact-rules.ts",
-        "tests/unit/messaging/contact-rules.test.ts"
+        "src/lib/dates.ts",
+        "src/lib/validators/calendar.ts",
+        "tests/unit/dates.test.ts",
+        "tests/unit/calendar/validators.test.ts"
       ],
-      "dependencies": [
-        "TASK-1",
-        "TASK-2"
-      ],
-      "estimateHours": 4,
+      "dependencies": [],
+      "estimateHours": 2.5,
       "requirementIds": [
-        "FR-5",
-        "FR-6",
-        "FR-7",
+        "FR-4",
         "FR-32",
-        "NFR-1",
+        "NFR-3",
+        "NFR-8",
         "NFR-10"
       ]
     },
     {
       "id": "TASK-4",
-      "description": "Access helpers: getParticipation (404 when missing or leftAt set), requireSafeguardingLead (ADMIN + DB-read flag, 403), requirePageSafeguardingLead (redirect /forbidden)",
+      "description": "Pure expandOccurrences(event, from, to, tz): wall-clock WEEKLY (+7d) / MONTHLY (same day, skip short months), until inclusive, occurrence id `${eventId}:${startISO}`. Unit tests: weekly, monthly on 31st, until bound, DST week.",
       "files": [
-        "src/server/messaging/access.ts"
+        "src/server/calendar/recurrence.ts",
+        "tests/unit/calendar/recurrence.test.ts"
       ],
       "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
-        "NFR-1",
-        "FR-23",
-        "FR-24"
-      ]
-    },
-    {
-      "id": "TASK-5",
-      "description": "Notification plumbing: register message.received and message.reported types (COMMUNICATION); add optional NotifyInput.inApp (default true) to notify() — existing callers unchanged",
-      "files": [
-        "src/server/notifications/types.ts",
-        "src/server/notifications/notify.ts"
-      ],
-      "dependencies": [],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-19",
-        "FR-20",
-        "FR-26"
-      ]
-    },
-    {
-      "id": "TASK-6",
-      "description": "Quiet hours: pure isInQuietHours (wraps midnight) and quietHoursEnd (fromZonedTime), getSettings/putSettings (both-or-neither, start≠end); unit test incl. DST and edge minutes",
-      "files": [
-        "src/server/messaging/quiet-hours.ts",
-        "tests/unit/messaging/quiet-hours.test.ts"
-      ],
-      "dependencies": [
-        "TASK-1",
-        "TASK-2"
+        "TASK-3"
       ],
       "estimateHours": 2,
       "requirementIds": [
-        "FR-20",
-        "FR-21",
+        "FR-15",
+        "NFR-3",
         "NFR-10"
       ]
     },
     {
-      "id": "TASK-7",
-      "description": "Messaging notifications + deferred email: conversationLink, onMessageSent (collapse unread message.received, in-app notify, create-only PendingMessageEmail upsert, skip muted/left), onMessageReported; processPendingMessageEmails (claim-by-delete, read/muted/left drop, quiet-hours re-defer, notify inApp:false, ≤200/run); hook into dispatch route in its own try/catch with messageEmails summary",
+      "id": "TASK-5",
+      "description": "Pure iCal builder: escapeText, foldLine (75 octets, CRLF), vtimezone, vevent (VALUE=DATE exclusive end for all-day, UTC Z for one-off, TZID+RRULE for series, zero-duration deadline with URL), buildCalendar. Unit tests parse output with node-ical.",
       "files": [
-        "src/server/messaging/notifications.ts",
-        "src/server/messaging/email.ts",
-        "src/app/api/internal/email/dispatch/route.ts"
+        "src/server/calendar/ical.ts",
+        "tests/unit/calendar/ical.test.ts"
       ],
       "dependencies": [
         "TASK-1",
-        "TASK-5",
-        "TASK-6"
+        "TASK-4"
       ],
       "estimateHours": 3,
       "requirementIds": [
-        "FR-4",
-        "FR-19",
-        "FR-20",
-        "FR-26"
+        "FR-26",
+        "NFR-3",
+        "NFR-6",
+        "NFR-10"
+      ]
+    },
+    {
+      "id": "TASK-6",
+      "description": "Audience resolver at the PRD-12 path: resolveAudienceUserIds, isUserInAudience, audienceWhereForUser (keys precomputed once, OR filter in SQL), canTargetAudience (ADMIN any; TEACHER COURSE via assertCanManageCourse or homeroom SECTION). Unit test for canTargetAudience.",
+      "files": [
+        "src/server/announcements/audience.ts",
+        "tests/unit/calendar/audience.test.ts"
+      ],
+      "dependencies": [
+        "TASK-2"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-3",
+        "FR-7",
+        "NFR-4",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-7",
+      "description": "Register notification types event.created (defaultEmail false), event.holiday_created (true), event.updated (false), event.rsvp_reminder (false); COMMUNICATION, all roles.",
+      "files": [
+        "src/server/notifications/types.ts"
+      ],
+      "dependencies": [],
+      "estimateHours": 0.5,
+      "requirementIds": [
+        "FR-23",
+        "FR-28",
+        "FR-29"
       ]
     },
     {
       "id": "TASK-8",
-      "description": "Message service: listMessages keyset (before | after+since → {messages, changed}, deleted redaction), sendMessage + exported send-transaction helper (rate limit, participation, canSendIn, attachment ownership ≤5, link files, bump lastMessageAt, sender lastReadAt, unarchive others, after-commit onMessageSent), editMessage (MessageRevision in tx) and soft deleteMessage within 15 min",
+      "description": "calendar-service: getEvent/createEvent/updateEvent/deleteEvent (admin-only fields, canTargetAudience, creator/ADMIN guard, isNoSchool default, all-day conversion, $transaction, audit on admin edits of others' events, event.created/holiday_created/updated notify), upsertRsvp/listRsvps, isSchoolDay, noSchoolDays, createTermBreaks (idempotent, audited, no notify), getOrCreateFeedToken/resetFeedToken/findUserByFeedToken (randomBytes(32) + hashToken). Must NOT import timetable-service.",
       "files": [
-        "src/server/messaging/messages.ts"
+        "src/server/calendar/calendar-service.ts"
       ],
       "dependencies": [
         "TASK-2",
         "TASK-3",
         "TASK-4",
+        "TASK-6",
         "TASK-7"
       ],
-      "estimateHours": 4,
+      "estimateHours": 6,
       "requirementIds": [
-        "FR-3",
+        "FR-5",
+        "FR-6",
         "FR-7",
-        "FR-10",
-        "FR-11",
-        "FR-13",
-        "FR-15",
-        "FR-27",
-        "FR-31",
-        "NFR-2",
-        "NFR-3",
-        "NFR-4"
+        "FR-8",
+        "FR-16",
+        "FR-20",
+        "FR-21",
+        "FR-22",
+        "FR-25",
+        "FR-28",
+        "FR-29",
+        "FR-36",
+        "NFR-5",
+        "NFR-7"
       ]
     },
     {
       "id": "TASK-9",
-      "description": "Conversation service: listConversations (lastMessageAt desc, preview, LATERAL unread count ≤99, archived/q filters), createConversation (validateNewConversation, involvesStudent, first message via send helper), getConversation (canSend/canLeave), markRead (also marks notification read + deletes PendingMessageEmail), setMuted, setArchived, leave (ONE_TO_ONE / CREATOR_OF_STUDENT_GROUP refusals), unreadCount raw COUNT",
+      "description": "sources.ts: getCalendarItems(user, range, sources, studentId?, {series}) merging events (audience-filtered, expanded or series mode), holidays, assignments, quizzes, timetable (week only, skipping noSchoolDays) in parallel, with childName prefix for parents; getPublicEvents (public-safe fields); getUpcomingEventsForUser (now..+90d, events+holidays).",
       "files": [
-        "src/server/messaging/conversations.ts"
+        "src/server/calendar/sources.ts"
       ],
       "dependencies": [
         "TASK-8"
       ],
       "estimateHours": 4,
       "requirementIds": [
-        "FR-6",
-        "FR-9",
-        "FR-12",
-        "FR-14",
-        "FR-18",
+        "FR-10",
+        "FR-11",
+        "FR-13",
+        "FR-15",
+        "FR-26",
         "FR-30",
         "FR-31",
-        "NFR-2"
+        "FR-32",
+        "NFR-4",
+        "NFR-5",
+        "NFR-11"
       ]
     },
     {
       "id": "TASK-10",
-      "description": "Register 'message' file-access context: participant not left, or ADMIN safeguarding lead (DB read); deny on error",
+      "description": "sendRsvpReminders(now): events with rsvpDeadline in (now, now+48h] and rsvpReminderSentAt null, claim via conditional updateMany, notify audience minus responders. Hook into dispatch cron in an isolated try/catch; summary gains rsvpReminders {events, notified}.",
       "files": [
-        "src/server/files/contexts.ts"
+        "src/server/calendar/maintenance.ts",
+        "src/app/api/internal/email/dispatch/route.ts"
       ],
       "dependencies": [
-        "TASK-1"
+        "TASK-8"
       ],
-      "estimateHours": 1,
+      "estimateHours": 1.5,
       "requirementIds": [
-        "FR-27",
-        "NFR-1"
+        "FR-23",
+        "NFR-9"
       ]
     },
     {
       "id": "TASK-11",
-      "description": "Contacts service: listContacts(user, q) builds labelled groups (My teachers, My child's teachers (<child>), Students in <course>, Parents of students in <course>, Homeroom <section>, Staff, School office) from contact-rules relation queries, q filter, cap 50/group",
+      "description": "Replace both inline weekday checks at the 'PRD-14 holidays hook' lines in getScheduleForDate/getSchoolScheduleForDate with `if (!(await isSchoolDay(date)).isSchoolDay) return [];` (delete old check; return type unchanged).",
       "files": [
-        "src/server/messaging/contacts.ts"
+        "src/server/timetable/timetable-service.ts"
       ],
       "dependencies": [
-        "TASK-3"
+        "TASK-8"
       ],
-      "estimateHours": 2,
+      "estimateHours": 0.5,
       "requirementIds": [
-        "FR-8"
+        "FR-16",
+        "FR-17",
+        "NFR-9"
       ]
     },
     {
       "id": "TASK-12",
-      "description": "Reports + safeguarding services: reportMessage (participant, not sender, 409 on duplicate OPEN, after-commit onMessageReported); listReports, getReport (±5 msgs incl. deleted + revisions, audited), reviewReport (note required for review, 409 if not OPEN, audited), searchConversations (involvesStudent only), getConversationForSafeguarding (404 if !involvesStudent, audit every call)",
+      "description": "Attendance server: getToday, getOverview and getRegister add noSchoolReason; registerPutBody gains optional holidayOverride; saveRegister rejects VALIDATION_ERROR (details.reason='HOLIDAY_OVERRIDE_REQUIRED') on a no-school date without it (D-8); route passes the flag through.",
       "files": [
-        "src/server/messaging/reports.ts",
-        "src/server/messaging/safeguarding.ts"
+        "src/server/attendance/attendance-service.ts",
+        "src/lib/validators/attendance.ts",
+        "src/app/api/attendance/register/route.ts"
       ],
       "dependencies": [
-        "TASK-4",
-        "TASK-7"
+        "TASK-8"
       ],
-      "estimateHours": 4,
+      "estimateHours": 1.5,
       "requirementIds": [
-        "FR-22",
-        "FR-23",
-        "FR-24",
-        "FR-25",
-        "FR-26",
-        "NFR-1",
-        "NFR-3",
-        "NFR-11"
+        "FR-18",
+        "NFR-7"
       ]
     },
     {
       "id": "TASK-13",
-      "description": "Conversation API routes (thin withHandler → auth → parse → service): GET/POST /api/conversations, GET /api/conversations/:id, GET/POST /api/conversations/:id/messages, POST read/mute/archive/leave",
+      "description": "Attendance UI: landing shows 'No classes today — <reason>'; RegisterForm shows warning Alert when noSchoolReason is set and save goes through ConfirmDialog 'Record attendance on a holiday anyway' sending holidayOverride: true. Extend existing RegisterForm unit test.",
       "files": [
-        "src/app/api/conversations/route.ts",
-        "src/app/api/conversations/[id]/route.ts",
-        "src/app/api/conversations/[id]/messages/route.ts",
-        "src/app/api/conversations/[id]/read/route.ts",
-        "src/app/api/conversations/[id]/mute/route.ts",
-        "src/app/api/conversations/[id]/archive/route.ts",
-        "src/app/api/conversations/[id]/leave/route.ts"
+        "src/app/(app)/attendance/take/page.tsx",
+        "src/app/(app)/attendance/take/RegisterForm.tsx",
+        "tests/unit/attendance-register-form.test.tsx"
       ],
       "dependencies": [
-        "TASK-2",
-        "TASK-8",
-        "TASK-9"
+        "TASK-12"
       ],
-      "estimateHours": 3,
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-6",
-        "FR-7",
-        "FR-9",
-        "FR-10",
-        "FR-12",
-        "FR-13",
-        "FR-14",
-        "FR-28",
-        "NFR-1",
-        "NFR-4"
+        "FR-17",
+        "FR-18",
+        "NFR-1"
       ]
     },
     {
       "id": "TASK-14",
-      "description": "Message, messaging and settings API routes: PATCH/DELETE /api/messages/:id, POST /api/messages/:id/report, GET /api/messaging/unread-count, GET /api/messaging/contacts, GET/PUT /api/me/messaging-settings",
+      "description": "Thin event routes: POST /api/events; GET/PATCH/DELETE /api/events/[id] (GET adds myRsvp, totals, canEdit); GET /api/events/[id]/ics (buildCalendar single event, download); PUT /api/events/[id]/rsvp; GET /api/events/[id]/rsvps (JSON or csv.ts). 404 when not visible, 403 forbidden, 409 RSVP closed.",
       "files": [
-        "src/app/api/messages/[id]/route.ts",
-        "src/app/api/messages/[id]/report/route.ts",
-        "src/app/api/messaging/unread-count/route.ts",
-        "src/app/api/messaging/contacts/route.ts",
-        "src/app/api/me/messaging-settings/route.ts"
+        "src/app/api/events/route.ts",
+        "src/app/api/events/[id]/route.ts",
+        "src/app/api/events/[id]/ics/route.ts",
+        "src/app/api/events/[id]/rsvp/route.ts",
+        "src/app/api/events/[id]/rsvps/route.ts"
       ],
       "dependencies": [
-        "TASK-2",
-        "TASK-6",
-        "TASK-8",
-        "TASK-9",
-        "TASK-11",
-        "TASK-12"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-8",
-        "FR-15",
-        "FR-18",
-        "FR-21",
-        "FR-22",
-        "FR-28"
-      ]
-    },
-    {
-      "id": "TASK-15",
-      "description": "Safeguarding API routes: GET /api/safeguarding/reports, GET/PATCH /api/safeguarding/reports/:id, GET /api/safeguarding/conversations, GET /api/safeguarding/conversations/:id",
-      "files": [
-        "src/app/api/safeguarding/reports/route.ts",
-        "src/app/api/safeguarding/reports/[id]/route.ts",
-        "src/app/api/safeguarding/conversations/route.ts",
-        "src/app/api/safeguarding/conversations/[id]/route.ts"
-      ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-12"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-23",
-        "FR-24",
-        "FR-25",
-        "FR-28",
-        "NFR-1",
-        "NFR-11"
-      ]
-    },
-    {
-      "id": "TASK-16",
-      "description": "isSafeguardingLead on PATCH /api/users/:id: add to updateUserSchema; updateUser rejects true for non-ADMIN (400 VALIDATION_ERROR) and audits the change in user.update metadata",
-      "files": [
-        "src/lib/validators/users.ts",
-        "src/server/services/users.ts"
-      ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 1,
-      "requirementIds": [
-        "FR-2",
-        "NFR-11"
-      ]
-    },
-    {
-      "id": "TASK-17",
-      "description": "Seed: Alice Admin safeguarding lead; upsert Pat↔Sam ParentStudentLink; idempotent threads Pat↔Tom (6), Tom + 4 MATH-7A students (3), Tina↔Tom (4), student↔teacher thread with one OPEN report; logger.warn skip on missing prerequisites",
-      "files": [
-        "prisma/seed.ts"
-      ],
-      "dependencies": [
-        "TASK-1",
-        "TASK-3"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-29"
-      ]
-    },
-    {
-      "id": "TASK-18",
-      "description": "Inbox client foundation: usePolling hook (pauses on document.hidden, fires on visibilitychange), MessagesLayout (two panes, single pane + back IconButton below 768px), ConversationList (Inbox/Archived tabs, search, Badge unread, 30s poll). Look up every MUI component via mui-mcp first",
-      "files": [
-        "src/components/messaging/usePolling.ts",
-        "src/components/messaging/MessagesLayout.tsx",
-        "src/components/messaging/ConversationList.tsx"
-      ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-13"
+        "TASK-5",
+        "TASK-8"
       ],
       "estimateHours": 3,
       "requirementIds": [
-        "FR-9",
-        "FR-13",
-        "NFR-5",
+        "FR-12",
+        "FR-21",
+        "FR-22",
+        "FR-33",
         "NFR-7",
         "NFR-8"
       ]
     },
     {
-      "id": "TASK-19",
-      "description": "Thread client: MessageThread (day dividers in school tz, FileList, edited/deleted states, IntersectionObserver load-older with stable scroll, 5s after+since poll, POST /read on new visible messages, per-message edit/delete/report Menu + toast), Composer (Enter sends, Shift+Enter newline, FileUpload context 'message' ≤5, counter >4500, disabled when !canSend), ConversationMenu (mute, archive, participants Dialog, leave ConfirmDialog hidden when !canLeave)",
+      "id": "TASK-15",
+      "description": "Routes: GET /api/calendar (any user, getCalendarItems), GET /api/school-day?date= (new singular folder; /api/school-days untouched), POST /api/academic-years/[id]/term-breaks (ADMIN, createTermBreaks).",
       "files": [
-        "src/components/messaging/MessageThread.tsx",
-        "src/components/messaging/Composer.tsx",
-        "src/components/messaging/ConversationMenu.tsx"
+        "src/app/api/calendar/route.ts",
+        "src/app/api/school-day/route.ts",
+        "src/app/api/academic-years/[id]/term-breaks/route.ts"
       ],
       "dependencies": [
-        "TASK-13",
-        "TASK-14",
-        "TASK-18"
-      ],
-      "estimateHours": 5,
-      "requirementIds": [
-        "FR-7",
-        "FR-10",
-        "FR-11",
-        "FR-13",
-        "FR-14",
-        "FR-15",
-        "FR-22",
-        "NFR-5",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-20",
-      "description": "NewConversationDialog: Autocomplete multiple + groupBy over /api/messaging/contacts, subject ≤120, first message, initialRecipients and optional group restriction props; navigates to /messages/<id> on success",
-      "files": [
-        "src/components/messaging/NewConversationDialog.tsx"
-      ],
-      "dependencies": [
-        "TASK-2",
-        "TASK-13",
-        "TASK-14"
+        "TASK-9"
       ],
       "estimateHours": 2,
       "requirementIds": [
-        "FR-12",
-        "FR-16",
-        "FR-17",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-21",
-      "description": "Messages pages: server shells calling requirePageUser rendering MessagesLayout with ConversationList, MessageThread/Composer/ConversationMenu and the new-conversation button",
-      "files": [
-        "src/app/(app)/messages/layout.tsx",
-        "src/app/(app)/messages/page.tsx",
-        "src/app/(app)/messages/[conversationId]/page.tsx"
-      ],
-      "dependencies": [
-        "TASK-18",
-        "TASK-19",
-        "TASK-20"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-9",
-        "FR-10",
-        "NFR-1",
+        "FR-20",
+        "FR-32",
+        "FR-34",
         "NFR-7"
       ]
     },
     {
-      "id": "TASK-22",
-      "description": "Navigation + unread badge: NavItem.badge/requires, Messages (all roles, badge 'messages') and Safeguarding (ADMIN, requires safeguardingLead) items, navigationForRole(role, flags); (app)/layout.tsx reads isSafeguardingLead and passes to shell; shell renders MessagesNavBadge (30s poll of unread-count)",
+      "id": "TASK-16",
+      "description": "Token/public routes: GET /api/me/calendar-feed, POST /api/me/calendar-feed/reset (D-6), GET /api/calendar/feed/[token] (strip .ics, hashed lookup, rateLimit 60/h → 429 + Retry-After, text/calendar, Cache-Control private max-age=900, unknown → plain 404), GET /api/public/events (IP rateLimit 120/h, ≤100 days, D-9). Add '/api/calendar/feed/' and '/api/public/' to PUBLIC_API_PATHS and extend its unit test.",
       "files": [
-        "src/config/navigation.ts",
-        "src/app/(app)/layout.tsx",
-        "src/app/(app)/shell.tsx",
-        "src/components/messaging/MessagesNavBadge.tsx"
+        "src/app/api/me/calendar-feed/route.ts",
+        "src/app/api/me/calendar-feed/reset/route.ts",
+        "src/app/api/calendar/feed/[token]/route.ts",
+        "src/app/api/public/events/route.ts",
+        "src/config/public-routes.ts",
+        "tests/unit/public-routes.test.ts"
+      ],
+      "dependencies": [
+        "TASK-5",
+        "TASK-9"
+      ],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "FR-24",
+        "FR-25",
+        "FR-26",
+        "FR-27",
+        "FR-30",
+        "NFR-5",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-17",
+      "description": "Shared AudienceBuilder (PRD-12 adopts as-is): rows of type Select + entity Autocomplete (grade level/section/course/role via existing APIs) + three include Checkboxes; client-side type filter mirrors canTargetAudience. MUI only.",
+      "files": [
+        "src/components/AudienceBuilder/AudienceBuilder.tsx"
+      ],
+      "dependencies": [
+        "TASK-3"
+      ],
+      "estimateHours": 2.5,
+      "requirementIds": [
+        "FR-3",
+        "FR-7",
+        "FR-14",
+        "NFR-1"
+      ]
+    },
+    {
+      "id": "TASK-18",
+      "description": "EventEditorDialog: RHF + eventInputSchema; title, category (HOLIDAY/TERM_BREAK admin-only), all-day switch, @mui/x-date-pickers, location, MarkdownEditor, AudienceBuilder, recurrence + until, RSVP switch + deadline, admin-only isNoSchool/isPublic; POST/PATCH with useToast. MUI MCP lookup first (NFR-2).",
+      "files": [
+        "src/app/(app)/calendar/EventEditorDialog.tsx"
       ],
       "dependencies": [
         "TASK-14",
+        "TASK-17"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-4",
+        "FR-6",
+        "FR-14",
+        "NFR-1",
+        "NFR-2"
+      ]
+    },
+    {
+      "id": "TASK-19",
+      "description": "EventDrawer (right Drawer): title, category Chip, school-tz time, location, MarkdownView, audience chips, RSVP ToggleButtonGroup + guests (parents) + note (disabled after deadline), totals, 'Add to my calendar' .ics link, edit (opens EventEditorDialog) / delete (ConfirmDialog) when canEdit, creator/admin RSVP DataTable + CSV link.",
+      "files": [
+        "src/app/(app)/calendar/EventDrawer.tsx"
+      ],
+      "dependencies": [
         "TASK-18"
       ],
-      "estimateHours": 2,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-18",
-        "FR-23",
-        "NFR-5"
+        "FR-12",
+        "FR-21",
+        "FR-22",
+        "NFR-1"
+      ]
+    },
+    {
+      "id": "TASK-20",
+      "description": "/calendar page: server page (requirePageUser) → CalendarView with EventCalendar (month/week/agenda, week 7–19, agenda 30 days, displayTimezone, readOnly), default view by 768px media query, controlled fetch on visible-date/view change with Map cache, ?event=<id> opens drawer, deadline click → router.push(href), parent child Select, 'New event' for ADMIN/TEACHER, Subscribe link; SourceChips persisted to localStorage; nav entry 'Calendar' for all roles. MUI MCP lookup first (NFR-2); D-5 agenda fallback only if QA rejects.",
+      "files": [
+        "src/app/(app)/calendar/page.tsx",
+        "src/app/(app)/calendar/CalendarView.tsx",
+        "src/app/(app)/calendar/SourceChips.tsx",
+        "src/config/navigation.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-15",
+        "TASK-19"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-9",
+        "FR-10",
+        "FR-11",
+        "FR-13",
+        "FR-35",
+        "NFR-1",
+        "NFR-2",
+        "NFR-4",
+        "NFR-12"
+      ]
+    },
+    {
+      "id": "TASK-21",
+      "description": "/account/calendar: server page + SubscribeCard client (read-only URL TextField, navigator.clipboard copy, Google/Apple/Outlook static instructions, 'Reset link' via ConfirmDialog; url null → prompt to reset, D-6).",
+      "files": [
+        "src/app/(app)/account/calendar/page.tsx",
+        "src/app/(app)/account/calendar/SubscribeCard.tsx"
+      ],
+      "dependencies": [
+        "TASK-16"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-24",
+        "FR-25",
+        "NFR-1"
+      ]
+    },
+    {
+      "id": "TASK-22",
+      "description": "Minimal /admin/academic-years/[id] page (requirePageRole ADMIN): year name, read-only term list from existing terms service, TermBreaksButton client with ConfirmDialog + toast showing created count.",
+      "files": [
+        "src/app/(app)/admin/academic-years/[id]/page.tsx",
+        "src/app/(app)/admin/academic-years/[id]/TermBreaksButton.tsx"
+      ],
+      "dependencies": [
+        "TASK-15"
+      ],
+      "estimateHours": 1.5,
+      "requirementIds": [
+        "FR-20",
+        "NFR-7"
       ]
     },
     {
       "id": "TASK-23",
-      "description": "Student page + roster entry points: new students/[id]/layout.tsx (keeps [id] segment) rendering StudentMessageActions ('Message parents' for TEACHER/ADMIN hidden without linked parents; 'Message teacher' for PARENT restricted to My child's teachers group); roster page moves staff table into client RosterTable with Checkbox selection + 'Message selected students'",
+      "description": "AssignmentForm and QuizSettingsPanel: on dueAt/availableUntil change fetch /api/school-day?date=; if not a school day show non-blocking <Alert severity=\"warning\">This date is a holiday (<title>).</Alert>; save unchanged.",
       "files": [
-        "src/app/(app)/students/[id]/layout.tsx",
-        "src/components/messaging/StudentMessageActions.tsx",
-        "src/app/(app)/courses/[courseId]/roster/page.tsx",
-        "src/app/(app)/courses/[courseId]/roster/RosterTable.tsx"
+        "src/app/(app)/courses/[courseId]/assignments/AssignmentForm.tsx",
+        "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizSettingsPanel.tsx"
       ],
       "dependencies": [
-        "TASK-20"
+        "TASK-15"
       ],
-      "estimateHours": 3,
+      "estimateHours": 1,
       "requirementIds": [
-        "FR-16",
-        "FR-17",
-        "NFR-5"
+        "FR-19",
+        "FR-34"
       ]
     },
     {
       "id": "TASK-24",
-      "description": "Quiet hours UI: QuietHoursSection (two TextField type=time, Save, Clear) on /account/notifications",
+      "description": "seedCalendar() (idempotent, match by title): Thanksgiving break, Winter break TERM_BREAK, Semester 1 exams (3 GRADE_LEVEL audiences), Parent–teacher evening (RSVP, Grade 7 parents only), Science fair (public), weekly Chess club (Tuesdays, ROBOTICS course audience; seed ROBOTICS course if absent, D-7), Sports day (public, no announcement link).",
       "files": [
-        "src/components/messaging/QuietHoursSection.tsx",
-        "src/app/(app)/account/notifications/page.tsx"
+        "prisma/seed.ts"
       ],
       "dependencies": [
-        "TASK-14"
+        "TASK-8"
       ],
-      "estimateHours": 1,
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-21",
-        "NFR-5"
+        "FR-37"
       ]
     },
     {
       "id": "TASK-25",
-      "description": "Safeguarding UI: /admin/safeguarding page (requirePageSafeguardingLead, Tabs Reports/Conversations, ?report= opens drawer), SafeguardingReports and SafeguardingConversations (DataTable + detail Drawer, Mark reviewed with note / Dismiss), read-only audited conversation view page showing deleted bodies and revisions",
+      "description": "Service integration tests: calendar merge per role (admin, teacher, student, parent with 3 children) incl. series mode; audience resolver parity across all seed users; isSchoolDay (weekday, holiday, recurring no-school) and createTermBreaks gap math/idempotency; RSVP reminder claimed once.",
       "files": [
-        "src/app/(app)/admin/safeguarding/page.tsx",
-        "src/app/(app)/admin/safeguarding/conversations/[id]/page.tsx",
-        "src/components/messaging/SafeguardingReports.tsx",
-        "src/components/messaging/SafeguardingConversations.tsx"
+        "tests/integration/calendar/calendar-merge.test.ts",
+        "tests/integration/calendar/audience-parity.test.ts",
+        "tests/integration/calendar/school-day.test.ts"
       ],
       "dependencies": [
-        "TASK-4",
+        "TASK-9",
+        "TASK-10",
+        "TASK-11",
         "TASK-12",
-        "TASK-15"
+        "TASK-24"
       ],
       "estimateHours": 4,
       "requirementIds": [
-        "FR-23",
-        "FR-24",
-        "FR-25",
-        "NFR-1",
         "NFR-3",
-        "NFR-5"
+        "NFR-4",
+        "NFR-7",
+        "NFR-10"
       ]
     },
     {
       "id": "TASK-26",
-      "description": "Integration tests: notification collapse, muted skip, rate limit 429, non-participant/left 404, edit revision + 15-min window, duplicate report 409; deferred email read short-circuit and quiet-hours deferral; safeguarding 403 for non-leads and audit row on view",
+      "description": "Route integration tests: teacher SCHOOL-audience create → 403; RSVP after deadline → 409; non-parent guests forced 0; feed token reset → old URL 404, new URL 200 and node-ical valid; feed 429 after limit.",
       "files": [
-        "tests/integration/messaging/messaging.test.ts",
-        "tests/integration/messaging/email.test.ts",
-        "tests/integration/messaging/safeguarding.test.ts"
+        "tests/integration/calendar/events-rsvp.test.ts",
+        "tests/integration/calendar/feed-token.test.ts"
       ],
       "dependencies": [
-        "TASK-7",
-        "TASK-13",
         "TASK-14",
-        "TASK-15",
-        "TASK-16"
+        "TASK-16",
+        "TASK-24"
       ],
-      "estimateHours": 4,
+      "estimateHours": 3,
       "requirementIds": [
-        "NFR-10",
-        "NFR-1",
-        "NFR-4",
-        "FR-15",
-        "FR-19",
-        "FR-20",
-        "FR-22",
-        "FR-23",
-        "FR-25"
+        "NFR-5",
+        "NFR-6",
+        "NFR-7",
+        "NFR-10"
       ]
     },
     {
       "id": "TASK-27",
-      "description": "E2E: parent→teacher round trip in two browser contexts (appears < 6s); student→student absent from picker and POST returns 403",
+      "description": "Playwright: admin creates a holiday → teacher attendance landing shows 'No classes today — <holiday>' and student sees it on /calendar (no student Today view exists; NFR-11); parent RSVPs; feed URL from /account/calendar returns valid ICS.",
       "files": [
-        "tests/e2e/messaging.spec.ts"
+        "tests/e2e/calendar.spec.ts"
       ],
       "dependencies": [
-        "TASK-17",
+        "TASK-13",
+        "TASK-20",
         "TASK-21",
-        "TASK-22"
+        "TASK-24"
       ],
-      "estimateHours": 2,
+      "estimateHours": 3,
       "requirementIds": [
-        "NFR-8",
         "NFR-10",
-        "FR-5",
-        "FR-13"
+        "NFR-12"
       ]
     }
   ],
   "fileStructure": {
+    "/": [
+      "package.json",
+      "package-lock.json"
+    ],
+    "src/theme/": [
+      "theme.ts"
+    ],
     "prisma/": [
       "schema.prisma",
       "seed.ts"
     ],
-    "prisma/migrations/": [
-      "20261112000000_add_direct_messaging/"
-    ],
-    "src/app/": [
-      "(app)/",
-      "api/"
-    ],
-    "src/components/": [
-      "messaging/"
-    ],
-    "src/config/": [
-      "navigation.ts"
+    "prisma/migrations/20261113000000_add_calendar/": [
+      "migration.sql"
     ],
     "src/lib/": [
-      "messaging/",
-      "validators/"
+      "dates.ts"
     ],
-    "src/server/": [
-      "files/",
-      "messaging/",
-      "notifications/",
-      "services/"
-    ],
-    "tests/e2e/": [
-      "messaging.spec.ts"
-    ],
-    "tests/integration/": [
-      "messaging/"
+    "src/lib/validators/": [
+      "calendar.ts",
+      "attendance.ts"
     ],
     "tests/unit/": [
-      "messaging/"
+      "dates.test.ts",
+      "attendance-register-form.test.tsx",
+      "public-routes.test.ts"
+    ],
+    "tests/unit/calendar/": [
+      "validators.test.ts",
+      "recurrence.test.ts",
+      "ical.test.ts",
+      "audience.test.ts"
+    ],
+    "src/server/calendar/": [
+      "recurrence.ts",
+      "ical.ts",
+      "calendar-service.ts",
+      "sources.ts",
+      "maintenance.ts"
+    ],
+    "src/server/announcements/": [
+      "audience.ts"
+    ],
+    "src/server/notifications/": [
+      "types.ts"
+    ],
+    "src/app/api/internal/email/dispatch/": [
+      "route.ts"
+    ],
+    "src/server/timetable/": [
+      "timetable-service.ts"
+    ],
+    "src/server/attendance/": [
+      "attendance-service.ts"
+    ],
+    "src/app/api/attendance/register/": [
+      "route.ts"
+    ],
+    "src/app/(app)/attendance/take/": [
+      "page.tsx",
+      "RegisterForm.tsx"
+    ],
+    "src/app/api/events/": [
+      "route.ts"
+    ],
+    "src/app/api/events/[id]/": [
+      "route.ts"
+    ],
+    "src/app/api/events/[id]/ics/": [
+      "route.ts"
+    ],
+    "src/app/api/events/[id]/rsvp/": [
+      "route.ts"
+    ],
+    "src/app/api/events/[id]/rsvps/": [
+      "route.ts"
+    ],
+    "src/app/api/calendar/": [
+      "route.ts"
+    ],
+    "src/app/api/school-day/": [
+      "route.ts"
+    ],
+    "src/app/api/academic-years/[id]/term-breaks/": [
+      "route.ts"
+    ],
+    "src/app/api/me/calendar-feed/": [
+      "route.ts"
+    ],
+    "src/app/api/me/calendar-feed/reset/": [
+      "route.ts"
+    ],
+    "src/app/api/calendar/feed/[token]/": [
+      "route.ts"
+    ],
+    "src/app/api/public/events/": [
+      "route.ts"
+    ],
+    "src/config/": [
+      "public-routes.ts",
+      "navigation.ts"
+    ],
+    "src/components/AudienceBuilder/": [
+      "AudienceBuilder.tsx"
+    ],
+    "src/app/(app)/calendar/": [
+      "EventEditorDialog.tsx",
+      "EventDrawer.tsx",
+      "page.tsx",
+      "CalendarView.tsx",
+      "SourceChips.tsx"
+    ],
+    "src/app/(app)/account/calendar/": [
+      "page.tsx",
+      "SubscribeCard.tsx"
+    ],
+    "src/app/(app)/admin/academic-years/[id]/": [
+      "page.tsx",
+      "TermBreaksButton.tsx"
+    ],
+    "src/app/(app)/courses/[courseId]/assignments/": [
+      "AssignmentForm.tsx"
+    ],
+    "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/": [
+      "QuizSettingsPanel.tsx"
+    ],
+    "tests/integration/calendar/": [
+      "calendar-merge.test.ts",
+      "audience-parity.test.ts",
+      "school-day.test.ts",
+      "events-rsvp.test.ts",
+      "feed-token.test.ts"
+    ],
+    "tests/e2e/": [
+      "calendar.spec.ts"
     ]
   },
-  "totalEstimateHours": 69,
+  "totalEstimateHours": 65.0,
   "nxpPatterns": [],
   "status": "complete"
 }

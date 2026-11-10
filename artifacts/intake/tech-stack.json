@@ -1,10 +1,11 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T19:00:00Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-09T19:10:00Z",
   "phase": "intake",
   "version": "1.0",
+
   "techStack": "react",
-  "confidencePct": 100,
-  "detectionNotes": "The PRD declares '--brownfield --tech-stack react'. The workspace is Next.js 14 App Router with React 18, TypeScript strict, Prisma on PostgreSQL 16, MUI 9.5.0 and MUI X. No new dependencies are needed. Reuse src/server/rate-limit.ts, registerFileAccess (src/server/files/access.ts), notify() and the notification types registry, audit(), and requireUser/requireRole. Reuse the components FileUpload, FileList, UserAvatar, ConfirmDialog, Toast/useToast and the NotificationBell badge-and-poll pattern, which live in src/components/<Name>/. Hook the maintenance work into /api/internal/email/dispatch. The mui-mcp server is available for component lookup. Styling goes only through the theme, sx and styled().",
+  "confidencePct": 99,
+  "detectionNotes": "Run mode '--brownfield --tech-stack react' declared in the PRD header. Fixed stack: Next.js 14 App Router, React 18, TypeScript strict, MUI v9 (@mui/material 9.5.0 installed) with Emotion (sx/styled/theme only — no Tailwind/CSS modules), MUI X v9 (data-grid, date-pickers, charts installed; x-scheduler NEW in this ticket, beta, version to pin via MUI MCP), Prisma + PostgreSQL 16, Auth.js v5, Zod, React Hook Form, date-fns + date-fns-tz, Vitest + Playwright. New libs implied by PRD: @mui/x-scheduler (required), 'ics' package (optional — hand-written builder allowed), node-ical (test-only, devDependency).",
   "cssPreprocessor": "css"
 }

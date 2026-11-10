@@ -1,16 +1,19 @@
 {
-  "ticketId": "SH-13",
-  "timestamp": "2026-11-09T19:00:00Z",
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-09T19:12:00Z",
   "phase": "intake",
   "version": "1.0",
+
   "status": "complete",
-  "requirementsCount": 43,
-  "overallConfidencePct": 95,
+  "requirementsCount": 49,
+  "functionalCount": 37,
+  "nonFunctionalCount": 12,
+  "overallConfidencePct": 96,
   "blockers": [],
-  "notes": [
-    "PRD-12 (Announcements) is not implemented in the workspace (SH-12 run failed). PRD-13 does not depend on it at the code level. Proceed.",
-    "Open architect decisions are listed in requirements.json clarificationLog[0].unresolved: co-teacher scope, updatedAt on new models, where isSafeguardingLead is edited, quiet-hours role scope.",
-    "The student route segment is [id], not [studentId]. Shared components live in src/components/<Name>/."
+  "warnings": [
+    "PRD-12 dependency missing in workspace: no AudienceType enum, audience.ts or audience builder. Architect must decide whether SH-14 adds a minimal PRD-12-compatible version (FR-3, FR-7, FR-14, FR-37 Sports day).",
+    "/admin/academic-years/[id] page does not exist (API only) — FR-20 needs a host page.",
+    "@mui/x-scheduler (beta) must be installed and version-pinned via MUI MCP first (FR-1); node-ical needed as devDependency for NFR-6."
   ],
   "nextPhase": "architect"
 }

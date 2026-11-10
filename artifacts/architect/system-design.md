@@ -1,380 +1,433 @@
-# System Design: PRD-13 Direct Messaging
+# System Design: PRD-14 School Calendar, Events & Holidays
 
-Ticket: **SH-13** · Phase: architect (`arch-design-system`) · Timestamp: 2026-11-09T22:30:00Z · Status: **complete**
+Ticket: SH-14 · Phase: architect (arch-design-system) · Timestamp: 2026-11-09T23:58:00Z · Status: complete
 
-Inputs read from disk: `artifacts/intake/requirements.json` (32 FR + 11 NFR), `artifacts/intake/handoff-to-architect.json`, `artifacts/intake/tech-stack.json`, `artifacts/architect/tech-stack-decisions.md` (ADR-1..12), `artifacts/architect/requirements-analysis-notes.md` (B1..B20, A1..A14).
+Inputs:
+- `artifacts/intake/requirements.json`: 37 FR and 12 NFR, 96% confidence
+- `artifacts/intake/handoff-to-architect.json`
+- `artifacts/architect/tech-stack-decisions.md`: ADR-1 to ADR-13
+- `artifacts/architect/requirements-analysis-notes.md`: B1 to B19, D1 to D9, R1 to R4
 
-> This file replaces a stale SH-12 `system-design.md`. `api-contracts.json` and `handoff-to-dev-planning.json` in this folder are still stale (SH-12). `arch-api-contracts` must rewrite them from this document.
+> This replaces the stale SH-13 `system-design.md`. `api-contracts.json` and `handoff-to-dev-planning.json` in this folder are still SH-13 until `arch-api-contracts` rewrites them.
 
 ---
 
 ## 1. Overview
 
-SchoolHub gets 1:1 and small-group (≤25) messaging between staff, students and parents. It runs inside the existing Next.js 14 App Router monolith, with no new dependencies and no new infrastructure:
+SH-14 adds a school calendar to the existing SchoolHub app (Next.js 14 App Router, Prisma/PostgreSQL, MUI 9). The pieces are:
 
-- **Storage:** 8 new Prisma models plus `User.isSafeguardingLead`, in one migration (ADR-2).
-- **Who may message whom:** one pure rules module, `contact-rules.ts`. Create, send and the contacts list all use it (ADR-3).
-- **Delivery:** HTTP polling. The open thread polls every 5 s; the inbox list and the sidebar badge poll every 30 s. There are no websockets (ADR-1, NFR-8, NFR-9).
-- **Notifications:** in-app notifications are collapsed to one unread row per conversation. Email is deferred through `PendingMessageEmail`, which the existing maintenance cron drains, and it respects quiet hours (ADR-5, ADR-6).
-- **Safeguarding:** the safeguarding area is server-gated on `ADMIN` plus `isSafeguardingLead`, read fresh from the database. Every view is audited. Deleted messages and edit history are retained and visible only to safeguarding leads (ADR-8, NFR-3).
-- **UI:** MUI-only and built from the existing shared components (ADR-7, NFR-5).
+- one Prisma migration
+- one server module, `src/server/calendar/`
+- a shared audience resolver, at the path PRD-12 will use
+- about a dozen thin route handlers
+- two new pages (`/calendar`, `/account/calendar`), plus one small admin page
+- small, targeted edits to timetable, attendance, the assignment and quiz editors, notifications, the cron, navigation and the seed
 
-### Intake blockers and carried risks (Compliance Rule 5)
+Design principles:
 
-**Intake blockers:** `handoff-to-architect.json.blockers` is **empty**. Intake confidence was 95%.
+1. **One read path.** A single function, `getCalendarItems(user, range, sources, studentId?)`, feeds the `/calendar` API, the iCal feed, `getUpcomingEventsForUser`, and (with `sources=['events']`) the single-event visibility check. That way the feed cannot show anything the app hides (NFR-5).
+2. **Recurrence is expanded on the server, at read time.** A recurring event is stored once. Clients and the scheduler only ever receive plain occurrences. The feed emits RRULE (ADR-2, ADR-3).
+3. **One holiday rule.** `isSchoolDay` in calendar-service owns the teaching-weekday rule and the no-school-event rule. Timetable, attendance, the editors and `/api/school-day` all call it (ADR-8).
+4. **Reuse before writing.** The design reuses `rateLimit`, `notify`, `audit`, `hashToken`, `csv.ts`, `DataTable`, `ConfirmDialog`, `MarkdownView/Editor`, `useToast`, the dispatch cron, `getSchoolTimezone` and the access helpers (NFR-9).
 
-**Carried risks and known gaps** (none of them blocks this phase):
+### Intake blockers and warnings
 
-1. **PRD-12 is absent.** SH-12 Announcements failed. Messaging has no code dependency on it, so do not build announcements here (NFR-9).
-2. **No user-admin form exists.** `isSafeguardingLead` can be set only through `PATCH /api/users/:id` and the seed (ADR-11, FR-2). This is a documented gap. Building a user-admin UI is out of scope.
-3. **mui-mcp was unreachable during the architect phase.** The dev phase must connect to it and run `useMuiDocs`/`fetchDocs` before writing any UI (NFR-5).
-4. **The rate limiter is per-process.** It only holds on a single instance. This is accepted (ADR-4, NFR-4).
-5. **`/students/[id]` has no page or layout today.** The FR-16 actions need a new layout (§3.8).
+`handoff-to-architect.json` reports **no blockers** (`blockers: []`). It raises three warnings, resolved as follows:
 
-### Resolved open decisions
-
-| Decision | Resolution | Source |
+| Intake warning | Resolution | Ref |
 |---|---|---|
-| Do co-teachers manage a course? | Yes: `teacherId = me OR coTeacherIds has me`. | ADR-9, FR-32 |
-| `updatedAt` on new models | Added to Conversation, ConversationParticipant, Message, MessageAttachment, MessageReport and MessagingSettings. Not added to MessageRevision or PendingMessageEmail. | ADR-10 |
-| Where `isSafeguardingLead` is edited | API and validator only. Setting it to `true` on a non-ADMIN user is rejected with 422/VALIDATION, and the change is audited. | ADR-11 |
-| Who gets quiet hours | All roles. | ADR-12 |
-| Group send rule after a relationship ends | A non-staff sender may send only if `canMessage(sender, s)` holds for at least one staff participant who has not left. Staff can always send. | A4, FR-7 |
-| Homeroom reachability | Current academic year only: `section.academicYear.isCurrent`. Applies to messaging only. `student-access.ts` is not changed. | A5 |
-| Access after leaving | A participant with `leftAt` set is treated as a non-participant: 404 on the thread and denied on attachments. | A7 |
-| Leaving a 1:1 conversation | Not allowed. Archive covers 1:1. Leaving is possible only when a conversation has more than 2 participants. | A10 |
-| Effect of a new message on archive state | It clears `archivedAt` for the recipients. The unread count covers all conversations the user has not left. | A11 |
-| Reporting rules | Users can report others' messages only. Only one OPEN report per (message, reporter) is allowed; a repeat returns 409. | A12 |
-| Breakpoint | `theme.breakpoints.down(768)`, used locally. The theme is not changed. | A8, NFR-7 |
-| How pollers see edits and deletes | `?after=<lastId>&since=<iso>` returns `{ messages, changed }`. | A9, ADR-1 |
-| How email is sent without an in-app row | Add an optional `NotifyInput.inApp?: boolean` (default `true`). The worker calls `notify({ inApp:false, email })`, so preference and status filtering stay inside `notify()`. | ADR-5 |
-| Quiet-hours input | MUI `TextField type="time"`. Not `TimePicker`. | ADR-6 |
-| Nav entry for safeguarding | Add `NavItem.requires?: 'safeguardingLead'`. `(app)/layout.tsx` reads the flag and passes it to the shell. The page still enforces 403 itself. | A13, FR-23 |
+| PRD-12 missing: no `AudienceType`, `audience.ts` or audience builder | SH-14 adds `enum AudienceType { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }` and `src/server/announcements/audience.ts`, exactly as PRD-12 §FR-1/FR-2 specify. It also adds a minimal MUI `AudienceBuilder`. PRD-12 adopts all three without changes. No Announcement models. | ADR-9, §3.3 |
+| `/admin/academic-years/[id]` page missing | Add a minimal ADMIN server page at that exact route with a read-only term list and an "Add term breaks" button. | ADR-10, §3.9 |
+| New dependencies | `@mui/x-scheduler@9.0.0-beta.15` (exact, installed first) with a scoped `@mui/x-internals` override. `node-ical@0.27.6` as an exact devDependency. Nothing else is added. | ADR-1, ADR-5 |
+
+### Conflicts between the research inputs, and how this design settles them
+
+| Topic | arch-research-stack | arch-research-reqs | **Decision** |
+|---|---|---|---|
+| Audience shape | PRD-12 enum (6 values) with `refId` and `include*` flags | 4-value enum with `targetId` and `roles[]` | **ADR-9.** PRD-14 FR-1 itself defines `EventAudience` with `refId` / `includeStudents` / `includeParents` / `includeTeachers` (verified in `14-calendar.md` L128-137), and PRD-12 L96 defines the 6 values. "Grade 7 parents" = `GRADE_LEVEL` with `includeStudents=false, includeTeachers=false`. No `roles[]` column. |
+| Resolver path | `src/server/announcements/audience.ts` | `src/server/audience/audience.ts` | **`src/server/announcements/audience.ts`**, the path PRD-12 names, so PRD-12 doesn't need a rename. |
+| `getScheduleForDate` "reason" | Add `reason` to its return | Keep `ScheduleEntry[]`; callers fetch the reason separately | **Keep `ScheduleEntry[]`** (no churn for callers: attendance L130/L472, `getCurrentSlot`). Callers that need the holiday name call `isSchoolDay(date)` directly. FR-17's "reason" is delivered through `isSchoolDay` and `/api/school-day`. |
+| Email default per category (FR-28) | Not addressed | D5: a second type | **Two registry types:** `event.created` (`defaultEmail: false`) and `event.holiday_created` (`defaultEmail: true`, used for HOLIDAY/TERM_BREAK). Both keep the per-user preference override, and `notify.ts` is unchanged. This is a deliberate deviation (D-3 below). |
+| RSVP reminder "once" | `rsvpReminderSentAt` column | Same, claimed with conditional `updateMany` | Agreed: claim it with `updateMany({where:{id, rsvpReminderSentAt:null}})`. |
+
+### Deviations from the PRD's model and route list (all deliberate)
+
+| ID | Deviation | Why | Traces to |
+|---|---|---|---|
+| D-1 | `CalendarEvent.rsvpReminderSentAt DateTime?` | Stores "once per event" for the reminder. Claimed atomically. | FR-23 |
+| D-2 | `EventAudience @@index([eventId])` and `@@index([type, refId])` | Audience filtering in SQL on the hot path. | NFR-4 |
+| D-3 | Extra notification type `event.holiday_created` | Per-category email default, within the existing preference model. | FR-28 |
+| D-4 | Back-relations on `User` (`calendarEvents`, `eventRsvps`, `calendarFeedToken`) and `onDelete: Cascade` FKs on `EventRsvp.userId` / `CalendarFeedToken.userId` | Prisma requires the relations. Cascade matches the "cascade deletes" instruction in FR-2. | FR-2 |
+| D-5 | Agenda view: 30-day page with next/prev in Community `EventCalendar`, instead of true infinite scroll | Community has no infinite agenda. If QA rejects this, the fallback is MUI `List` + native `IntersectionObserver` below 768 px, fetching the next 30-day window. Rejection triggers the fallback; it is not built up front. | FR-9, ADR-2 |
+| D-6 | `GET /api/me/calendar-feed` returns `url` only when it creates the first token, otherwise `{url:null, hasToken:true, createdAt}`. The page offers "Reset link". | The raw token cannot be re-shown because it is stored hashed. | FR-24, FR-25, NFR-5 |
+| D-7 | Seed a minimal ELECTIVE `ROBOTICS` course (teacher Tom, current year) only if it doesn't exist | The Chess club audience needs it, and it is absent from the seed. | FR-37 |
+| D-8 | Register save on a no-school date requires `holidayOverride: true` in the body, enforced on the server | Makes FR-18's extra confirmation a real rule, not only a UI dialog. | FR-18, NFR-7 |
+| D-9 | `GET /api/public/events` is rate limited per IP (`rateLimit('pubcal:'+ip, 120, 3_600_000)`) and range-capped at 100 days | Only unauthenticated JSON route; reuses the existing limiter. | FR-30, NFR-7 |
 
 ---
 
-## 2. Data Model (one migration: `20261112000000_add_direct_messaging`)
+## 2. Component Breakdown
 
-The field names in the PRD's Prisma block are authoritative. The sketch below is the **minimum plus architect additions**, which are marked `// +`. All IDs are `cuid()`. All timestamps are stored in UTC.
+### 2.1 Dependencies and config (do first)
+
+| Change | Ref |
+|---|---|
+| `npm i --save-exact @mui/x-scheduler@9.0.0-beta.15`. Nested override `"@mui/x-scheduler": {"@mui/x-internals": "9.17.0"}`. Verify with `npm ls @mui/x-internals`. If npm doesn't honour the nested override, fall back to a global `9.17.0`. | FR-1, ADR-1 |
+| `import type {} from '@mui/x-scheduler/theme-augmentation'` beside the theme | FR-9, ADR-1 |
+| `npm i -D --save-exact node-ical@0.27.6` | NFR-6 |
+| Before writing scheduler code, the dev phase looks up the Quickstart, Views, Events, Editing, Timezone, Localization and Responsiveness pages via MUI MCP (`useMuiDocs` + `fetchDocs`). If MCP is unreachable, stop and report a blocker. | NFR-2 |
+
+### 2.2 Data model: migration `20261113000000_add_calendar`
 
 ```prisma
-enum ReportStatus { OPEN REVIEWED DISMISSED }
+enum AudienceType  { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }   // PRD-12 values, owned here until PRD-12 lands
+enum EventCategory { HOLIDAY TERM_BREAK EXAM EVENT MEETING TRIP SPORTS DEADLINE OTHER }
+enum Recurrence    { NONE WEEKLY MONTHLY }
+enum RsvpResponse  { YES NO MAYBE }
 
-model Conversation {
-  id              String   @id @default(cuid())
-  subject         String?  // ≤120 (FR-12)
-  createdById     String
-  involvesStudent Boolean  @default(false)       // FR-30, set at create, never changes
-  lastMessageAt   DateTime @default(now())       // FR-31
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt            // + ADR-10
-  createdBy       User     @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  participants    ConversationParticipant[]
-  messages        Message[]
-  pendingEmails   PendingMessageEmail[]
-  @@index([lastMessageAt])
-  @@index([involvesStudent, createdAt])          // FR-24
+model CalendarEvent {
+  id                 String        @id @default(cuid())
+  title              String
+  description        String?
+  category           EventCategory
+  startAt            DateTime
+  endAt              DateTime
+  allDay             Boolean       @default(false)
+  location           String?
+  roomId             String?
+  recurrence         Recurrence    @default(NONE)
+  recurrenceUntil    DateTime?     @db.Date
+  isNoSchool         Boolean       @default(false)
+  rsvpEnabled        Boolean       @default(false)
+  rsvpDeadline       DateTime?
+  rsvpReminderSentAt DateTime?                                  // D-1
+  isPublic           Boolean       @default(false)
+  createdById        String
+  createdBy          User          @relation("CalendarEventCreator", fields: [createdById], references: [id])
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  audiences          EventAudience[]
+  rsvps              EventRsvp[]
+  @@index([startAt, endAt])
 }
 
-model ConversationParticipant {
-  id             String    @id @default(cuid())
-  conversationId String
-  userId         String
-  lastReadAt     DateTime?
-  mutedAt        DateTime?
-  archivedAt     DateTime?
-  leftAt         DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt          // + ADR-10
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@unique([conversationId, userId])
-  @@index([userId, archivedAt])
+model EventAudience {
+  id              String        @id @default(cuid())
+  eventId         String
+  event           CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type            AudienceType
+  refId           String?       // gradeLevelId | sectionId | courseId | Role name (ROLE); null for SCHOOL/STAFF
+  includeStudents Boolean       @default(true)
+  includeParents  Boolean       @default(true)
+  includeTeachers Boolean       @default(true)
+  @@index([eventId])
+  @@index([type, refId])                                        // D-2
 }
 
-model Message {
-  id             String    @id @default(cuid())
-  conversationId String
-  senderId       String
-  body           String    // 1..5000 (FR-11)
-  editedAt       DateTime?
-  deletedAt      DateTime? // soft delete only (NFR-3)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt          // + ADR-10, gives polling its "changed since" signal
-  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User                @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  attachments    MessageAttachment[]
-  revisions      MessageRevision[]
-  reports        MessageReport[]
-  @@index([conversationId, createdAt])        // NFR-2
+model EventRsvp {
+  eventId   String
+  event     CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  response  RsvpResponse
+  guests    Int           @default(0)
+  note      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  @@id([eventId, userId])
 }
 
-model MessageAttachment { id, messageId, fileId @unique, createdAt, updatedAt(+)
-  // Cascade on Message and on FileObject. Back-relation FileObject.messageAttachments.
+model CalendarFeedToken {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
 }
-model MessageRevision   { id, messageId, body, createdAt   @@index([messageId]) }               // FR-3
-model MessageReport     { id, messageId, reporterId, reason (≤1000), status ReportStatus @default(OPEN),
-                          reviewedById?, reviewedAt?, reviewNote?, createdAt, updatedAt(+)
-                          @@index([status, createdAt])  @@index([messageId, reporterId]) }      // FR-22/23
-model MessagingSettings { id, userId @unique, quietStart String?, quietEnd String?, createdAt, updatedAt } // FR-21
-model PendingMessageEmail { id, userId, conversationId, dueAt, createdAt
-                          @@unique([userId, conversationId])  @@index([dueAt]) }                // FR-4/20
-// User: + isSafeguardingLead Boolean @default(false)  (FR-2), plus back-relations for every model above.
 ```
 
-Transactions (all use `prisma.$transaction`):
+Exact field lists for `EventRsvp` follow PRD §FR-1. The dev agent copies any field this sketch omits from `14-calendar.md` L139-148. Traces to FR-2, FR-3, FR-23, NFR-4, NFR-8.
 
-- **Send.** Insert the Message. Link the attachments (`FileObject.contextId = messageId`). Update `Conversation.lastMessageAt`. Set the sender's `lastReadAt` to now. Clear `archivedAt` for the other participants. (FR-11, FR-27, FR-31, A11)
-- **Create.** Insert the Conversation (with `involvesStudent` computed), the participants, and the first message using the same send logic. (FR-6, FR-30)
-- **Edit.** Insert a MessageRevision holding the *old* body. Update `body` and `editedAt`. (FR-3, FR-15)
+### 2.3 Server modules
 
-No code path issues `prisma.message.delete*`. Cascades fire only when an admin purges a User or a Conversation.
-
----
-
-## 3. Component Breakdown
-
-All new server code lives in `src/server/messaging/` (NFR-6). Route handlers are thin: `withHandler`, then auth, then `parseBody`/`parseQuery` with schemas from `src/lib/validators/messaging.ts`, then a service call, then `ok`/`paginated`.
-
-### 3.1 Server modules
-
-| Module | Responsibility | Requirements |
-|---|---|---|
-| `contact-rules.ts` | `canMessageWith(sender, recipient, rel)` is pure. `loadRelations(senderId, candidateIds)` loads in one batch: ACTIVE enrollments in courses the teacher manages (`teacherId` or `coTeacherIds has`), current-year homeroom `SectionMember`, `ParentStudentLink`, and recipient role and status. `canMessage(sender, recipient)` and `messageableIds(sender, ids)` are thin async wrappers. Non-ACTIVE recipients → false. `validateNewConversation(creator, participants)` checks the 2..25 participant count, `canMessage` for each participant, and that any group with a STUDENT also has a TEACHER or ADMIN. `canSendIn(sender, participants)` implements the A4 rule. | FR-5, FR-6, FR-7, FR-32, NFR-1 |
-| `contacts.ts` | `listContacts(user, q)` builds labelled groups forward from the same relation queries: "My teachers", "My child's teachers (<child>)", "Students in <course>", "Parents of students in <course>", "Homeroom <section>", "Staff" (TEACHER) and "School office" (ADMINs). Each group is filtered by `q` (case-insensitive name match) and capped at 50. | FR-8 |
-| `access.ts` | `getParticipation(userId, conversationId)` returns the participant row only if `leftAt` is null; otherwise it throws `NOT_FOUND`. `requireSafeguardingLead()` calls `requireUser` and `requireRole('ADMIN')`, then reads `isSafeguardingLead` from the database and throws `FORBIDDEN` if it is false. `requirePageSafeguardingLead()` redirects to `/forbidden`. | NFR-1, FR-23, FR-24 |
-| `conversations.ts` | `listConversations(user, {archived, q, page})` returns rows ordered by `lastMessageAt desc` with the participants, a preview (`"<first name>: <body ≤80>"`, or "This message was deleted") and `unreadCount`. Per-row unread counts come from one raw SQL `LATERAL COUNT` over the page, capped at 99. `createConversation`, `getConversation` (returns `canSend`, `canLeave` and the participants), `markRead`, `setMuted`, `setArchived`, `leave`. `leave` is refused with 403 when the conversation has 2 or fewer participants, or when the user is the creator and `involvesStudent` is true. | FR-6, FR-9, FR-12, FR-14, FR-30, FR-31 |
-| `messages.ts` | `listMessages(user, id, {before \| after+since, limit=30})` uses a keyset on `(createdAt, id)`. Deleted messages go to normal users as `{deleted:true, body:null, attachments:[]}`. `sendMessage` checks the rate limit, the participation, `canSendIn`, and attachment ownership (owner = sender, unattached, context `'message'`, at most 5), then runs the send transaction and, after commit, `onMessageSent`. `editMessage` and `deleteMessage` require: the caller is the sender, `now − createdAt ≤ 15 min`, and the message is not already deleted. Otherwise they throw 403 with `details.reason = 'EDIT_WINDOW_EXPIRED'`. | FR-7, FR-10, FR-11, FR-13, FR-15, FR-27, FR-31, NFR-2, NFR-3, NFR-4 |
-| `notifications.ts` | `onMessageSent(conversationId, message)` handles each other participant who has not muted or left the conversation. It runs `notification.deleteMany({ userId in, type:'message.received', readAt:null, link })`, then `notify({ type:'message.received', link, title, body })` **without email**. It then upserts `PendingMessageEmail` with `create: { dueAt: now+10m }, update: {}`, so the first unread message starts the 10-minute clock. `conversationLink(id)` is the single link builder, shared with `markRead`. `onMessageReported(report)` notifies ACTIVE safeguarding leads with `message.reported` and email, without the message text. | FR-19, FR-20, FR-26 |
-| `quiet-hours.ts` | Pure functions `isInQuietHours(hhmm, start, end)` (handles ranges that wrap midnight) and `quietHoursEnd(now, tz, settings)`, which converts the end time to a UTC instant with date-fns-tz. `getSettings` and `putSettings` require start and end to be both set or both null, and reject `start == end`. | FR-20, FR-21 |
-| `email.ts` | `processPendingMessageEmails(now)`, run from `POST /api/internal/email/dispatch` in its own try/catch. It processes `dueAt ≤ now`, at most 200 rows per run. For each row: claim it with `deleteMany({id})` and continue only if `count === 1`. If `lastReadAt ≥ row.createdAt`, or the user is muted or has left, drop the row. If the user is in quiet hours, re-insert the row with `dueAt = quietHoursEnd`. Otherwise call `notify({ inApp:false, email:{ template:'generic-notification' } })`. | FR-4, FR-20 |
-| `reports.ts` | `reportMessage(user, messageId, reason)` requires a participant who is not the sender. A second OPEN report from the same user on the same message returns 409. After commit it calls `onMessageReported`. | FR-22, FR-26 |
-| `safeguarding.ts` | Each function starts with `requireSafeguardingLead()`. `listReports({status})` returns OPEN reports first, then the rest by `createdAt desc`. `getReport(id)` returns the message, 5 messages before and 5 after (including deleted messages and revisions) and the participants, and writes an audit row. `reviewReport(id, {action:'review'\|'dismiss', note?})` sets `status`, `reviewedById`, `reviewedAt` and `reviewNote`, then writes an audit row. `searchConversations({participantId, from, to, page})` filters on `involvesStudent: true`. `getConversationForSafeguarding(id)` returns the full thread, including deleted bodies and `revisions[]`, and calls `audit({action:'safeguarding.conversation.view', entityType:'Conversation', entityId})` on **every** call. | FR-23, FR-24, FR-25, NFR-1, NFR-3, NFR-11 |
-| `files/contexts.ts` (edit) | `register('message', resolver)` with `contextId = messageId`. The resolver allows a participant who has not left the message's conversation, or an ADMIN with `isSafeguardingLead` (read from the database). It denies on any error. | FR-27 |
-| `notifications/types.ts` (edit) | Add `message.received` {COMMUNICATION, defaultEmail:true, roles: all} and `message.reported` {COMMUNICATION, mandatoryInApp:true, defaultEmail:true, roles:['ADMIN']}. | FR-19, FR-26 |
-| `notifications/notify.ts` (edit) | Add an optional `inApp?: boolean`, default `true`. When it is `false`, skip the `Notification` insert. All existing callers keep their current behaviour. | FR-20 |
-| `users` validator and service (edit) | Add `isSafeguardingLead: z.boolean().optional()`. Reject `true` unless the target user is ADMIN. Audit the change in the existing `user.update` metadata. | FR-2, NFR-11 |
-| `prisma/seed.ts` (edit) | Set Alice as a safeguarding lead. Upsert the Pat↔Sam `ParentStudentLink` if it is missing. Seed four threads: Pat↔Tom about Sam's homework (6 messages); Tom and 4 ACTIVE MATH-7A students (3 messages); Tina↔Tom (4 messages); and one student↔teacher thread with one OPEN report. Each block is idempotent: it looks up the thread by subject and skips if it exists. A block is skipped with a `logger.warn` if its prerequisites are missing. All seeded data must satisfy `canMessage`. | FR-29 |
-
-### 3.2 Validators: `src/lib/validators/messaging.ts`
-
-| Schema | Fields |
-|---|---|
-| `createConversationSchema` | `{participantIds: cuid[] 1..24, subject?: ≤120, body: trim 1..5000, fileIds?: ≤5}` |
-| `sendMessageSchema` | `{body, fileIds?}` |
-| `editMessageSchema` | `{body}` |
-| `listMessagesQuery` | `{before?}` or `{after, since?}`, which are mutually exclusive, plus `limit ≤ 30` |
-| `listConversationsQuery` | `{archived?: bool, q?, page, pageSize}` |
-| `archiveSchema` | `{archived: bool}` |
-| `muteSchema` | `{muted: bool}` |
-| `reportSchema` | `{reason: trim 1..1000}` |
-| `reviewReportSchema` | `{action: 'review'\|'dismiss', note?: ≤1000}` |
-| `safeguardingConversationsQuery` | `{participantId?, from?, to?, page}` |
-| `messagingSettingsSchema` | `{quietStart: HH:mm\|null, quietEnd: HH:mm\|null}` |
-| `contactsQuery` | `{q?: ≤100}` |
-
-The client composer imports the same limits from `src/lib/messaging/constants.ts`: `BODY_MAX=5000`, `COUNTER_FROM=4500`, `MAX_FILES=5`, `MAX_PARTICIPANTS=25`, `EDIT_WINDOW_MS=15*60_000`, `THREAD_POLL_MS=5000`, `LIST_POLL_MS=30000`, `PAGE_SIZE=30`. (FR-11, FR-13, FR-15, NFR-6)
-
-### 3.3 API route handlers (surface for `arch-api-contracts`)
-
-| Method and path | Auth | Service | Requirements |
+| File | Exports | Notes | Reqs |
 |---|---|---|---|
-| GET `/api/conversations` | any user | listConversations | FR-9, FR-28 |
-| POST `/api/conversations` | any user + rate limit | createConversation | FR-6, FR-12, FR-30, NFR-4 |
-| GET `/api/conversations/:id` | participant | getConversation | FR-7, FR-14, NFR-1 |
-| GET `/api/conversations/:id/messages?before=\|after=&since=` | participant | listMessages | FR-10, FR-13, NFR-2 |
-| POST `/api/conversations/:id/messages` | participant + rate limit (30/min) | sendMessage | FR-7, FR-11, FR-19, FR-20, FR-31, NFR-4 |
-| POST `/api/conversations/:id/read` | participant | markRead | FR-14 |
-| POST `/api/conversations/:id/mute` | participant | setMuted | FR-14 |
-| POST `/api/conversations/:id/archive` | participant | setArchived | FR-14 |
-| POST `/api/conversations/:id/leave` | participant | leave | FR-14 |
-| PATCH `/api/messages/:id` | sender, within 15 min | editMessage | FR-3, FR-15 |
-| DELETE `/api/messages/:id` | sender, within 15 min (soft delete) | deleteMessage | FR-15, NFR-3 |
-| POST `/api/messages/:id/report` | participant, not the sender | reportMessage | FR-22, FR-26 |
-| GET `/api/messaging/unread-count` | any user | one `$queryRaw` COUNT of the user's conversations not left with `lastMessageAt > coalesce(lastReadAt, 'epoch')` | FR-18, NFR-2 |
-| GET `/api/messaging/contacts?q=` | any user | listContacts | FR-8 |
-| GET `/api/me/messaging-settings` | any user | getSettings | FR-21 |
-| PUT `/api/me/messaging-settings` | any user | putSettings | FR-21 |
-| GET `/api/safeguarding/reports?status=` | safeguarding lead | listReports | FR-23 |
-| GET `/api/safeguarding/reports/:id` | safeguarding lead | getReport (audited) | FR-23, FR-25 |
-| PATCH `/api/safeguarding/reports/:id` | safeguarding lead | reviewReport (audited) | FR-23, NFR-11 |
-| GET `/api/safeguarding/conversations` | safeguarding lead | searchConversations | FR-24 |
-| GET `/api/safeguarding/conversations/:id` | safeguarding lead | getConversationForSafeguarding (audited) | FR-24, FR-25 |
-| PATCH `/api/users/:id` (existing) | ADMIN | adds `isSafeguardingLead` | FR-2 |
-| POST `/api/internal/email/dispatch` (existing) | CRON_SECRET | adds processPendingMessageEmails | FR-20 |
+| `src/server/announcements/audience.ts` (new, PRD-12 path) | `resolveAudienceUserIds(audiences)`, `isUserInAudience(user, audiences)`, `audienceWhereForUser(user)` (Prisma `EventAudience` filter), `canTargetAudience(user, audience)` | Semantics are those of PRD-12 FR-2. `audienceWhereForUser` precomputes the user's keys once: their grade levels, sections and courses, the same for linked children (parents), the courses they teach and the sections they homeroom (teachers), and their role. It returns an `OR` over `{type, refId, include*}` so filtering happens in SQL (NFR-4). `canTargetAudience`: ADMIN → any. TEACHER → `COURSE` passes `assertCanManageCourse`, or `SECTION` where `homeroomTeacherId === user.id`. Everything else → false. | FR-3, FR-6, FR-7, FR-28, FR-29, FR-23, NFR-4, NFR-7 |
+| `src/server/calendar/recurrence.ts` (new, pure) | `expandOccurrences(event, from, to, tz)` | Steps in school-tz wall clock: +7 days, or +1 month on the same day of month, skipping months that lack the day. Duration is kept in wall-clock terms. Stops at the earlier of `recurrenceUntil` (end of that day, inclusive) and `to`. Occurrence id = `${eventId}:${occurrenceStartISO}`. | FR-15, FR-4, NFR-3, ADR-3 |
+| `src/server/calendar/ical.ts` (new, pure) | `escapeText`, `foldLine`, `vtimezone(tz, from, to)`, `vevent(item, tz)`, `buildCalendar(items, tz, window)` | All-day events use `VALUE=DATE` with an exclusive `DTEND`. Timed one-off events use UTC `Z`. Recurring events use `TZID` + `RRULE:FREQ=WEEKLY|MONTHLY;UNTIL=…Z` (+`BYMONTHDAY`). Deadlines are zero-duration VEVENTs with `URL`. Lines are CRLF and folded at 75 octets. | FR-12, FR-26, NFR-3, NFR-6, ADR-5 |
+| `src/server/calendar/calendar-service.ts` (new) | `getEvent`, `createEvent`, `updateEvent`, `deleteEvent`, `upsertRsvp`, `listRsvps`, `isSchoolDay`, `noSchoolDays(from,to)`, `createTermBreaks(yearId, actor)`, `getOrCreateFeedToken`, `resetFeedToken`, `findUserByFeedToken` | Owns every per-entity check (NFR-7). **Imports nothing from timetable-service** (R2). It reads `prisma.schoolDay` directly, and timetable-service imports *from* it. | FR-5..8, FR-16, FR-20..23, FR-25, FR-33, FR-34, FR-36 |
+| `src/server/calendar/sources.ts` (new) | `getCalendarItems`, `getPublicEvents`, `getUpcomingEventsForUser` | The merge in §3.1. It may import timetable-service, the assignment and quiz services, and calendar-service, because nothing imports it back except routes (R2). | FR-10, FR-11, FR-15, FR-26, FR-30..32 |
+| `src/server/calendar/maintenance.ts` (new) | `sendRsvpReminders(now)` | Selects events with `rsvpEnabled`, `rsvpDeadline ∈ (now, now+48h]` and `rsvpReminderSentAt = null`. For each, claims it via `updateMany({where:{id, rsvpReminderSentAt:null}, data:{rsvpReminderSentAt:now}})`. If `count===1`, resolves the audience minus existing RSVP userIds and calls `notify('event.rsvp_reminder')`. | FR-23, ADR-11 |
+| `src/lib/validators/calendar.ts` (new, client-safe) | `eventInputSchema`, `eventPatchSchema`, `rsvpSchema`, `calendarQuerySchema`, `schoolDayQuerySchema`, `publicEventsQuerySchema` | Rules: title ≤ 150; description ≤ 5000; `endAt ≥ startAt`; `recurrenceUntil` required for WEEKLY/MONTHLY and ≤ start + 1 year; guests 0–5; range `to − from ≤ 100 days`; `sources ⊆ {events, holidays, assignments, quizzes, timetable}`. All-day input is `yyyy-MM-dd` start and inclusive end. The **server** converts it to `[schoolMidnight(start), schoolMidnight(end+1))`. | FR-4, FR-21, FR-32, NFR-8 |
+| `src/lib/dates.ts` (edit) | add `schoolMidnight(dateStr, tz)`, `schoolDateOf(instant, tz)` | Pure and client-safe. The single source of all-day and date conversions. | FR-4, FR-16, NFR-3, ADR-4 |
 
-**Error codes:**
+### 2.4 Edits to existing modules
 
-| Case | Response |
-|---|---|
-| Non-participant, or a participant who has left | 404 NOT_FOUND. The cuid is never treated as authorisation (NFR-1). |
-| Contact-rule violation on create | 403 FORBIDDEN, and nothing is created (FR-6). |
-| Send after the relationship has ended | 403 FORBIDDEN with `details.reason:'RELATIONSHIP_ENDED'` (FR-7). |
-| Edit or delete after 15 minutes | 403 FORBIDDEN with `details.reason:'EDIT_WINDOW_EXPIRED'` (FR-15). |
-| Duplicate OPEN report | 409 CONFLICT. |
-| Rate limit exceeded | 429 RATE_LIMITED with `details.retryAfterMs`. |
-| Not a safeguarding lead | 403 FORBIDDEN. |
+| File | Change | Reqs |
+|---|---|---|
+| `src/server/timetable/timetable-service.ts` | At both `// PRD-14 holidays hook` lines, replace the inline `schoolDay` weekday check with `if (!(await isSchoolDay(date)).isSchoolDay) return [];`. The weekday rule now lives only in `isSchoolDay`, so the old check is deleted, not duplicated. The return type is unchanged. | FR-16, FR-17, NFR-9 |
+| `src/server/attendance/attendance-service.ts` | `getToday` and `getOverview` add `noSchoolReason: string \| null` from `isSchoolDay`. The register save path rejects with `VALIDATION_ERROR` "holidayOverride required" when the date is not a school day and `holidayOverride !== true` (D-8). | FR-18 |
+| Attendance landing + `RegisterForm.tsx` | Landing shows "No classes today — <reason>". The register shows a warning `Alert` banner, and the save button opens `ConfirmDialog` "Record attendance on a holiday anyway", which sends `holidayOverride: true`. | FR-18, NFR-1 |
+| Teacher/student/parent Today views (those consuming `getScheduleForDate`) | When `isSchoolDay` is false, show the holiday name instead of the empty class list. | FR-17 |
+| `AssignmentForm.tsx`, `QuizSettingsPanel.tsx` | On a `dueAt`/`availableUntil` change, `fetch('/api/school-day?date=')`. If false, show a non-blocking `<Alert severity="warning">This date is a holiday (<title>).</Alert>`. Save is unchanged. | FR-19, FR-34 |
+| `src/server/notifications/types.ts` | Add `event.created` (COMMUNICATION, defaultEmail false), `event.holiday_created` (COMMUNICATION, defaultEmail true), `event.updated` (COMMUNICATION, false) and `event.rsvp_reminder` (COMMUNICATION, false). All roles. | FR-23, FR-28, FR-29 |
+| `src/app/api/internal/email/dispatch/route.ts` | Add an isolated `try { await sendRsvpReminders(now) } catch (e) { logger.error(...) }` block, matching the quiz-maintenance block. | FR-23, NFR-9 |
+| `src/config/navigation.ts` | `{ label: 'Calendar', href: '/calendar', icon: CalendarMonth, roles: ALL_ROLES }`. `/account/calendar` gets no sidebar entry, as with the other `/account/*` pages. It is reached from the account area and a "Subscribe" link on `/calendar`. | FR-35 |
+| `prisma/seed.ts` | `seedCalendar()`, idempotent: match by title (+ startAt where it is stable). It seeds the 7 events from FR-37 and the ROBOTICS course if absent (D-7). "Sports day" has no announcement link. Grade 6–8 exams use three `GRADE_LEVEL` audiences. "Grade 7 parents" = `GRADE_LEVEL` with only `includeParents`. | FR-37 |
 
-### 3.4 Pages
+### 2.5 Route handlers (thin: requireUser/requireRole → Zod parse → service → `ok`/`apiError`)
 
-| Route | Kind | Contents | Requirements |
+| Route | Auth | Service call | Reqs |
 |---|---|---|---|
-| `src/app/(app)/messages/layout.tsx` + `page.tsx` + `[conversationId]/page.tsx` | Server shell calling `requirePageUser`. The client renders `MessagesLayout`. | Two panes: the list on the left and the thread on the right. Below 768 px only one pane shows: the list on `/messages`, the thread on `/messages/[id]` with a back `IconButton`. | FR-9, FR-10, NFR-7 |
-| `src/app/(app)/admin/safeguarding/page.tsx` | Server, calls `requirePageSafeguardingLead()` | MUI `Tabs`: Reports and Conversations. `?report=<id>` opens the report detail drawer. | FR-23, FR-24 |
-| `src/app/(app)/admin/safeguarding/conversations/[id]/page.tsx` | Server, calls the service so the audit is written | Read-only thread showing deleted bodies, each marked as deleted, and edit revisions. | FR-24, FR-25 |
-| `src/app/(app)/account/notifications/page.tsx` (edit) | Add `QuietHoursSection` | Two `TextField type="time"` inputs, a Save button and a Clear button. | FR-21 |
-| `src/app/(app)/students/[id]/layout.tsx` (**new**) | Server layout that keeps the `[id]` segment name | Loads the viewer's role and the student's linked parents. Renders `StudentMessageActions`, a compact right-aligned action row with no duplicated title, above `children`. | FR-16 |
-| `src/app/(app)/courses/[courseId]/roster/page.tsx` (edit) | The TEACHER/ADMIN table moves into a client `RosterTable` with `Checkbox` selection | The toolbar button "Message selected students" opens `NewConversationDialog` prefilled with the selection. `RosterEntry.student.id` already exists. | FR-17 |
+| `GET /api/calendar?from&to&sources&studentId` | any user | `getCalendarItems` | FR-10, FR-11, FR-32, NFR-7 |
+| `POST /api/events` | ADMIN, TEACHER | `createEvent` | FR-5..7, FR-14, FR-28, FR-33 |
+| `GET /api/events/:id` | visible to user | `getEvent` (+`myRsvp`, totals, `canEdit`) | FR-12, FR-22, FR-33 |
+| `PATCH /api/events/:id` | creator, ADMIN | `updateEvent` | FR-6..8, FR-29, FR-33, FR-36 |
+| `DELETE /api/events/:id` | creator, ADMIN | `deleteEvent` | FR-8, FR-33, FR-36 |
+| `GET /api/events/:id/ics` | visible to user | `getEvent` → `buildCalendar([event])` | FR-12, FR-33 |
+| `PUT /api/events/:id/rsvp` | audience member | `upsertRsvp` | FR-21 |
+| `GET /api/events/:id/rsvps[?format=csv]` | creator, ADMIN | `listRsvps` → JSON or `csv.ts` | FR-22 |
+| `GET /api/me/calendar-feed` | any user | `getOrCreateFeedToken` | FR-24, FR-25 |
+| `POST /api/me/calendar-feed/reset` | any user | `resetFeedToken` | FR-24, FR-25 |
+| `GET /api/calendar/feed/[token]` (`.ics` stripped from param) | token | `findUserByFeedToken` → `rateLimit` → `getCalendarItems` → `buildCalendar` | FR-26, FR-27, NFR-5, NFR-6 |
+| `GET /api/school-day?date=` (new singular folder; `/api/school-days` untouched) | any user | `isSchoolDay` | FR-16, FR-19, FR-34 |
+| `GET /api/public/events?from&to` | public, IP rate limit | `getPublicEvents` | FR-30, D-9 |
+| `POST /api/academic-years/:id/term-breaks` | ADMIN | `createTermBreaks` | FR-20 |
 
-### 3.5 Client components: `src/components/messaging/`
+Error mapping: not visible → 404 `NOT_FOUND`. Visible but not permitted → 403 `FORBIDDEN`. RSVP after the deadline, or with RSVP disabled → 409 `CONFLICT`. Feed token unknown → plain 404. Feed over the limit → 429 `RATE_LIMITED` + `Retry-After`. `arch-api-contracts` defines the exact shapes.
 
-This follows the lowercase feature-folder precedent of `gradebook/` and `report-cards/`.
+### 2.6 UI
 
-| Component | Built from | Requirements |
+| Path / component | Contents | Reqs |
 |---|---|---|
-| `usePolling(fn, ms)` | `setInterval`. Pauses while `document.hidden` and fires immediately on `visibilitychange`. The NotificationBell pattern is copied; NotificationBell itself is not refactored. | FR-13, NFR-8 |
-| `ConversationList` | `List`, `ListItemButton`, `UserAvatar`, `Badge`, `Tabs` (Inbox/Archived) and a search `TextField`. Polls every 30 s. | FR-9 |
-| `MessageThread` | Day dividers come from `formatInSchoolTz`. Uses `FileList`, an "edited" `Typography`, and "This message was deleted". An `IntersectionObserver` sentinel at the top loads `?before=` and keeps the scroll position stable. Polls `?after=&since=` every 5 s. When new messages arrive and the tab is visible, it posts `/read`. A per-message `Menu` offers edit and delete (own messages within 15 minutes) and report (others' messages); reporting shows the toast "Reported — the school will review this.". | FR-10, FR-13, FR-14, FR-15, FR-22 |
-| `Composer` | Multiline `TextField`. Enter sends and Shift+Enter inserts a newline. `FileUpload` with context `'message'`, up to 5 files. A character counter appears above 4,500 characters. When `canSend` is false, the composer is disabled and shows "You can no longer send messages in this conversation." | FR-7, FR-11 |
-| `NewConversationDialog` | `Dialog` with `Autocomplete multiple` and `groupBy` over `/api/messaging/contacts` (not `UserPicker`, which ignores contact rules), a subject field (≤120) and the first message. Accepts `initialRecipients`. | FR-12, FR-16, FR-17 |
-| `ConversationMenu` | `Menu` with Mute, Archive/Unarchive, View participants (`Dialog`) and Leave group (`ConfirmDialog`). Leave is hidden when `canLeave` is false. | FR-14 |
-| `StudentMessageActions` | TEACHER/ADMIN get "Message parents", which opens the dialog prefilled with the linked parents. The button is hidden when the student has no linked parents. PARENT gets "Message teacher", which opens the dialog restricted to the "My child's teachers (<child>)" group. | FR-16 |
-| `MessagesNavBadge` | Used by the shell for nav items with `badge: 'messages'`. Polls `/api/messaging/unread-count` every 30 s and renders a `Badge`. | FR-18 |
-| `QuietHoursSection` | Inputs as described in §3.4. | FR-21 |
-| `SafeguardingReports`, `SafeguardingConversations` | `DataTable` (MUI X DataGrid) plus a detail `Drawer` with Mark reviewed (requires a note) and Dismiss. | FR-23, FR-24 |
-
-### 3.6 Config and shell
-
-- `src/config/navigation.ts`:
-  - Add `{ label:'Messages', href:'/messages', icon: ChatBubbleOutline, roles: ALL_ROLES, badge:'messages' }`.
-  - Add `{ label:'Safeguarding', href:'/admin/safeguarding', roles:['ADMIN'], requires:'safeguardingLead', group:'Admin' }`.
-  - Add `badge?` and `requires?` to `NavItem`.
-  - `navigationForRole(role, flags?)` filters out items whose `requires` flag is not set. (FR-18, FR-23)
-- `src/app/(app)/layout.tsx` reads `isSafeguardingLead` alongside the existing settings query and passes it to `AppShell`.
-- `shell.tsx` renders `MessagesNavBadge` for `badge:'messages'`.
+| `src/app/(app)/calendar/page.tsx` (server) → `CalendarView.tsx` (client) | `requirePageUser`. `<EventCalendar>` from `@mui/x-scheduler/event-calendar`: `views={['month','week','agenda']}`, week `startTime:7, endTime:19`, agenda `dayCount:30`, `displayTimezone={tz}`, `readOnly`, `eventCreation={false}`. The default view is month at `useMediaQuery('(min-width:768px)')`, agenda below that. Controlled `events`, refetched on `onVisibleDateChange`/`onViewChange` with plain `fetch` and a small Map cache keyed by `from|to|sources|studentId`. The page opens the drawer when `?event=<id>` is present (notification links). | FR-9, FR-10, NFR-1, NFR-2, NFR-4, NFR-12 |
+| `SourceChips` | MUI `Chip`s: School events · My assignments · My quizzes · My timetable (Week view only) · Holidays. Stored in `localStorage['calendar.sources']`. Holidays = HOLIDAY/TERM_BREAK/`isNoSchool`; School events = everything else, with no overlap. `timetable` is fetched only in Week view. | FR-10 |
+| Child filter (PARENT only) | `Select`: "All children" or one child → `studentId`. Deadline titles get the child's name prefixed by the server. | FR-11 |
+| `EventDrawer` | Right-anchored `Drawer`: title, category `Chip`, time in school tz, location, `MarkdownView` description, audience chips, RSVP controls (`ToggleButtonGroup` + guests `TextField` for parents + note; disabled after the deadline), "Add to my calendar" (`<a href="/api/events/:id/ics" download>`), and edit/delete when `canEdit` (delete via `ConfirmDialog`). Creator/admin see an RSVP `DataTable` + CSV link. | FR-12, FR-21, FR-22, NFR-1 |
+| Deadline click | `onEventEditingStart` → `cancel()` → `router.push(item.href)` | FR-13 |
+| `EventEditorDialog` | "New event" button (ADMIN/TEACHER). React Hook Form + `eventInputSchema`. Fields: title, category (HOLIDAY/TERM_BREAK only for admins), all-day switch, date/time pickers (`@mui/x-date-pickers`), location, `MarkdownEditor`, `AudienceBuilder`, recurrence select + until date, RSVP switch + deadline, and admin-only `isNoSchool`/`isPublic`. Results go through `useToast`. | FR-4..7, FR-14 |
+| `src/components/AudienceBuilder/` (new shared) | Rows of type `Select` + entity `Autocomplete` (grade level / section / course / role) + three include `Checkbox`es. Types are filtered by `canTargetAudience` rules on the client. The server stays authoritative. | FR-3, FR-7, FR-14 |
+| `src/app/(app)/account/calendar/page.tsx` | "Subscribe" card: URL `TextField` (read-only) + copy (`navigator.clipboard`), Google/Apple/Outlook instructions as static text, and "Reset link" behind `ConfirmDialog`. When `url` is null: "Reset link to get a new URL" (D-6). | FR-24, FR-25 |
+| `src/app/(app)/admin/academic-years/[id]/page.tsx` | `requirePageRole('ADMIN')`. Year name, read-only term list (existing terms service), and an "Add term breaks" button + `ConfirmDialog` that shows the number of breaks created via toast. | FR-20 |
 
 ---
 
-## 4. Data Flow
+## 3. Data Flow
 
-### 4.1 Create conversation (FR-6, FR-12, FR-30)
+### 3.1 Calendar read (`GET /api/calendar`, the feed, upcoming events)
 
-1. The dialog sends `POST /api/conversations` with `{participantIds, subject, body, fileIds}`.
-2. The handler checks `rateLimit('msg:'+uid)` and then calls `validateNewConversation`, which runs one `loadRelations` batch.
-3. Any violation returns 403 and nothing is written.
-4. Otherwise, one transaction creates the Conversation (`involvesStudent` = any participant is a STUDENT), the participants and the first message, which follows the send steps in §4.2.
-5. The response returns `{conversation}`, and the client navigates to `/messages/<id>`.
+```
+route → calendarQuerySchema (≤100 days) → getCalendarItems(user, {from,to,sources,studentId})
+  1. scope   = studentId ? resolveViewedStudent(user, studentId) : getAccessibleStudentIds(user)   (404 for others)
+  2. where   = audienceWhereForUser(user, scope)          // keys computed once
+  3. Promise.all([
+       events:      CalendarEvent where startAt < to AND (endAt > from OR (recurrence≠NONE AND recurrenceUntil ≥ from))
+                    AND (audiences some where) OR createdById=user  (ADMIN: no audience filter)
+                    → expandOccurrences(e, from, to, tz) → split into holidays / events by category+isNoSchool,
+       assignments: existing assignment service, PUBLISHED, dueAt ∈ [from,to), scoped students/courses,
+       quizzes:     existing quiz service, PUBLISHED, availableUntil ∈ [from,to),
+       timetable:   getPersonalTimetable(target) projected onto dates in range, skipping noSchoolDays(from,to)
+     ]) – only for requested sources
+  4. map → CalendarItem union {kind:'event'|'assignment'|'quiz'|'timetable', id, title, start, end, allDay, color, href?, childName?}
+```
+The feed calls the same function with `from=now−30d, to=now+365d`, sources minus timetable, and recurring events **unexpanded**. Instead of occurrences it gets the series rows so it can emit RRULE. The 100-day cap is skipped because the call is internal. Traces to FR-10, FR-11, FR-15, FR-26, FR-31, FR-32, NFR-4, NFR-5.
 
-### 4.2 Send (FR-7, FR-11, FR-19, FR-20, FR-27, FR-31, NFR-4)
+### 3.2 Event write
 
-1. The composer sends `POST /api/conversations/:id/messages`.
-2. The handler checks the rate limit, which may return 429.
-3. It loads the participation; a missing participation returns 404.
-4. It runs `canSendIn`, which may return 403 RELATIONSHIP_ENDED.
-5. It verifies the attachments.
-6. The send transaction inserts the message, links the attachments, bumps `lastMessageAt`, sets the sender's `lastReadAt`, and unarchives the conversation for the other participants.
-7. The handler returns 201 with `{message}`.
-8. After commit, `onMessageSent` runs for each recipient who has not muted or left: delete the old unread `message.received` notification, call `notify` in-app only, and upsert `PendingMessageEmail` (create-only).
+```
+POST/PATCH → eventInputSchema → createEvent/updateEvent(user, input)
+  - FR-6: non-admin + (isNoSchool | isPublic | HOLIDAY | TERM_BREAK) → 403
+  - FR-7: every audience must pass canTargetAudience(user, a) → else 403
+  - FR-8: PATCH/DELETE requires createdById===user.id or ADMIN
+  - FR-5: isNoSchool ??= category ∈ {HOLIDAY, TERM_BREAK}
+  - all-day → schoolMidnight conversion (FR-4)
+  - prisma.$transaction: event + replace audiences
+  - after commit:
+      FR-36 audit() if ADMIN && createdById≠user.id (update/delete)
+      FR-28 create: first occurrence within 30 days → notify(HOLIDAY|TERM_BREAK ? 'event.holiday_created' : 'event.created',
+            resolveAudienceUserIds(audiences) − creator, link '/calendar?event=<id>')
+      FR-29 update: startAt|endAt|allDay|location changed AND event upcoming → notify('event.updated') once
+```
 
-### 4.3 Poll and read (FR-13, FR-14, FR-18, NFR-2, NFR-8)
+### 3.3 Audience resolution (PRD-12 FR-2 semantics)
 
-- **Thread.** Every 5 s the thread calls `GET …/messages?after=<lastId>&since=<lastPollIso>`.
-  1. The handler does a participant lookup on the unique index.
-  2. It loads the cursor message's `createdAt`.
-  3. It queries `Message where conversationId AND (createdAt,id) > cursor` on `@@index([conversationId, createdAt])`, with `take 100`.
-  4. It queries `changed` = messages with `updatedAt > since` and `createdAt ≤ cursor`, with `take 100`.
-  5. When nothing has changed it returns `{messages:[],changed:[]}`. Target: under 100 ms.
-- **Mark read.** When messages arrive while the thread is visible, and when a thread is opened, the client sends `POST …/read`. This sets `lastReadAt`, marks that conversation's unread `message.received` notification read, and deletes the `PendingMessageEmail` row.
-- **List and badge.** Every 30 s the client calls `GET /api/conversations` and `GET /api/messaging/unread-count`.
+| Type | refId | Students (`includeStudents`) | Parents (`includeParents`) | Teachers (`includeTeachers`) |
+|---|---|---|---|---|
+| SCHOOL | null | all active users | | |
+| STAFF | null | ADMIN + TEACHER | | |
+| ROLE | role name | users with that role | | |
+| GRADE_LEVEL | gradeLevelId | `StudentProfile.gradeLevelId = refId` | their `ParentStudentLink` parents | teachers of current-year courses in sections of that grade |
+| SECTION | sectionId | current-year `SectionMember`s | their parents | homeroom teacher + teachers of courses in the section |
+| COURSE | courseId | ACTIVE `Enrollment`s | their parents | `teacherId` + `coTeacherIds` |
 
-### 4.4 Deferred email (FR-20, FR-21)
+Only ACTIVE, non-archived users count. `isUserInAudience` and `audienceWhereForUser` give the same answer as `resolveAudienceUserIds`. A property-style integration test loops over every seed user to check this (PRD-12 test requirement). Traces to FR-3, FR-7, NFR-7.
 
-1. Cron calls `POST /api/internal/email/dispatch`, which runs `processPendingMessageEmails(now)`.
-2. For each due row, claim it by deleting it.
-3. If the user has read the conversation, muted it or left it, stop there.
-4. If the user is in quiet hours (school timezone, ranges may wrap midnight), re-insert the row with `dueAt` = the end of quiet hours.
-5. Otherwise call `notify({inApp:false, email})`. `notify()` applies the user's email preference and filters out DISABLED and ARCHIVED users.
+### 3.4 School-day check
 
-### 4.5 Report and safeguarding (FR-22..FR-26, NFR-11)
+```
+isSchoolDay(date) → d = schoolDateOf(date, tz), isoDay
+  1. SchoolDay[isoDay].isTeaching ?? isoDay ≤ 5   → false, reason 'Not a teaching day'
+  2. isNoSchool events with a SCHOOL audience where startAt < midnight(d+1) AND (endAt > midnight(d) OR recurring)
+     → expandOccurrences within that day → first hit → false, reason 'Holiday: <title>'
+  3. → { isSchoolDay: true, reason: null }
+noSchoolDays(from, to) = one query, same rules, returns Map<date, reason> (used by the timetable source; avoids N calls)
+```
+Callers: timetable-service (FR-17), attendance (FR-18), `/api/school-day` (FR-19, FR-34), timetable source in §3.1. Traces to FR-16..19, FR-34.
 
-1. A participant sends `POST /api/messages/:id/report` with `{reason}`. A duplicate OPEN report returns 409.
-2. After commit, `notify` sends `message.reported` to the ACTIVE safeguarding leads (mandatory in-app, plus email), linking to `/admin/safeguarding?report=<id>`.
-3. A lead opens the report. `requireSafeguardingLead` runs (non-leads get 403), the report detail with ±5 messages loads, and `audit('safeguarding.conversation.view')` is written.
-4. Review or dismiss calls `PATCH`, which updates the report and writes `audit('safeguarding.report.review'|'…dismiss')`.
-5. Conversation search filters on `involvesStudent=true`. Every view of a conversation writes an audit row.
+### 3.5 RSVP
 
-### 4.6 Attachments (FR-11, FR-27)
+`PUT /api/events/:id/rsvp` → `rsvpSchema` → `upsertRsvp`:
+1. Check the event is visible and `rsvpEnabled`. Otherwise 404 (not visible) or 409.
+2. Require `isUserInAudience`. Otherwise 403.
+3. Require `now < rsvpDeadline`. Otherwise 409.
+4. If the user is not a PARENT, force `guests = 0`.
+5. Upsert on `(eventId, userId)`.
 
-1. `FileUpload` with context `'message'` uploads the file, unattached.
-2. The send transaction sets `contextId` to the messageId. Files left unattached are purged after 24 h by the existing job.
-3. Downloads go through `registerFileAccess('message')`, which allows participants who have not left and safeguarding leads.
+A recurring event has one RSVP for the whole series. The drawer gets `myRsvp` and totals `{yes, no, maybe, guests}` from `GET /api/events/:id`. Creator and admin read the full list via `/rsvps`, or `?format=csv` via `csv.ts`. Traces to FR-21, FR-22.
+
+### 3.6 Reminder job
+
+Cron `POST /api/internal/email/dispatch` → `sendRsvpReminders(now)` → claim → audience − responders → `notify('event.rsvp_reminder', link '/calendar?event=<id>')`. Traces to FR-23.
+
+### 3.7 iCal feed
+
+```
+GET /api/calendar/feed/<token>.ics
+  token = param.replace(/\.ics$/, '') → hashToken(token) → CalendarFeedToken by tokenHash (unique) → user ACTIVE?
+    no → 404 text/plain
+  rateLimit('calfeed:'+hash, 60, 3_600_000) → !ok → 429 + Retry-After
+  items = getCalendarItems(user, feed window, series mode)
+  body  = buildCalendar(items, tz, window)   // VTIMEZONE for transitions in window, RRULE for series
+  200 text/calendar; charset=utf-8, Cache-Control: private, max-age=900
+```
+Token lifecycle:
+- `getOrCreateFeedToken` creates the row on first use from `randomBytes(32).toString('base64url')`, stores `hashToken(raw)`, and returns the URL once.
+- `resetFeedToken` upserts a new hash, so the old URL returns 404 immediately.
+- No raw token is ever logged.
+
+Traces to FR-24..27, NFR-5, NFR-6, ADR-6, ADR-7.
+
+### 3.8 Public and dashboard hooks
+
+- `getPublicEvents(from, to)`: `isPublic` events, expanded, returning only public-safe fields (id, title, category, start, end, allDay, location, description). Traces to FR-30.
+- `getUpcomingEventsForUser(user, limit)`: `getCalendarItems(user, now..now+90d, ['events','holidays'])`, sorted, then the first `limit` items. No UI. Traces to FR-31, NFR-11.
+
+### 3.9 Term breaks
+
+`POST /api/academic-years/:id/term-breaks` (ADMIN) → `createTermBreaks`:
+1. Order the terms by `startDate`.
+2. For each consecutive pair where `next.start > prev.end + 1 day`, create an all-day TERM_BREAK with `isNoSchool=true` and a SCHOOL audience, from `prev.end+1` (inclusive) to `next.start` (exclusive).
+3. Skip any gap that already has a TERM_BREAK with the same span. This makes the call idempotent.
+4. Return `{ created }`.
+5. Write an `audit()` entry.
+
+Traces to FR-20.
 
 ---
 
-## 5. Key patterns and constraints
+## 4. Cross-cutting
 
-- **Server-side authorisation everywhere (NFR-1).** Every service function takes the `SessionUser` and starts with `getParticipation` or `requireSafeguardingLead`. Nothing trusts IDs sent by the client.
-- **One source of truth for contact rules (ADR-3).** Create, send, contacts and the student/roster actions all go through `contact-rules.ts`.
-- **After-commit side effects.** `notify()` never throws and is called only after the transaction commits, which matches the platform convention.
-- **Scope guard (NFR-9).** Do not add reactions, typing indicators, websockets/SSE, broadcast messaging, E2E encryption or announcements. Leave the behaviour of `student-access.ts` and `UserPicker` unchanged.
-- **Logging and time (NFR-6).** Use `logger` only. Store everything in UTC and display it in the school timezone through `src/lib/dates.ts`.
+- **Time (NFR-3, NFR-8).**
+  - Storage is in UTC. Display uses `SchoolSettings.timezone`, read via the existing `getSchoolTimezone()`. No third copy is created.
+  - All-day events run from school-tz midnight with an exclusive end.
+  - Expansion steps in wall-clock time.
+  - The feed uses `VALUE=DATE` for all-day events and `TZID` + VTIMEZONE for series.
+  - The scheduler gets `displayTimezone`.
+  - One DST-week test fixture (America/New_York 2026-11-01, or the seed tz) runs through the expansion, the all-day path and the feed.
+- **Security (NFR-5, NFR-7).**
+  - Every route calls `requireUser`/`requireRole`, except the feed (hashed token) and public events (public fields only, IP limit).
+  - Per-entity checks live in calendar-service.
+  - Students see only themselves, and parents only their linked children (`getAccessibleStudentIds` / `resolveViewedStudent`).
+  - A non-visible event returns 404, so its existence doesn't leak.
+- **Performance (NFR-4).**
+  - A parent with 3 children in month view needs about 6 indexed queries, run in parallel.
+  - The audience is filtered in SQL, and holidays are found with one `noSchoolDays` query.
+  - There is no cache layer. Add one only if the Playwright timing or a measurement exceeds 500 ms.
+- **UI rules (NFR-1, NFR-12).**
+  - Only MUI, icons and MUI X (including the scheduler) are used. Toasts go through `useToast`, side panels through `Drawer`, and confirmations through `ConfirmDialog`/`Dialog`.
+  - English only. The breakpoint is 768 px.
+- **Scope (NFR-11).**
+  - Out of scope: per-occurrence exceptions, room booking (`roomId` is stored and unused), two-way sync, and dashboard or public-site UI.
+- **Tests (NFR-10).**
+  - Unit tests:
+    - `expandOccurrences`: weekly, monthly on the 31st, the until bound, a DST week
+    - `isSchoolDay`: weekday, holiday, recurring no-school
+    - `ical`: escaping `, ; \ \n`, folding, RRULE, VALUE=DATE exclusive end, node-ical parse
+    - all-day conversion
+    - term-break gap math
+    - `canTargetAudience`
+  - Integration tests:
+    - calendar merge per role (admin, teacher, student, parent with 3 children)
+    - feed token reset (old URL 404, new URL 200 and node-ical-valid)
+    - RSVP deadline (409) and parent-only guests
+    - audience resolver parity across seed users
+    - teacher SCHOOL create → 403
+  - Playwright:
+    - an admin creates a holiday, and the student's Today view shows the holiday name
+    - a parent RSVPs
+    - the feed URL returns a valid ICS
+  - `npm run lint && npm run typecheck && npm run test` stays green.
 
-### Tests (NFR-10)
+### Risks carried forward
 
-| Kind | File | What it covers |
-|---|---|---|
-| Unit | `tests/unit/messaging/contact-rules.test.ts` | The full role×role matrix, co-teacher, homeroom in the current year and in a previous year, DROPPED enrollment, a group with a student and no staff, 26 participants, and `canSendIn` after a relationship has ended. |
-| Unit | `tests/unit/messaging/quiet-hours.test.ts` | Ranges that wrap midnight, edge minutes, and DST. |
-| Integration | `tests/integration/messaging/*.test.ts` | Notification collapsing to one unread row; muted participants skipped; quiet-hours deferral and the read short-circuit in `processPendingMessageEmails`; revision capture on edit; the 15-minute window; rate limit 429; non-participant 404; safeguarding 403 for non-leads; the audit row on view; and 409 on a duplicate report. |
-| E2E | `tests/e2e/messaging.spec.ts` | Parent→teacher round trip in two browser contexts, with the message appearing in under 6 s. Student→student is absent from the picker and `POST` returns 403. |
-| Suite | — | The existing lint, typecheck and test suites must stay green. |
-
----
-
-## 6. Requirements Traceability
-
-| Req | Design element |
+| Risk | Mitigation |
 |---|---|
-| FR-1 | §2 models Conversation, ConversationParticipant, Message, MessageAttachment, MessageReport + ReportStatus, MessagingSettings; migration `20261112000000_add_direct_messaging` |
-| FR-2 | §2 `User.isSafeguardingLead`; §3.1 users validator/service edit; ADR-11 |
-| FR-3 | §2 MessageRevision; edit transaction in `messages.ts` |
-| FR-4 | §2 PendingMessageEmail; `email.ts` |
-| FR-5 | `contact-rules.ts` `canMessageWith` / `canMessage` |
-| FR-6 | `validateNewConversation`; §4.1 |
-| FR-7 | `canSendIn`; `getConversation.canSend`; Composer disabled state; §4.2 |
-| FR-8 | `contacts.ts`; GET `/api/messaging/contacts` |
-| FR-9 | `/messages` pages; `ConversationList`; `listConversations` |
-| FR-10 | `MessageThread`; `listMessages?before=`; day grouping in the school timezone |
-| FR-11 | `Composer`; `sendMessageSchema`; `constants.ts` |
-| FR-12 | `NewConversationDialog`; POST `/api/conversations` |
-| FR-13 | `usePolling`; `?after=&since=` (5 s); list and badge (30 s); §4.3 |
-| FR-14 | read/mute/archive/leave routes; `ConversationMenu`; leave rules in `conversations.ts` |
-| FR-15 | `editMessage`/`deleteMessage` with the 15-minute window; PATCH/DELETE `/api/messages/:id` |
-| FR-16 | `students/[id]/layout.tsx` + `StudentMessageActions` |
-| FR-17 | Roster `RosterTable` selection + "Message selected students" |
-| FR-18 | `navigation.ts` Messages item + `MessagesNavBadge`; GET `/api/messaging/unread-count` |
-| FR-19 | `message.received` type; `onMessageSent` collapse + in-app `notify` |
-| FR-20 | PendingMessageEmail upsert; `processPendingMessageEmails`; `notify({inApp:false})`; §4.4 |
-| FR-21 | MessagingSettings; `/api/me/messaging-settings`; `QuietHoursSection`; `quiet-hours.ts` |
-| FR-22 | `reports.ts`; POST `/api/messages/:id/report`; toast copy |
-| FR-23 | `/admin/safeguarding` Reports tab; `listReports`/`getReport`/`reviewReport`; `requireSafeguardingLead` |
-| FR-24 | Conversations tab; `searchConversations`; `getConversationForSafeguarding`; read-only view page |
-| FR-25 | `audit('safeguarding.conversation.view')` in `getReport` and `getConversationForSafeguarding` |
-| FR-26 | `message.reported` type; `onMessageReported` |
-| FR-27 | `files/contexts.ts` `'message'` resolver; attachment linking in the send transaction |
-| FR-28 | §3.3 route table; validators; standard response shapes |
-| FR-29 | `prisma/seed.ts` edits (§3.1) |
-| FR-30 | `involvesStudent` computed in the create transaction |
-| FR-31 | `lastMessageAt` bumped in the send transaction |
-| FR-32 | `loadRelations`: `teacherId OR coTeacherIds has` |
-| NFR-1 | `access.ts` `getParticipation` (404) / `requireSafeguardingLead` (DB flag); file resolver |
-| NFR-2 | `@@index([conversationId, createdAt])`; keyset `after` poll; raw COUNT for unread |
-| NFR-3 | Soft delete only; MessageRevision; deleted content visible only through `safeguarding.ts` |
-| NFR-4 | `rateLimit('msg:'+uid, 30, 60_000)` on send and create → 429 |
-| NFR-5 | §3.5 MUI-only components; mui-mcp lookups required in dev |
-| NFR-6 | `src/server/messaging/*`, `src/lib/validators/messaging.ts`, logger, UTC, cuid |
-| NFR-7 | `MessagesLayout` single pane below 768 px with back button |
-| NFR-8 | 5 s thread poll (≤ ~5 s + request latency < 6 s); no websockets |
-| NFR-9 | §5 scope guard |
-| NFR-10 | §5 Tests |
-| NFR-11 | `audit()` on report review/dismiss and on `isSafeguardingLead` changes |
+| R1 Beta scheduler API drift | Exact pin, MCP lookup before use, and the scheduler used only as a read-only display (ADR-2). The D-5 fallback is pre-agreed. |
+| R2 Import cycle between timetable and calendar | The edges run one way: timetable-service → calendar-service, and sources.ts → (timetable, assignments, quizzes, calendar-service). calendar-service reads teaching weekdays via `prisma.schoolDay` and never imports timetable-service. |
+| R3 DST correctness across 4 code paths | Shared pure helpers in `src/lib/dates.ts` plus one shared DST fixture. |
+| R4 Audience is both the hot path and the security boundary | A single implementation plus the parity test. |
+
+---
+
+## 5. Requirements Traceability
+
+| Req | Design element(s) |
+|---|---|
+| FR-1 | §2.1 exact pin `@mui/x-scheduler@9.0.0-beta.15` + scoped override (ADR-1) |
+| FR-2 | §2.2 migration `20261113000000_add_calendar`: enums, 4 models, cascades, `[startAt,endAt]` index |
+| FR-3 | §2.2 `AudienceType` (PRD-12 values); §2.3 `announcements/audience.ts`; §3.3 resolution table |
+| FR-4 | §2.3 `validators/calendar.ts` + `schoolMidnight`; §3.2 all-day conversion |
+| FR-5 | §3.2 `isNoSchool ??= HOLIDAY/TERM_BREAK` in `createEvent` |
+| FR-6 | §3.2 admin-only field check; §2.6 editor hides admin fields |
+| FR-7 | §2.3 `canTargetAudience`; §3.2 check on create/patch |
+| FR-8 | §3.2 creator/ADMIN guard on PATCH/DELETE |
+| FR-9 | §2.6 `CalendarView` with `EventCalendar` views/viewConfig/breakpoint; D-5 agenda fallback |
+| FR-10 | §2.6 `SourceChips` + localStorage; §3.1 `sources` param, holidays/events split |
+| FR-11 | §2.6 parent child filter; §3.1 `studentId` scope + `childName` |
+| FR-12 | §2.6 `EventDrawer`; §2.5 `GET /api/events/:id`, `/ics` |
+| FR-13 | §2.6 deadline click → `router.push(href)` |
+| FR-14 | §2.6 `EventEditorDialog` + `AudienceBuilder` |
+| FR-15 | §2.3 `recurrence.ts` `expandOccurrences`; §3.1 read-time expansion |
+| FR-16 | §2.3 `isSchoolDay`; §3.4 |
+| FR-17 | §2.4 timetable-service hook + Today views |
+| FR-18 | §2.4 attendance `noSchoolReason`, `holidayOverride` (D-8), `RegisterForm` banner/confirm |
+| FR-19 | §2.4 `AssignmentForm` / `QuizSettingsPanel` warning via `/api/school-day` |
+| FR-20 | §2.6 `/admin/academic-years/[id]` page; §2.5 term-breaks route; §3.9 `createTermBreaks` |
+| FR-21 | §2.5 `PUT /api/events/:id/rsvp`; §3.5 `upsertRsvp` rules |
+| FR-22 | §2.5 `/rsvps[?format=csv]`; §2.6 drawer totals + `DataTable` |
+| FR-23 | §2.3 `maintenance.ts`; §2.4 cron hook + type; D-1 `rsvpReminderSentAt` |
+| FR-24 | §2.6 `/account/calendar`; §2.5 me/calendar-feed routes |
+| FR-25 | §3.7 token lifecycle with `hashToken`; D-6 |
+| FR-26 | §2.3 `ical.ts`; §3.7 feed build (window, RRULE, VTIMEZONE, escaping) |
+| FR-27 | §2.5 feed route; §3.7 rate limit + Cache-Control |
+| FR-28 | §2.4 types `event.created` + `event.holiday_created` (D-3); §3.2 notify on create |
+| FR-29 | §2.4 type `event.updated`; §3.2 notify on time/location change |
+| FR-30 | §3.8 `getPublicEvents`; §2.5 `/api/public/events` (D-9) |
+| FR-31 | §3.8 `getUpcomingEventsForUser` |
+| FR-32 | §2.5 `GET /api/calendar`; §3.1 `getCalendarItems`; 100-day cap in validator |
+| FR-33 | §2.5 event CRUD + `/ics` routes |
+| FR-34 | §2.5 `GET /api/school-day` (singular, new folder) |
+| FR-35 | §2.4 `navigation.ts` Calendar entry |
+| FR-36 | §3.2 `audit()` on admin edits/deletes of other users' events |
+| FR-37 | §2.4 `seedCalendar()` + ROBOTICS course (D-7) |
+| NFR-1 | §2.6 MUI-only components; §4 UI rules |
+| NFR-2 | §2.1 MCP lookup gate before scheduler use |
+| NFR-3 | §2.3 wall-clock expansion, `dates.ts` helpers, ical VALUE=DATE/TZID; §4 DST fixture |
+| NFR-4 | §3.1 parallel indexed queries, SQL audience filter, D-2 index; §4 performance |
+| NFR-5 | §3.7 32-byte token, SHA-256 hash; §3.1 shared read path |
+| NFR-6 | §2.1 `node-ical` devDep; §4 parse tests |
+| NFR-7 | §2.5 auth column; §3.3; §4 security |
+| NFR-8 | §2.3 module layout under `src/server/calendar/`; thin routes; Zod; UTC storage |
+| NFR-9 | §1 reuse list; §2.4 edits instead of new helpers |
+| NFR-10 | §4 tests |
+| NFR-11 | §4 scope; §3.8 hooks only |
+| NFR-12 | §2.6 768 px breakpoint, English only |

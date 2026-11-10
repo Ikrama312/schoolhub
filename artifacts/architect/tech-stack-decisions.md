@@ -1,164 +1,228 @@
-# Tech Stack Decisions: PRD-13 Direct Messaging
+# Tech Stack Decisions: PRD-14 School Calendar, Events & Holidays
 
-Ticket: SH-13 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-09T21:45:00Z · Status: complete
+Ticket: SH-14 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-09T22:40:00Z · Status: complete
 
-> This file replaces a stale SH-12 version. The other files in `artifacts/architect/` are still from SH-12 until their own sub-tasks rewrite them.
+> This file replaces the stale SH-13 version. The other files in `artifacts/architect/` are still from SH-13 until their own sub-tasks rewrite them.
 
-**Base stack (checked against `package.json`).** `artifacts/intake/tech-stack.json` reports `react` at 100% confidence, and the workspace matches it:
+**Base stack (checked against `package.json`).** `artifacts/intake/tech-stack.json` reports `react` at 99% confidence, and the workspace matches it:
 
 - Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict
-- Prisma 5.20.0 on PostgreSQL 16, Zod 3.23.8
-- MUI 9.5.0: material, icons-material, material-nextjs, x-data-grid, x-date-pickers
-- date-fns 3.6.0, date-fns-tz 3.2.0, next-auth 5 beta, nodemailer with `@react-email/*`
-- Vitest, Testing Library, Playwright 1.47 and `@axe-core/playwright`
+- Prisma 5.20.0 on PostgreSQL 16, Zod 3.23.8, react-hook-form 7.53.0
+- MUI 9.5.0: material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts
+- date-fns 3.6.0, date-fns-tz 3.2.0, react-markdown 10.1.0 + rehype-sanitize (behind `MarkdownView`)
+- Vitest 2.1.1, Testing Library, Playwright 1.47.2
 
-Intake reported no blockers (`blockers: []`, 95% confidence). Intake left four decisions to the architect (`clarificationLog[0].unresolved`). ADR-9 through ADR-12 settle them.
+Intake reported no blockers (`blockers: []`, 96% confidence). It raised three warnings and left six unresolved questions (`clarificationLog[0].unresolved`). ADR-1 and ADR-9 through ADR-11 cover the warnings. ADR-12 confirms the intake defaults for the remaining questions.
 
-**No new runtime dependencies.** Every requirement can be met with the stack above and the existing helpers.
+**Dependency changes (complete list).**
 
----
-
-## ADR-1: Near-real-time delivery uses HTTP polling, not websockets or SSE
-
-**Context.** NFR-8 requires a message to appear in another open thread within 6 s. NFR-9 and the PRD's Out of Scope list rule out websockets. FR-13 fixes the intervals: 5 s for the active thread, and 30 s for the conversation list and the sidebar badge. NFR-2 requires polls to finish in under 100 ms. The app runs on Next.js route handlers, which have no long-lived connection infrastructure.
-
-**Decision.**
-- The client polls with plain `fetch` inside `setInterval`. It copies the pattern from `src/components/NotificationBell/NotificationBell.tsx`: polling pauses on `visibilitychange` when the tab is hidden and refreshes immediately when the tab becomes visible again.
-- Thread polling uses `GET /api/conversations/:id/messages?after=<lastId>`. The server finds the cursor message's `createdAt` and returns rows with `createdAt > cursor`, ordered `(createdAt, id)`. The query uses the `@@index([conversationId, createdAt])` from FR-1. When nothing has changed, it returns `[]`.
-- To pick up edits and deletes, a poll response also returns messages with `updatedAt > since`. The client sends `since` as the time of its last poll. The 5 s poll needs no second endpoint.
-- The interval constants live in one place, `src/lib/messaging/constants.ts`: `THREAD_POLL_MS = 5000` and `LIST_POLL_MS = 30000`.
-- Do not add SWR, React Query or any other data-fetching library.
-
-**Consequences.** The worst-case delay is about 5 s plus request time, which meets the 6 s target. Load grows linearly with the number of open threads, which is acceptable for a single school. Any later move to SSE would only change the client hook. Drives: FR-13, NFR-2, NFR-8, NFR-9.
-
-## ADR-2: Persistence is Prisma and PostgreSQL in one new migration
-
-**Context.** FR-1 through FR-4 add Conversation, ConversationParticipant, Message, MessageAttachment, MessageReport with the ReportStatus enum, MessagingSettings, MessageRevision, PendingMessageEmail and `User.isSafeguardingLead`. FR-30 and FR-31 add the denormalised fields `involvesStudent` and `lastMessageAt`. NFR-3 forbids hard deletes by users.
-
-**Decision.**
-- Add one migration, `prisma/migrations/20261112000000_add_direct_messaging`. Its timestamp sorts after the latest migration, `20261111000000_add_gradebook`.
-- Ordering, unread state and polling all depend on these indexes:
-  - `Message @@index([conversationId, createdAt])` (NFR-2)
-  - `ConversationParticipant @@unique([conversationId, userId])` plus `@@index([userId, archivedAt])` for the inbox
-  - `Conversation @@index([lastMessageAt])`
-  - `Conversation @@index([involvesStudent, createdAt])` for safeguarding search (FR-24)
-  - `MessageReport @@index([status, createdAt])` (FR-23)
-  - `PendingMessageEmail @@unique([userId, conversationId])` plus `@@index([dueAt])` (FR-20)
-- Soft delete uses `Message.deletedAt`. The API never issues a `delete` on Message. Cascades only fire when an admin purges a User or Conversation, which matches the existing conventions.
-- Write the message insert, the `Conversation.lastMessageAt` update and the sender's `lastReadAt` update in one `prisma.$transaction`. Write the edit and its `MessageRevision` insert in one transaction as well.
-- Do not add a search engine. FR-9 and FR-24 search with Prisma `contains` and `mode: 'insensitive'` on participant names and subject. At single-school scale, a bounded ILIKE is enough.
-
-**Consequences.** One reversible migration, and the existing `db:migrate` and `db:seed` flows keep working. Postgres needs no extensions. Drives: FR-1, FR-2, FR-3, FR-4, FR-9, FR-24, FR-30, FR-31, NFR-2, NFR-3.
-
-## ADR-3: Contact rules are a pure function with an injected relationship loader
-
-**Context.** FR-5 defines the sender-to-recipient matrix. FR-6 adds the group rules: at most 25 participants, and a group with a student must include staff. FR-7 re-checks the rules on every send. FR-32 counts co-teachers as managing a course. FR-8 lists contacts from the same rules. NFR-10 requires unit tests over the full matrix.
-
-**Decision.**
-- `src/server/messaging/contact-rules.ts` exports:
-  - a pure `canMessageWith(sender, recipient, rel)`, where `rel` is a pre-loaded relationship snapshot;
-  - a thin async `canMessage(sender, recipient)`, which loads the snapshot through Prisma and then calls the pure function.
-- The snapshot covers:
-  - ACTIVE `Enrollment` rows in courses where the teacher is `teacherId` or is listed in `coTeacherIds` (Prisma `has`);
-  - `Section.homeroomTeacherId`;
-  - `ParentStudentLink`.
-- Vitest covers the pure function with a table-driven matrix and needs no database. A small number of integration tests cover the loader.
-- `GET /api/messaging/contacts` reuses the same snapshot logic, building lists forward from the sender, so the contacts list and the send check cannot drift apart.
-
-**Consequences.** One source of truth for who may message whom. The tests are fast and complete. Every send does one extra indexed query per recipient pair, which is affordable at 25 or fewer participants. Drives: FR-5, FR-6, FR-7, FR-8, FR-32, NFR-1, NFR-10.
-
-## ADR-4: Reuse the existing platform services rather than adding new infrastructure
-
-**Context.** NFR-6 sets the code conventions. Intake confirmed which helpers already exist.
-
-**Decision.**
-
-| Need | Reuse | Requirement |
-|---|---|---|
-| Auth and role checks | `requireUser` and `requireRole` from `src/server/auth/requireRole.ts`, plus a new `assertParticipant(userId, conversationId)` in `src/server/messaging/access.ts` | NFR-1 |
-| Handlers and errors | `withHandler`, `ok` and `AppError` from `src/server/http.ts`, with the standard success, list and error shapes | FR-28, NFR-6 |
-| Validation | Zod in a new `src/lib/validators/messaging.ts` | NFR-6 |
-| Rate limit | `rateLimit('msg:'+userId, 30, 60_000)` from `src/server/rate-limit.ts`; on failure throw `AppError('RATE_LIMITED')` (HTTP 429) | NFR-4 |
-| Attachments | `registerFileAccess('message', resolver)` with the resolver added in `src/server/files/contexts.ts`. Access is allowed for participants of the message's conversation, and for ADMIN users with `isSafeguardingLead`. The resolver denies on error. Uploads reuse `FileUpload` and `FileList`. | FR-11, FR-27 |
-| Audit | `audit()` from `src/server/audit.ts` for `safeguarding.conversation.view` and for report review and dismissal | FR-25, NFR-11 |
-| Timezone | `formatInSchoolTz` and `schoolNow` from `src/lib/dates.ts`, using `SchoolSettings.timezone` | FR-10, FR-21 |
-| Logging | `logger` from `src/lib/logger.ts`, never `console.log` | NFR-6 |
-
-**Consequences.** No new dependencies. The rate limiter keeps counts in each process (it already carries a `ponytail:` note). That is fine for one instance, and NFR-4 does not ask for more. Drives: FR-11, FR-25, FR-27, FR-28, NFR-1, NFR-4, NFR-6, NFR-11.
-
-## ADR-5: Notification collapsing and deferred email build on `notify()`
-
-**Context.** FR-19 requires one unread in-app `message.received` per conversation, replacing older ones, with email on by default. FR-20 sends the email only if the recipient has not read the conversation within 10 minutes and it is outside their quiet hours. FR-26 adds `message.reported`, which is mandatory in-app and sends email. In `src/server/notifications/notify.ts`, `notify()` enqueues email only when `input.email` is set, and it already resolves per-user preferences. The `Notification` model has no `conversationId` column.
-
-**Decision.**
-- Register both types in `src/server/notifications/types.ts` under `COMMUNICATION`:
-  - `message.received`: `defaultEmail: true`
-  - `message.reported`: `mandatoryInApp: true`, `defaultEmail: true`
-- **Collapsing.** Unread rows are keyed by the link `/messages/<conversationId>`. On send, the service runs `notification.deleteMany({ userId in recipients, type: 'message.received', link, readAt: null })` and then calls `notify()` without `email`. That writes the in-app rows only. Muted participants are skipped.
-- **Deferral.** In the same send path, the service upserts `PendingMessageEmail` with `dueAt = now + 10 min`, using the unique key `(userId, conversationId)`. A repeat send does not reset `dueAt`, so the first unread message starts the clock.
-- **Dispatch.** Add `processPendingMessageEmails(now)` in `src/server/messaging/email.ts`. It runs in its own try/catch in `POST /api/internal/email/dispatch`, next to the quiz jobs. For each due row:
-  - If `lastReadAt` is at or after the row's `createdAt`, delete the row.
-  - Else, if the recipient is in quiet hours, move `dueAt` to the end of their quiet hours.
-  - Otherwise, enqueue the email and delete the row.
-- **Email-only path.** Extend `NotifyInput` with an optional `inApp?: boolean` flag, defaulting to `true`. The worker reuses `notify()` with `inApp: false`, so preference resolution and email rendering stay in one place.
-- Do not add a job queue or a separate cron. The existing cron is the maintenance run.
-
-**Consequences.** The change is additive: the default flag keeps the behaviour of every current `notify()` caller. Email latency is bounded by the cron interval. That is acceptable because the PRD's threshold is 10 minutes. Drives: FR-19, FR-20, FR-26, NFR-10.
-
-## ADR-6: Quiet hours are wall-clock strings evaluated in the school timezone
-
-**Context.** FR-21 stores a start and end time as `HH:mm` in the school timezone, and the range may wrap midnight.
-
-**Decision.**
-- `MessagingSettings.quietStart` and `MessagingSettings.quietEnd` are nullable `String` fields in `HH:mm`, validated by a Zod regex.
-- A pure helper `isInQuietHours(hhmm, start, end)` handles the wrap with `start > end ? (t >= start || t < end) : (t >= start && t < end)`.
-- A second helper, `quietHoursEnd(now, tz, settings)`, uses `fromZonedTime` to turn the end time into a UTC instant.
-- The UI is an MUI `TextField type="time"`. Do not add `TimePicker` from `@mui/x-date-pickers`, so no date adapter needs wiring for this page.
-
-**Consequences.** Daylight-saving changes are handled by date-fns-tz. The helpers are pure and easy to unit test. Drives: FR-20, FR-21, NFR-6, NFR-10.
-
-## ADR-7: The UI uses MUI only, built from existing components
-
-**Context.** NFR-5 allows only MUI v9 and MUI X, looked up through mui-mcp, and bans Tailwind, shadcn, Radix, notistack and similar libraries. NFR-7 requires a single pane below 768 px. FR-9 through FR-12 describe the inbox, thread, composer and new-conversation dialog.
-
-**Decision.**
-- **Layout.** Use MUI `Box`, `Stack`, `List`, `ListItemButton`, `Badge`, `Tabs`, `Divider` and `Paper`.
-- **Responsive switch.** Use `useMediaQuery(theme.breakpoints.down(768))` or a custom theme breakpoint. When the screen is narrow, `/messages/[id]` renders the thread with a back `IconButton`.
-- **Composer.** Use a multiline MUI `TextField`. `onKeyDown` sends on Enter and inserts a newline on Shift+Enter. A `Typography` counter shows after 4,500 characters.
-- **Upward infinite scroll.** Use an `IntersectionObserver` sentinel at the top of the thread, which needs no library. When older messages load, the hook keeps the scroll position stable.
-- **Recipient picker.** Use MUI `Autocomplete` with `multiple` and `groupBy` set to the contact group label from FR-8. `UserPicker` is not used here because it calls `/api/users/search`, which ignores contact rules.
-- **Reuse.** Reuse `UserAvatar`, `ConfirmDialog`, `Toast`/`useToast`, `EmptyState`, `PageHeader`, `FileUpload` and `FileList` from `src/components/<Name>/`.
-- **Safeguarding queue.** Use `@mui/x-data-grid` for the reports queue and the conversations search, matching the other admin pages.
-- **Styling.** Use the theme, `sx` and `styled()` only.
-- **Doc lookups.** Look up every MUI component through mui-mcp (`useMuiDocs`/`fetchDocs`) before using it. Note: mui-mcp did not connect during this sub-task (connection timeout). The dev phase must confirm it is reachable.
-
-**Consequences.** No banned imports, and the UI looks like the rest of the app. Drives: FR-9, FR-10, FR-11, FR-12, FR-23, FR-24, NFR-5, NFR-7.
-
-## ADR-8: Safeguarding access is checked on the server only
-
-**Context.** FR-23 and FR-24 limit safeguarding views to ADMIN users with `isSafeguardingLead`. NFR-1 says conversation IDs are never proof of access. FR-25 requires every safeguarding view to be audited.
-
-**Decision.**
-- Add `requireSafeguardingLead()` in `src/server/messaging/access.ts`. It calls `requireRole('ADMIN')`, then re-reads `isSafeguardingLead` from the database, not from the session token, so revoking the flag takes effect immediately. If the flag is false, it throws `FORBIDDEN` (HTTP 403).
-- Pages under `src/app/(app)/admin/safeguarding` call it server-side, using the existing `requirePageRole` pattern.
-- The read-only conversation view includes `deletedAt` content and `MessageRevision` rows. It calls `audit({ action: 'safeguarding.conversation.view' })` once per request.
-
-**Consequences.** A database lookup on each safeguarding request. These requests are rare, so the cost is negligible. Drives: FR-23, FR-24, FR-25, NFR-1, NFR-3.
-
----
-
-## Settled open questions from intake
-
-| # | Question | Decision | Basis |
+| Package | Version | Kind | Why |
 |---|---|---|---|
-| ADR-9 | Do co-teachers count as managing a course? | **Yes.** `teacherId = me OR coTeacherIds has me`, the same rule `contexts.ts` already uses for file access. | FR-32, FR-5 |
-| ADR-10 | Should the new models get `updatedAt`? | **Yes**, on Conversation, ConversationParticipant, Message, MessageReport, MessageAttachment and MessagingSettings, following the platform convention (28 of the 51 existing models have it). `Message.updatedAt` also gives polling its "changed since" signal (ADR-1). MessageRevision and PendingMessageEmail keep only `createdAt`: revisions never change, and pending emails are only upserted and deleted. | FR-1, NFR-6 |
-| ADR-11 | Where is `isSafeguardingLead` edited? | **There is no admin user edit form.** Nothing under `src/app/(app)/admin` edits users, and no `.tsx` file calls `PATCH /api/users/:id`. Add `isSafeguardingLead: z.boolean().optional()` to `updateUserSchema` (`src/lib/validators/users.ts`) and to `updateUser()` (`src/server/services/users.ts`). Reject `true` unless the target user is ADMIN, and record the change with `audit()`. Building a user-admin UI is out of scope, so this is recorded as a known gap. The seed (FR-29) sets the flag on Alice Admin. | FR-2, NFR-9, NFR-11 |
-| ADR-12 | Do quiet hours apply only to teachers or to every role? | **Every role.** `/api/me/messaging-settings` is open to any authenticated user. | FR-21 |
+| `@mui/x-scheduler` | `9.0.0-beta.15` (exact) | dependency | FR-1, FR-9 |
+| `node-ical` | `0.27.6` (exact) | devDependency | NFR-6 (tests only) |
 
-## Known gaps and risks for downstream sub-tasks
+Do **not** add `ics`, `rrule`, `luxon`, `dayjs`, SWR/React Query, or any calendar library other than `@mui/x-scheduler`. Reasons are in ADR-3, ADR-5 and NFR-1.
 
-- **Rate limiter.** The in-process rate limiter only holds on a single instance (ADR-4).
-- **No user-admin page.** `isSafeguardingLead` can be changed through the API and the seed only (ADR-11).
-- **mui-mcp unreachable.** mui-mcp could not be reached during this sub-task. The dev phase must use it for component lookups (NFR-5).
-- **PRD-12 not present.** PRD-12 (Announcements) is absent. Messaging has no code dependency on it, so do not build announcements (NFR-9).
+---
+
+## ADR-1: Pin `@mui/x-scheduler@9.0.0-beta.15` and scope the `@mui/x-internals` override
+
+**Context.** FR-1 requires installing `@mui/x-scheduler` first, pinned to the exact version that the MUI MCP server reports. NFR-2 requires checking the docs through the MCP. The MCP `useMuiDocs` listing shows `@mui/x-scheduler@9.0.0-beta.15`, which is also the npm `latest` tag. Its peer dependencies (`react ^18`, `@mui/material ^9.0.0`, `@mui/icons-material ^9.0.0`, `@emotion/* ^11`) are all met.
+
+The conflict is that `package.json` has a global override `"@mui/x-internals": "9.1.0"`. x-scheduler beta.15 depends on `@mui/x-internals` **exactly `9.17.0`**. It also pulls in `@mui/x-tree-view ^9.17.0`, `@mui/x-scheduler-internals 9.0.0-beta.15`, `@base-ui/react ^1.9.0` and `@base-ui/utils ^0.5.0`. With the global override in place, npm would force x-scheduler onto 9.1.0 internals, and that is likely to break at runtime.
+
+**Decision.**
+- Run `npm install --save-exact @mui/x-scheduler@9.0.0-beta.15` before any other SH-14 work.
+- Scope the override so the existing pinned packages keep 9.1.0 and x-scheduler gets the version it needs:
+  ```json
+  "overrides": {
+    "react-is": "18.3.1",
+    "playwright-core": "1.47.2",
+    "@mui/x-internals": "9.1.0",
+    "@mui/x-scheduler": { "@mui/x-internals": "9.17.0" }
+  }
+  ```
+- Check the result with `npm ls @mui/x-internals`. x-scheduler must resolve 9.17.0, and data-grid, date-pickers and charts must stay on 9.1.0. If npm will not honour the nested override, raise the global override to `9.17.0`. The other three packages declare `^9.1.0`, so 9.17.0 satisfies them. Then re-run `npm run typecheck && npm run test`.
+- Add `import type {} from '@mui/x-scheduler/theme-augmentation'` next to the existing theme setup, as the Quickstart shows.
+
+**Consequences.** This is a beta dependency, and the exact pin keeps it reproducible. Upgrading means repeating the MCP lookup. The lockfile grows by the Base UI and tree-view packages, all from MUI. Drives: FR-1, NFR-1, NFR-2.
+
+## ADR-2: Community `EventCalendar` is a read-only, controlled view. SchoolHub owns the editing UI and data loading.
+
+**Context.** I read the MCP docs (Quickstart, Views, Events, Editing, Timezone, Recurring events, Lazy loading, Responsiveness) for beta.15. They show three limits that matter here:
+- **Recurrence expansion** and the recurrence tab in the dialog are Premium-only.
+- **`dataSource` lazy loading** is only documented on `EventCalendarPremium`.
+- **The built-in event dialog** cannot hold SchoolHub's audiences, RSVP, category or `isNoSchool` (FR-12, FR-14).
+
+The Community `EventCalendar` does support the following:
+- `views`, `defaultView` / `view` + `onViewChange`
+- `viewConfig` (week `startTime: 7`, `endTime: 19`; agenda `dayCount`)
+- `displayTimezone` (IANA)
+- `readOnly`, `eventCreation={false}`
+- `onEventEditingStart` with `cancel()`
+- per-event `allDay`, `color`, `readOnly`, `className`
+
+**Decision.**
+- Render `<EventCalendar>` from `@mui/x-scheduler/event-calendar` with these props:
+  - `views={['month','week','agenda']}`
+  - `viewConfig` set to week 07:00–19:00 and agenda `dayCount: 30`
+  - `displayTimezone={settings.timezone}`
+  - `readOnly`, `eventCreation={false}`
+- Choose the default view with MUI `useMediaQuery('(min-width:768px)')`: month at 768 px and wider, agenda below that.
+- **Controlled data.** Pass the `events` prop from `GET /api/calendar?from&to&sources&studentId`. Refetch when `onVisibleDateChange` / `onViewChange` fire, using plain `fetch`. Keep a small in-memory cache keyed by range. Do not use `dataSource`, which is Premium.
+- **Event click.** In `onEventEditingStart`, call `eventDetails.cancel()`. Then either open SchoolHub's own right-anchored `Drawer` (FR-12) or `router.push` to the assignment or quiz (FR-13). Use the scheduler `id` to tell the kinds apart, prefixed by source: `event:<id>:<occurrenceStart>`, `assignment:<id>`, `quiz:<id>`.
+- **Toolbar items.** "New event" (FR-14) is an MUI `Button` that opens a SchoolHub `Dialog`. The source chips (FR-10) are MUI `Chip`s, with their state in `localStorage`.
+- **Colours.** Category, subject and timetable colours map to the scheduler's named palette through `color`. The timetable blocks (FR-10) use a lighter `className` style from the theme.
+- **Agenda gap.** The PRD asks for infinite scroll in the agenda, which Community doesn't offer. The agenda uses `dayCount: 30` with next/previous paging. If QA requires true infinite scroll, the fallback that PRD FR-3 allows is an MUI `List` with a native `IntersectionObserver` on `< 768 px`, without adding another library. arch-design-system should mark this as an accepted deviation or schedule the fallback.
+
+**Consequences.** We never ship a beta editing flow, and every permission check goes through our own API (NFR-7). The scheduler is a display surface we could swap out later. Drives: FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, NFR-1, NFR-2, NFR-4, NFR-12.
+
+## ADR-3: Expand recurrence on the server with a hand-written `expandOccurrences`, without an RRULE library
+
+**Context.** FR-15 limits recurrence to NONE, WEEKLY and MONTHLY-by-date until `recurrenceUntil`, which can be at most one year out (FR-4). NFR-11 rules out exceptions and complex rules. Community does not expand `rrule` (ADR-2). NFR-3 requires DST-correct dates.
+
+**Decision.**
+- `expandOccurrences(event, from, to, tz)` goes in `src/server/calendar/recurrence.ts` and is a pure function.
+- Step through the **school-timezone wall clock**:
+  - Take the start's local `yyyy-MM-dd HH:mm` with `formatInTimeZone`.
+  - Add 7 days, or 1 month with the day of month clamped to skip. A month that lacks the day has no occurrence, which matches RFC 5545 and the scheduler docs.
+  - Convert back with `fromZonedTime`.
+  - Keep the duration as a wall-clock difference, so an all-day event stays midnight to midnight.
+- Stop at the earlier of `recurrenceUntil` (end of that day in the school timezone, inclusive) and `to`.
+- The API returns plain occurrences only. The scheduler never receives an `rrule`.
+
+**Consequences.** About 40 lines plus unit tests, including a DST-change week (NFR-10). That is cheaper than adding `rrule`, which is UTC-naive and needs a timezone shim. Drives: FR-15, FR-4, NFR-3, NFR-10, NFR-11.
+
+## ADR-4: Time model: UTC storage, school-timezone rules, and helpers in `src/lib/dates.ts`
+
+**Context.** NFR-8 says to store UTC and display in `SchoolSettings.timezone`. FR-4 stores all-day events as school-timezone midnight with an exclusive `endAt`. FR-16 and FR-34 work on calendar dates in the school timezone. `src/lib/dates.ts` already wraps `date-fns-tz` (`formatInSchoolTz`, `fromZonedTime` usage).
+
+**Decision.**
+- Add the small helpers to the existing `src/lib/dates.ts`, without creating a new date module:
+  - `schoolMidnight(dateStr, tz)`: `fromZonedTime(\`${d} 00:00\`, tz)`
+  - `schoolDateOf(instant, tz)`: `'yyyy-MM-dd'`
+- The client sends all-day events as `yyyy-MM-dd` start and inclusive end dates. The Zod validator in `src/lib/validators/calendar.ts` converts them to `[midnight(start), midnight(end+1))`.
+- The scheduler receives `Z` instants plus `allDay: true`, and `displayTimezone` places them correctly.
+
+**Consequences.** One source of truth for date rules, and a DST-week test covers the UI path and the feed path (NFR-3). Drives: FR-4, FR-16, FR-34, NFR-3, NFR-8.
+
+## ADR-5: Hand-write the iCalendar builder, emit our own VTIMEZONE, and validate with `node-ical` in tests
+
+**Context.** FR-26 needs RRULE for recurring events, a VTIMEZONE for the school timezone, and RFC escaping. NFR-6 says to parse the feed with `node-ical` in tests. The PRD allows either the `ics` package or a hand-written builder. `ics@3.12.1` writes UTC or floating times and has no VTIMEZONE support, so it cannot express "weekly at 15:30 school time across DST" with RRULE.
+
+**Decision.**
+- `src/server/calendar/ical.ts` contains:
+  - `escapeText` for `\\`, `;`, `,`, and newline → `\n`
+  - `foldLine`: 75 octets, CRLF + space
+  - `vtimezone(tz, from, to)`
+  - `vevent(...)`
+  - `buildCalendar(...)`
+- Timed non-recurring events use `DTSTART:...Z`. All-day events use `DTSTART;VALUE=DATE` with an exclusive `DTEND;VALUE=DATE`. Recurring events use `DTSTART;TZID=<tz>` plus `RRULE:FREQ=WEEKLY|MONTHLY;UNTIL=<utc>Z` (MONTHLY adds `BYMONTHDAY`).
+- `vtimezone` finds the offset transitions inside the feed window by scanning the window day by day with `getTimezoneOffset`, then narrowing to the minute. It emits one `STANDARD` or `DAYLIGHT` sub-component per transition, each with an explicit `DTSTART`, `TZOFFSETFROM` and `TZOFFSETTO`, which RFC 5545 allows. A zone with no DST (e.g. UTC) gets a single `STANDARD`.
+- The same builder serves `GET /api/events/:id/ics` (one event) and the feed. Set `Content-Type: text/calendar; charset=utf-8`.
+- Install `node-ical@0.27.6` as an exact devDependency for tests only.
+
+**Consequences.** The builder is about 120 lines with no runtime dependency, and VTIMEZONE is correct for the window actually served. Drives: FR-12, FR-26, FR-33, NFR-3, NFR-6, NFR-10.
+
+## ADR-6: Feed tokens reuse `hashToken` and `randomBytes(32)` from `src/server/auth/tokens.ts`
+
+**Context.** NFR-5 requires 32 random bytes stored hashed. FR-25 says the raw token is shown only at creation or reset. `src/server/auth/tokens.ts` already exports `hashToken` (SHA-256 hex) and generates `randomBytes(32).toString('base64url')`. The token must be found by hash on every feed request, so a slow salted hash such as bcrypt cannot be used. SHA-256 of a 256-bit random value is the standard choice for this.
+
+**Decision.**
+- `CalendarFeedToken` is keyed by `userId` with `tokenHash @unique`, per PRD FR-1.
+- **Reset** upserts a new hash, so the old URL immediately returns 404.
+- **`GET /api/me/calendar-feed`** behaves as follows:
+  - With no row yet, it creates one and returns `{ url }`.
+  - With an existing row, it returns `{ url: null, hasToken: true, createdAt }`, and the page offers "Reset link" to show a new URL.
+- The feed route compares hashes with a DB equality lookup on the unique index. No raw token is logged.
+
+**Consequences.** No new crypto code. Users who lose the URL have to reset it, which is the intent of "shown only at creation/reset". Drives: FR-24, FR-25, NFR-5, NFR-9.
+
+## ADR-7: Feed rate limiting and caching reuse `rateLimit` and plain headers
+
+**Context.** FR-27 sets a limit of 60 requests per token per hour (429), plus `Cache-Control: private, max-age=900`. `src/server/rate-limit.ts` exports `rateLimit(key, limit, windowMs)`, a sliding window that already carries a per-process `ponytail:` note.
+
+**Decision.**
+- Call `rateLimit(\`calfeed:${tokenHash}\`, 60, 3_600_000)` **after** the token lookup succeeds, so unknown tokens return 404 and don't fill the map.
+- On a 429, set `Retry-After` from `retryAfterMs`.
+- Set the cache header directly on the `Response`.
+
+**Consequences.** This inherits the limiter's per-process ceiling, which is acceptable for a single-school deployment. Drives: FR-27, NFR-9.
+
+## ADR-8: Holiday checks are one service, `isSchoolDay`, that reads PRD-06 `SchoolDay` and no-school events
+
+**Context.** FR-16 to FR-19 and FR-34 all ask whether a date is a school day. `timetable-service.ts` already provides `listSchoolDays` (teaching weekdays) and `getScheduleForDate`, which `attendance-service.ts` uses.
+
+**Decision.**
+- `isSchoolDay(date)` goes in `src/server/calendar/calendar-service.ts` and returns `{ isSchoolDay, reason }`. It checks:
+  1. the ISO weekday against `SchoolDay`
+  2. any `isNoSchool` event with a SCHOOL audience whose `[startAt, endAt)` covers that school-timezone date, including recurring occurrences through `expandOccurrences`.
+- `getScheduleForDate` calls it and returns `[]` with `reason: 'Holiday: <title>'`. Attendance and the Today views get the reason through that existing path, so no second check is needed.
+- The assignment and quiz editor warnings (FR-19) call `GET /api/school-day?date=` from the client. This is new and singular. The existing plural `/api/school-days` is unchanged.
+
+**Consequences.** Every caller goes through one function. Adding the reason field to the `getScheduleForDate` return type is the only change to PRD-06. Drives: FR-16, FR-17, FR-18, FR-19, FR-34, NFR-9.
+
+## ADR-9: SH-14 adds the `AudienceType` enum and audience resolver exactly as PRD-12 specifies (intake warning 1)
+
+**Context.** PRD-12 is not in the workspace, but its spec in `12-announcements.md` defines everything SH-14 needs:
+- `enum AudienceType { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }` with audience rows `{type, refId, includeStudents, includeParents, includeTeachers}`
+- `src/server/announcements/audience.ts` exporting `resolveAudienceUserIds(audiences)` and `isUserInAudience(user, audiences)`
+- the teacher targeting rule: COURSE audiences for courses they manage, plus their homeroom SECTION
+
+PRD-14 FR-1's `EventAudience` already uses exactly these fields. The models the resolver needs (`StudentProfile.gradeLevelId`, `ParentStudentLink`, `Section.homeroomTeacherId`, `SectionMember`, `Course`, `Enrollment`) all exist.
+
+**Decision.**
+- Add `enum AudienceType` with the exact PRD-12 values in SH-14's migration. Do **not** add the `Announcement` models.
+- Implement `src/server/announcements/audience.ts` at the PRD-12 path, with the PRD-12 FR-2 semantics, plus `canTargetAudience(user, audience)` for the FR-3 teacher rule. PRD-12 can then use it as it is, without a rename or a second copy (NFR-9).
+- The seed's "Grade 7 parents" audience is `GRADE_LEVEL` with `includeStudents=false, includeTeachers=false`.
+- Build a minimal `src/components/AudienceBuilder/` from MUI. Each row is a type `Select`, an entity `Autocomplete`, and three `Checkbox`es. It has no live recipient count, because that needs PRD-12's preview endpoint.
+- Seed "Sports day" without an announcement link (intake default).
+
+**Consequences.** FR-3, FR-7 and FR-14 move from LOW/MEDIUM confidence to buildable. PRD-12 later adds its own models, reuses the enum and helper, and may extend the builder. Drives: FR-3, FR-6, FR-7, FR-14, FR-37, NFR-7, NFR-9.
+
+## ADR-10: Create a minimal `/admin/academic-years/[id]` page for "Add term breaks" (intake warning 2)
+
+**Context.** FR-20 names this page, but only the REST API exists (`src/app/api/academic-years/[id]/…`, including terms). Moving the shortcut to another screen would break the PRD's route.
+
+**Decision.**
+- Add a server page `src/app/(app)/admin/academic-years/[id]/page.tsx`, ADMIN only. It shows the year, a read-only term list from the existing API or service, and an "Add term breaks" `Button` with a `ConfirmDialog`.
+- The button posts to a calendar-service function that creates TERM_BREAK no-school events for each gap between consecutive terms. It is idempotent: it skips gaps that already have a TERM_BREAK.
+- Term editing UI is out of scope (NFR-11).
+
+**Consequences.** One small page, no new academic-structure behaviour. Drives: FR-20, FR-35, NFR-11.
+
+## ADR-11: Maintenance and notifications reuse the existing cron and registry
+
+**Context.** FR-23, FR-28 and FR-29 add the notification types `event.rsvp_reminder`, `event.created` and `event.updated`. The internal dispatch cron (`src/app/api/internal/email/dispatch/route.ts`) already runs `src/server/quiz/maintenance.ts`, the PRD-10 precedent.
+
+**Decision.**
+- Register the three types in `src/server/notifications/types.ts` under `COMMUNICATION`, with the email defaults per FR-28 (HOLIDAY and TERM_BREAK: true).
+- Add `src/server/calendar/maintenance.ts` → `sendRsvpReminders(now)`, called from the dispatch route next to the quiz maintenance call.
+- "Once per event" needs to be stored somewhere. Add a nullable `CalendarEvent.rsvpReminderSentAt DateTime?` and set it in the same transaction.
+- For FR-28 and FR-29, call the existing `notify` from the event service on create or update. The update path compares old and new time and location fields.
+
+**Consequences.** No new job runner. The one column added beyond the PRD model is flagged here for arch-design-system to confirm. The alternative would be checking for existing Notification rows, which is slower. Drives: FR-23, FR-28, FR-29, NFR-9.
+
+## ADR-12: Defaults for the remaining intake questions
+
+**Context.** These are the intake `clarificationLog` items that ADR-9 to ADR-11 don't settle.
+
+**Decision.** Keep intake's defaults:
+- **Chips.** The Holidays chip controls events that are HOLIDAY, TERM_BREAK or `isNoSchool`. The School events chip controls all other events. No event appears under both.
+- **RSVP guests.** Only PARENT responders may set `guests`. The Zod schema forces 0 for other roles.
+- **Feed scope.** The teacher and admin feed shows exactly what `GET /api/calendar` shows them. Teachers get the deadlines of the assignments and quizzes they set.
+
+**Consequences.** The feed and the UI share one query path (`getCalendarItems(user, range, sources)`), so NFR-5 ("feed exposes nothing beyond the app") holds by construction. Drives: FR-10, FR-21, FR-26, FR-32, NFR-5.
+
+## ADR-13: Performance target (500 ms month view for a parent with 3 children) without new infrastructure
+
+**Context.** NFR-4. A month query covers one range of at most 42 days, merging events, assignments, quizzes and timetable for three children.
+
+**Decision.**
+- Resolve the user's audience keys once per request: the children's grade levels, sections, courses and roles.
+- Query `CalendarEvent` through the `[startAt, endAt]` index. Recurring events are matched by `startAt <= to AND (recurrenceUntil >= from OR recurrence = NONE AND endAt >= from)`.
+- Filter the audience in SQL on `EventAudience` with `OR` over those keys. Do not call `isUserInAudience` once per event.
+- Run the four source queries with `Promise.all`.
+- No caching layer.
+
+**Consequences.** A small, fixed number of indexed queries. Add a cache only if a measurement shows a miss. Drives: FR-32, NFR-4.
