@@ -10,18 +10,21 @@ import { requirePageUser } from '@/server/auth/requireRole';
 import { AppError } from '@/server/http';
 import { getSchoolTimezone, listMyAssignments } from '@/server/assignments/assignments-service';
 import { formatInSchoolTz } from '@/lib/dates';
+import { getSelectedChild } from '@/server/parent/selected-child';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { AssignmentList } from './AssignmentList';
 
 export const dynamic = 'force-dynamic';
 
-/** /assignments (FR-37..FR-39): student tabs, parent child selector, teacher/admin "To grade". */
+/** /assignments (FR-37..FR-39): student tabs, parent view of the selected child (PRD-15 FR-5), teacher/admin "To grade". */
 export default async function AssignmentsPage({ searchParams }: { searchParams: { studentId?: string } }) {
   const user = await requirePageUser();
   let data: Awaited<ReturnType<typeof listMyAssignments>>;
   try {
-    data = await listMyAssignments(user, { studentId: searchParams.studentId });
+    // PRD-15 FR-5: a linked ?studentId= overrides, else the sh_child selection, else the first child.
+    const studentId = user.role === 'PARENT' ? (await getSelectedChild(user, searchParams))?.studentId : searchParams.studentId;
+    data = await listMyAssignments(user, { studentId });
   } catch (error) {
     if (error instanceof AppError && error.code === 'FORBIDDEN') redirect('/forbidden');
     throw error;
@@ -63,8 +66,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
         rows={data.items}
         timezone={timezone}
         courses={data.courses}
-        childOptions={data.children}
-        studentId={data.studentId}
+        studentId={user.role === 'PARENT' ? data.studentId : undefined}
       />
     </Box>
   );

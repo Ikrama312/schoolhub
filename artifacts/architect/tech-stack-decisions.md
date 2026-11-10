@@ -1,228 +1,226 @@
-# Tech Stack Decisions: PRD-14 School Calendar, Events & Holidays
+# Tech Stack Decisions: PRD-15 Parent Portal (Child Switcher, Absence Notes, Conference Booking)
 
-Ticket: SH-14 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-09T22:40:00Z · Status: complete
+Ticket: SH-15 · Phase: architect (arch-research-stack) · Timestamp: 2026-11-10T12:30:00Z · Status: complete
 
-> This file replaces the stale SH-13 version. The other files in `artifacts/architect/` are still from SH-13 until their own sub-tasks rewrite them.
+> This file replaces the SH-14 version. The other files in `artifacts/architect/` (`system-design.md`, `requirements-analysis-notes.md`, `api-contracts.json`, `handoff-to-dev-planning.json`, `threat-model-notes.json`) are still from SH-14 until their own sub-tasks rewrite them.
 
-**Base stack (checked against `package.json`).** `artifacts/intake/tech-stack.json` reports `react` at 99% confidence, and the workspace matches it:
+**Base stack (checked against `package.json`).** `artifacts/intake/tech-stack.json` reports `react` at 98% confidence. The workspace matches:
 
 - Next.js 14.2.18 App Router, React 18.3.1, TypeScript strict
-- Prisma 5.20.0 on PostgreSQL 16, Zod 3.23.8, react-hook-form 7.53.0
-- MUI 9.5.0: material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts
-- date-fns 3.6.0, date-fns-tz 3.2.0, react-markdown 10.1.0 + rehype-sanitize (behind `MarkdownView`)
+- Prisma 5.20.0 on PostgreSQL 16, Zod 3.23.8, react-hook-form 7.53.0, Auth.js 5.0.0-beta.25
+- MUI 9.5.0 (material, icons-material, material-nextjs, x-data-grid, x-date-pickers, x-charts), @mui/x-scheduler 9.0.0-beta.15 (theme augmentation only)
+- date-fns 3.6.0, date-fns-tz 3.2.0, papaparse, file-type 20.5.0, react-markdown + rehype-sanitize (behind `MarkdownView`)
 - Vitest 2.1.1, Testing Library, Playwright 1.47.2
 
-Intake reported no blockers (`blockers: []`, 96% confidence). It raised three warnings and left six unresolved questions (`clarificationLog[0].unresolved`). ADR-1 and ADR-9 through ADR-11 cover the warnings. ADR-12 confirms the intake defaults for the remaining questions.
-
-**Dependency changes (complete list).**
-
-| Package | Version | Kind | Why |
-|---|---|---|---|
-| `@mui/x-scheduler` | `9.0.0-beta.15` (exact) | dependency | FR-1, FR-9 |
-| `node-ical` | `0.27.6` (exact) | devDependency | NFR-6 (tests only) |
-
-Do **not** add `ics`, `rrule`, `luxon`, `dayjs`, SWR/React Query, or any calendar library other than `@mui/x-scheduler`. Reasons are in ADR-3, ADR-5 and NFR-1.
+Intake reported no blockers (`blockers: []`, 95% confidence). It left six warnings and seven unresolved questions. ADR-11 through ADR-13 cover them.
 
 ---
 
-## ADR-1: Pin `@mui/x-scheduler@9.0.0-beta.15` and scope the `@mui/x-internals` override
+## ADR-1: Keep the existing stack and add no new dependencies
 
-**Context.** FR-1 requires installing `@mui/x-scheduler` first, pinned to the exact version that the MUI MCP server reports. NFR-2 requires checking the docs through the MCP. The MCP `useMuiDocs` listing shows `@mui/x-scheduler@9.0.0-beta.15`, which is also the npm `latest` tag. Its peer dependencies (`react ^18`, `@mui/material ^9.0.0`, `@mui/icons-material ^9.0.0`, `@emotion/* ^11`) are all met.
+**Context.** NFR-6 says to reuse what exists, with no re-scaffolding. NFR-7 requires lint, typecheck and tests to stay green. NFR-9 limits the work to one forge run. Every PRD-15 feature is covered by something already installed:
 
-The conflict is that `package.json` has a global override `"@mui/x-internals": "9.1.0"`. x-scheduler beta.15 depends on `@mui/x-internals` **exactly `9.17.0`**. It also pulls in `@mui/x-tree-view ^9.17.0`, `@mui/x-scheduler-internals 9.0.0-beta.15`, `@base-ui/react ^1.9.0` and `@base-ui/utils ^0.5.0`. With the global override in place, npm would force x-scheduler onto 9.1.0 internals, and that is likely to break at runtime.
+- **Forms:** RHF + Zod
+- **Dates:** date-fns-tz
+- **CSV:** `src/server/csv.ts` / papaparse
+- **.ics:** `src/server/calendar/ical.ts`
+- **Markdown:** `MarkdownView` / `MarkdownEditor`
+- **Uploads:** `FileUpload` + `file-type`
+- **Grids:** MUI X DataGrid via `DataTable`
+- **Date inputs:** MUI X DatePicker
 
-**Decision.**
-- Run `npm install --save-exact @mui/x-scheduler@9.0.0-beta.15` before any other SH-14 work.
-- Scope the override so the existing pinned packages keep 9.1.0 and x-scheduler gets the version it needs:
-  ```json
-  "overrides": {
-    "react-is": "18.3.1",
-    "playwright-core": "1.47.2",
-    "@mui/x-internals": "9.1.0",
-    "@mui/x-scheduler": { "@mui/x-internals": "9.17.0" }
-  }
-  ```
-- Check the result with `npm ls @mui/x-internals`. x-scheduler must resolve 9.17.0, and data-grid, date-pickers and charts must stay on 9.1.0. If npm will not honour the nested override, raise the global override to `9.17.0`. The other three packages declare `^9.1.0`, so 9.17.0 satisfies them. Then re-run `npm run typecheck && npm run test`.
-- Add `import type {} from '@mui/x-scheduler/theme-augmentation'` next to the existing theme setup, as the Quickstart shows.
+**Decision.** No new runtime or dev dependencies. `package.json` stays unchanged.
 
-**Consequences.** This is a beta dependency, and the exact pin keeps it reproducible. Upgrading means repeating the MCP lookup. The lockfile grows by the Base UI and tree-view packages, all from MUI. Drives: FR-1, NFR-1, NFR-2.
+**Consequences.** There is no new supply-chain surface and no lockfile churn. If dev-planning proposes a package, it needs a new ADR.
 
-## ADR-2: Community `EventCalendar` is a read-only, controlled view. SchoolHub owns the editing UI and data loading.
+## ADR-2: UI is MUI only, and every component is looked up in mui-mcp first
 
-**Context.** I read the MCP docs (Quickstart, Views, Events, Editing, Timezone, Recurring events, Lazy loading, Responsiveness) for beta.15. They show three limits that matter here:
-- **Recurrence expansion** and the recurrence tab in the dialog are Premium-only.
-- **`dataSource` lazy loading** is only documented on `EventCalendarPremium`.
-- **The built-in event dialog** cannot hold SchoolHub's audiences, RSVP, category or `isNoSchool` (FR-12, FR-14).
+**Context.** NFR-4 requires MUI v9 and MUI X only. Banned libraries are never imported. Toasts go through `useToast()`, confirmations through `Dialog`/`ConfirmDialog`, pickers through `Autocomplete`. The mui-mcp server is connected in this session (`useMuiDocs`, `fetchDocs`).
 
-The Community `EventCalendar` does support the following:
-- `views`, `defaultView` / `view` + `onViewChange`
-- `viewConfig` (week `startTime: 7`, `endTime: 19`; agenda `dayCount`)
-- `displayTimezone` (IANA)
-- `readOnly`, `eventCreation={false}`
-- `onEventEditingStart` with `cancel()`
-- per-event `allDay`, `color`, `readOnly`, `className`
+**Decision.** Map each new UI surface to MUI components:
 
-**Decision.**
-- Render `<EventCalendar>` from `@mui/x-scheduler/event-calendar` with these props:
-  - `views={['month','week','agenda']}`
-  - `viewConfig` set to week 07:00–19:00 and agenda `dayCount: 30`
-  - `displayTimezone={settings.timezone}`
-  - `readOnly`, `eventCreation={false}`
-- Choose the default view with MUI `useMediaQuery('(min-width:768px)')`: month at 768 px and wider, agenda below that.
-- **Controlled data.** Pass the `events` prop from `GET /api/calendar?from&to&sources&studentId`. Refetch when `onVisibleDateChange` / `onViewChange` fire, using plain `fetch`. Keep a small in-memory cache keyed by range. Do not use `dataSource`, which is Premium.
-- **Event click.** In `onEventEditingStart`, call `eventDetails.cancel()`. Then either open SchoolHub's own right-anchored `Drawer` (FR-12) or `router.push` to the assignment or quiz (FR-13). Use the scheduler `id` to tell the kinds apart, prefixed by source: `event:<id>:<occurrenceStart>`, `assignment:<id>`, `quiz:<id>`.
-- **Toolbar items.** "New event" (FR-14) is an MUI `Button` that opens a SchoolHub `Dialog`. The source chips (FR-10) are MUI `Chip`s, with their state in `localStorage`.
-- **Colours.** Category, subject and timetable colours map to the scheduler's named palette through `color`. The timetable blocks (FR-10) use a lighter `className` style from the theme.
-- **Agenda gap.** The PRD asks for infinite scroll in the agenda, which Community doesn't offer. The agenda uses `dayCount: 30` with next/previous paging. If QA requires true infinite scroll, the fallback that PRD FR-3 allows is an MUI `List` with a native `IntersectionObserver` on `< 768 px`, without adding another library. arch-design-system should mark this as an accepted deviation or schedule the fallback.
+| Surface | Requirements | MUI components |
+| --- | --- | --- |
+| Child switcher | FR-3, FR-6 | `Select` or `Menu`, with `UserAvatar` |
+| Overview cards | FR-9–FR-17 | `Card`, `List`, `Chip`, `LoadingSkeleton` |
+| Absence form | FR-18 | `DatePicker`, `RadioGroup`, `Checkbox` group, `FileUpload` |
+| Review queue | FR-21, FR-22 | `DataTable`, with `Dialog` for approve/reject |
+| Slot buttons | FR-30 | `ToggleButton` or `Button` grid |
+| Day view | FR-34 | `Table` with print CSS through `sx` and `@media print` |
+| Consent tracking | FR-39 | `DataTable` |
+| Signature field | FR-37 | `TextField` |
 
-**Consequences.** We never ship a beta editing flow, and every permission check goes through our own API (NFR-7). The scheduler is a display surface we could swap out later. Drives: FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, NFR-1, NFR-2, NFR-4, NFR-12.
+Developers must call `useMuiDocs` and `fetchDocs` before using each component. If the MCP is unreachable at dev time, that is a blocker, not something to work around.
 
-## ADR-3: Expand recurrence on the server with a hand-written `expandOccurrences`, without an RRULE library
+**Consequences.** QA's banned-import grep stays at zero hits. Printing (FR-34) uses `@media print` styles only, with no print library.
 
-**Context.** FR-15 limits recurrence to NONE, WEEKLY and MONTHLY-by-date until `recurrenceUntil`, which can be at most one year out (FR-4). NFR-11 rules out exceptions and complex rules. Community does not expand `rrule` (ADR-2). NFR-3 requires DST-correct dates.
+## ADR-3: Data model is one additive Prisma migration, plus three flagged extra columns
+
+**Context.** FR-1 and FR-2 define the enums and models, and reuse `AudienceType` for consent. Consent audiences are limited to GRADE_LEVEL, SECTION and COURSE. Three requirements need persisted state that the PRD field list does not name:
+
+- **FR-29:** block individual slots. Deleting a slot would not work, because the next availability regeneration would recreate it.
+- **FR-39:** "Remind non-responders" is limited to once per 24 h. `src/server/rate-limit.ts` is in-memory per process (its own `ponytail:` note says so), so the limit would reset on every deploy or restart.
+- **FR-40:** the 48 h reminder must go out once per form.
 
 **Decision.**
-- `expandOccurrences(event, from, to, tz)` goes in `src/server/calendar/recurrence.ts` and is a pure function.
-- Step through the **school-timezone wall clock**:
-  - Take the start's local `yyyy-MM-dd HH:mm` with `formatInTimeZone`.
-  - Add 7 days, or 1 month with the day of month clamped to skip. A month that lacks the day has no occurrence, which matches RFC 5545 and the scheduler docs.
-  - Convert back with `fromZonedTime`.
-  - Keep the duration as a wall-clock difference, so an all-day event stays midnight to midnight.
-- Stop at the earlier of `recurrenceUntil` (end of that day in the school timezone, inclusive) and `to`.
-- The API returns plain occurrences only. The scheduler never receives an `rrule`.
+- Add one migration `…_prd15_parent_portal` with the enums and models as specified. Date-only fields use `@db.Date` (NFR-8).
+- The three extra columns:
+  - `ConferenceSlot.blocked Boolean @default(false)` (FR-29)
+  - `ConsentForm.lastRemindedAt DateTime?` (FR-39)
+  - `ConsentForm.dueReminderSentAt DateTime?` (FR-40)
 
-**Consequences.** About 40 lines plus unit tests, including a DST-change week (NFR-10). That is cheaper than adding `rrule`, which is UTC-naive and needs a timezone shim. Drives: FR-15, FR-4, NFR-3, NFR-10, NFR-11.
+  Both reminders claim their slot atomically with `updateMany({ where: { id, <col>: null | lt cutoff } })` and treat `count === 0` as "already done". This is the same pattern as `CalendarEvent.rsvpReminderSentAt` (D-1).
+- Use one `ConsentResponse` per (formId, studentId) via `@@unique` (FR-38). Changes update the row in place, and each change is audited.
+- Zod schemas in `src/lib/validators/<feature>.ts` enforce the FR-2 limits: span ≤ 30 days, details ≤ 1,000 chars, slotMinutes 5–60, parentNote ≤ 500 chars. Forms and handlers share these schemas (NFR-7).
 
-## ADR-4: Time model: UTC storage, school-timezone rules, and helpers in `src/lib/dates.ts`
+**Consequences.** The extra columns go beyond "exactly as specified". `system-design.md` must list them as a deviation. If the PRD's own model already has an equivalent field, use that field and drop the extra column.
 
-**Context.** NFR-8 says to store UTC and display in `SchoolSettings.timezone`. FR-4 stores all-day events as school-timezone midnight with an exclusive `endAt`. FR-16 and FR-34 work on calendar dates in the school timezone. `src/lib/dates.ts` already wraps `date-fns-tz` (`formatInSchoolTz`, `fromZonedTime` usage).
+## ADR-4: Conference booking uses a conditional UPDATE plus a partial unique index
 
-**Decision.**
-- Add the small helpers to the existing `src/lib/dates.ts`, without creating a new date module:
-  - `schoolMidnight(dateStr, tz)`: `fromZonedTime(\`${d} 00:00\`, tz)`
-  - `schoolDateOf(instant, tz)`: `'yyyy-MM-dd'`
-- The client sends all-day events as `yyyy-MM-dd` start and inclusive end dates. The Zod validator in `src/lib/validators/calendar.ts` converts them to `[midnight(start), midnight(end+1))`.
-- The scheduler receives `Z` instants plus `allDay: true`, and `displayTimezone` places them correctly.
-
-**Consequences.** One source of truth for date rules, and a DST-week test covers the UI path and the feed path (NFR-3). Drives: FR-4, FR-16, FR-34, NFR-3, NFR-8.
-
-## ADR-5: Hand-write the iCalendar builder, emit our own VTIMEZONE, and validate with `node-ical` in tests
-
-**Context.** FR-26 needs RRULE for recurring events, a VTIMEZONE for the school timezone, and RFC escaping. NFR-6 says to parse the feed with `node-ical` in tests. The PRD allows either the `ics` package or a hand-written builder. `ics@3.12.1` writes UTC or floating times and has no VTIMEZONE support, so it cannot express "weekly at 15:30 school time across DST" with RRULE.
+**Context.** NFR-1 requires that exactly one of two concurrent bookings succeeds. The loser gets 409 `That slot was just taken`. FR-31 allows one slot per teacher per child and no overlapping bookings across teachers. FR-30 requires the booking to be atomic.
 
 **Decision.**
-- `src/server/calendar/ical.ts` contains:
-  - `escapeText` for `\\`, `;`, `,`, and newline → `\n`
-  - `foldLine`: 75 octets, CRLF + space
-  - `vtimezone(tz, from, to)`
-  - `vevent(...)`
-  - `buildCalendar(...)`
-- Timed non-recurring events use `DTSTART:...Z`. All-day events use `DTSTART;VALUE=DATE` with an exclusive `DTEND;VALUE=DATE`. Recurring events use `DTSTART;TZID=<tz>` plus `RRULE:FREQ=WEEKLY|MONTHLY;UNTIL=<utc>Z` (MONTHLY adds `BYMONTHDAY`).
-- `vtimezone` finds the offset transitions inside the feed window by scanning the window day by day with `getTimezoneOffset`, then narrowing to the minute. It emits one `STANDARD` or `DAYLIGHT` sub-component per transition, each with an explicit `DTSTART`, `TZOFFSETFROM` and `TZOFFSETTO`, which RFC 5545 allows. A zone with no DST (e.g. UTC) gets a single `STANDARD`.
-- The same builder serves `GET /api/events/:id/ics` (one event) and the feed. Set `Content-Type: text/calendar; charset=utf-8`.
-- Install `node-ical@0.27.6` as an exact devDependency for tests only.
+1. Book with `prisma.conferenceSlot.updateMany({ where: { id, bookedByParentId: null, blocked: false }, data: {...} })`. If `count === 0`, throw `AppError('CONFLICT', 'That slot was just taken')`. The client then refetches the slots.
+2. Enforce "one per teacher per child" in the database: a raw-SQL partial unique index in the migration on `(eventId, teacherId, bookedForStudentId) WHERE bookedForStudentId IS NOT NULL`. A P2002 error maps to a 409 with the FR-31 message. This follows the attendance ADR-3 precedent of a partial unique index plus P2002 handling.
+3. Check for overlaps with the parent's other bookings at that time inside the same `$transaction` before the conditional update. It returns `You already have a meeting with <teacher> at <time>`.
 
-**Consequences.** The builder is about 120 lines with no runtime dependency, and VTIMEZONE is correct for the window actually served. Drives: FR-12, FR-26, FR-33, NFR-3, NFR-6, NFR-10.
+**Consequences.** There is no advisory lock and no SERIALIZABLE isolation. The FR-46 integration test fires two `Promise.all` bookings and asserts exactly one success. There is a small window in which one parent could double-book overlapping slots with two different teachers in two tabs at once. That is acceptable: it is the same parent, and no data is corrupted.
 
-## ADR-6: Feed tokens reuse `hashToken` and `randomBytes(32)` from `src/server/auth/tokens.ts`
+## ADR-5: Child selection uses an httpOnly cookie that is validated on every request
 
-**Context.** NFR-5 requires 32 random bytes stored hashed. FR-25 says the raw token is shown only at creation or reset. `src/server/auth/tokens.ts` already exports `hashToken` (SHA-256 hex) and generates `randomBytes(32).toString('base64url')`. The token must be found by hash on every feed request, so a slow salted hash such as bcrypt cannot be used. SHA-256 of a 256-bit random value is the standard choice for this.
+**Context.** FR-3 to FR-6 require a selection stored in cookie `sh_child`, validated against `ParentStudentLink` on every request, falling back to the first child, with `?studentId=` as an override.
 
 **Decision.**
-- `CalendarFeedToken` is keyed by `userId` with `tokenHash @unique`, per PRD FR-1.
-- **Reset** upserts a new hash, so the old URL immediately returns 404.
-- **`GET /api/me/calendar-feed`** behaves as follows:
-  - With no row yet, it creates one and returns `{ url }`.
-  - With an existing row, it returns `{ url: null, hasToken: true, createdAt }`, and the page offers "Reset link" to show a new URL.
-- The feed route compares hashes with a DB equality lookup on the unique index. No raw token is logged.
+- Create one server helper, `getSelectedChild(user, searchParams?)`, in `src/server/parent/selected-child.ts`, wrapped in React `cache()`.
+- It resolves the child in this order: `?studentId=` if linked, then the `sh_child` cookie if linked, then the first linked child ordered by firstName.
+- It reads the cookie with `cookies()` from `next/headers`.
+- Writes go through one small route handler that sets the cookie with `httpOnly`, `sameSite=lax`, `path=/` and a 1-year maxAge, then calls `router.refresh()`. That handler is the existing `withHandler` pattern and gets the existing NFR-8 same-origin check in middleware.
 
-**Consequences.** No new crypto code. Users who lose the URL have to reset it, which is the intent of "shown only at creation/reset". Drives: FR-24, FR-25, NFR-5, NFR-9.
+**Consequences.** The cookie value is untrusted input. Every consumer gets it through the helper and never reads the cookie directly (NFR-5). The switcher lives in `shell.tsx`'s top bar.
 
-## ADR-7: Feed rate limiting and caching reuse `rateLimit` and plain headers
+## ADR-6: The child overview is built from streaming server components
 
-**Context.** FR-27 sets a limit of 60 requests per token per hour (429), plus `Cache-Control: private, max-age=900`. `src/server/rate-limit.ts` exports `rateLimit(key, limit, windowMs)`, a sliding window that already carries a per-process `ponytail:` note.
+**Context.** NFR-2 requires first paint under 1 s and the full page under 2 s. FR-17 requires each card to load independently through Suspense. FR-8 makes this the parent landing page.
 
 **Decision.**
-- Call `rateLimit(\`calfeed:${tokenHash}\`, 60, 3_600_000)` **after** the token lookup succeeds, so unknown tokens return 404 and don't fill the map.
-- On a 429, set `Retry-After` from `retryAfterMs`.
-- Set the cache header directly on the `Response`.
+- `/my-children/[studentId]` is a server component. It calls `assertCanViewStudent` once, then renders eight async card components (FR-9–FR-16). Each card is wrapped in `<Suspense fallback={<LoadingSkeleton/>}>` and runs its own service query.
+- No client data-fetching library is used. `GET /api/students/:id/overview` (FR-43) reuses the same service functions for API consumers.
+- Post-sign-in redirect for PARENT → `/my-children` (FR-8).
 
-**Consequences.** This inherits the limiter's per-process ceiling, which is acceptable for a single-school deployment. Drives: FR-27, NFR-9.
+**Consequences.** Slow cards such as grades do not block fast ones. Each card query must stay index-backed. `AttendanceRecord(studentId, createdAt)` and `CalendarEvent(startAt, endAt)` indexes already exist.
 
-## ADR-8: Holiday checks are one service, `isSchoolDay`, that reads PRD-06 `SchoolDay` and no-school events
+## ADR-7: Absence coverage is one pure module that attendance-service uses in three places
 
-**Context.** FR-16 to FR-19 and FR-34 all ask whether a date is a school day. `timetable-service.ts` already provides `listSchoolDays` (teaching weekdays) and `getScheduleForDate`, which `attendance-service.ts` uses.
-
-**Decision.**
-- `isSchoolDay(date)` goes in `src/server/calendar/calendar-service.ts` and returns `{ isSchoolDay, reason }`. It checks:
-  1. the ISO weekday against `SchoolDay`
-  2. any `isNoSchool` event with a SCHOOL audience whose `[startAt, endAt)` covers that school-timezone date, including recurring occurrences through `expandOccurrences`.
-- `getScheduleForDate` calls it and returns `[]` with `reason: 'Holiday: <title>'`. Attendance and the Today views get the reason through that existing path, so no second check is needed.
-- The assignment and quiz editor warnings (FR-19) call `GET /api/school-day?date=` from the client. This is new and singular. The existing plural `/api/school-days` is unchanged.
-
-**Consequences.** Every caller goes through one function. Adding the reason field to the `getScheduleForDate` return type is the only change to PRD-06. Drives: FR-16, FR-17, FR-18, FR-19, FR-34, NFR-9.
-
-## ADR-9: SH-14 adds the `AudienceType` enum and audience resolver exactly as PRD-12 specifies (intake warning 1)
-
-**Context.** PRD-12 is not in the workspace, but its spec in `12-announcements.md` defines everything SH-14 needs:
-- `enum AudienceType { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }` with audience rows `{type, refId, includeStudents, includeParents, includeTeachers}`
-- `src/server/announcements/audience.ts` exporting `resolveAudienceUserIds(audiences)` and `isUserInAudience(user, audiences)`
-- the teacher targeting rule: COURSE audiences for courses they manage, plus their homeroom SECTION
-
-PRD-14 FR-1's `EventAudience` already uses exactly these fields. The models the resolver needs (`StudentProfile.gradeLevelId`, `ParentStudentLink`, `Section.homeroomTeacherId`, `SectionMember`, `Course`, `Enrollment`) all exist.
+**Context.**
+- FR-23: approval converts ABSENT or missing records to EXCUSED.
+- FR-24: future registers are pre-filled.
+- FR-25: teachers may mark EXCUSED only when a note covers the student. Today `attendance-service.ts:219` restricts EXCUSED to ADMIN.
+- FR-27: absence notifications are suppressed.
+- FR-46 asks for unit tests of whole-day, partial-period and multi-day matching.
 
 **Decision.**
-- Add `enum AudienceType` with the exact PRD-12 values in SH-14's migration. Do **not** add the `Announcement` models.
-- Implement `src/server/announcements/audience.ts` at the PRD-12 path, with the PRD-12 FR-2 semantics, plus `canTargetAudience(user, audience)` for the FR-3 teacher rule. PRD-12 can then use it as it is, without a rename or a second copy (NFR-9).
-- The seed's "Grade 7 parents" audience is `GRADE_LEVEL` with `includeStudents=false, includeTeachers=false`.
-- Build a minimal `src/components/AudienceBuilder/` from MUI. Each row is a type `Select`, an entity `Autocomplete`, and three `Checkbox`es. It has no live recipient count, because that needs PRD-12's preview endpoint.
-- Seed "Sports day" without an announcement link (intake default).
+- Add a pure function `coversRecord(note, { date, periodId })` in `src/server/absence-notes/absence-coverage.ts`, with no Prisma import so it can be unit-tested.
+- `absence-notes-service.ts` loads the relevant notes, and attendance-service uses the function at three points:
+  1. `getRegister`: pre-fill EXCUSED and show a badge.
+  2. `saveRegister` line 219: replace the ADMIN-only check with "ADMIN, or an APPROVED note covers the record".
+  3. Before `notifyStudentAndParents` (~line 299): drop `attendance.absent` for students covered by a PENDING or APPROVED note.
+- Approval runs in one `$transaction`. It updates matching ABSENT records with an `updateMany`, and creates missing records for sessions that already exist. Dates with no session yet are handled by the FR-24 pre-fill.
+- After commit, call `audit({ request })` so the IP is stored (NFR-3).
 
-**Consequences.** FR-3, FR-7 and FR-14 move from LOW/MEDIUM confidence to buildable. PRD-12 later adds its own models, reuses the enum and helper, and may extend the builder. Drives: FR-3, FR-6, FR-7, FR-14, FR-37, NFR-7, NFR-9.
+**Consequences.** The rate recalculation needs no code, because `attendanceRate()` reads the records. Daily-homeroom sessions have no `periodId`, so whole-day and partial matching must treat a null `periodId` as matching any note that covers that date.
 
-## ADR-10: Create a minimal `/admin/academic-years/[id]` page for "Add term breaks" (intake warning 2)
+## ADR-8: Dates and time zones reuse the existing helpers
 
-**Context.** FR-20 names this page, but only the REST API exists (`src/app/api/academic-years/[id]/…`, including terms). Moving the shortcut to another screen would break the PRD's route.
+**Context.** NFR-8 requires UTC storage and school-timezone rules. Several features depend on this:
 
-**Decision.**
-- Add a server page `src/app/(app)/admin/academic-years/[id]/page.tsx`, ADMIN only. It shows the year, a read-only term list from the existing API or service, and an "Add term breaks" `Button` with a `ConfirmDialog`.
-- The button posts to a calendar-service function that creates TERM_BREAK no-school events for each gap between consecutive terms. It is idempotent: it skips gaps that already have a TERM_BREAK.
-- Term editing UI is out of scope (NFR-11).
+- FR-18: absence dates from 14 days back to 60 days ahead
+- FR-9: what counts as "today"
+- FR-32: the booking window
+- FR-40: the reminder 48 h before the due date
 
-**Consequences.** One small page, no new academic-structure behaviour. Drives: FR-20, FR-35, NFR-11.
+**Decision.** Use `schoolToday`, `addDays` and `daysBetween` from `attendance-rules.ts` and `date-fns-tz`, with the time zone from `SchoolSettings.timezone`. Generate slots (FR-29) with a pure `generateSlots(ranges, slotMinutes)` function in `conference-slots.ts`, which FR-46 also unit-tests.
 
-## ADR-11: Maintenance and notifications reuse the existing cron and registry
+**Consequences.** No new date helpers. Pure functions keep the unit tests free of timezone flakiness.
 
-**Context.** FR-23, FR-28 and FR-29 add the notification types `event.rsvp_reminder`, `event.created` and `event.updated`. The internal dispatch cron (`src/app/api/internal/email/dispatch/route.ts`) already runs `src/server/quiz/maintenance.ts`, the PRD-10 precedent.
+## ADR-9: Files, notifications and .ics extend the existing registries
 
-**Decision.**
-- Register the three types in `src/server/notifications/types.ts` under `COMMUNICATION`, with the email defaults per FR-28 (HOLIDAY and TERM_BREAK: true).
-- Add `src/server/calendar/maintenance.ts` → `sendRsvpReminders(now)`, called from the dispatch route next to the quiz maintenance call.
-- "Once per event" needs to be stored somewhere. Add a nullable `CalendarEvent.rsvpReminderSentAt DateTime?` and set it in the same transaction.
-- For FR-28 and FR-29, call the existing `notify` from the event service on create or update. The update path compares old and new time and location fields.
-
-**Consequences.** No new job runner. The one column added beyond the PRD model is flagged here for arch-design-system to confirm. The alternative would be checking for existing Notification rows, which is slower. Drives: FR-23, FR-28, FR-29, NFR-9.
-
-## ADR-12: Defaults for the remaining intake questions
-
-**Context.** These are the intake `clarificationLog` items that ADR-9 to ADR-11 don't settle.
-
-**Decision.** Keep intake's defaults:
-- **Chips.** The Holidays chip controls events that are HOLIDAY, TERM_BREAK or `isNoSchool`. The School events chip controls all other events. No event appears under both.
-- **RSVP guests.** Only PARENT responders may set `guests`. The Zod schema forces 0 for other roles.
-- **Feed scope.** The teacher and admin feed shows exactly what `GET /api/calendar` shows them. Teachers get the deadlines of the assignments and quizzes they set.
-
-**Consequences.** The feed and the UI share one query path (`getCalendarItems(user, range, sources)`), so NFR-5 ("feed exposes nothing beyond the app") holds by construction. Drives: FR-10, FR-21, FR-26, FR-32, NFR-5.
-
-## ADR-13: Performance target (500 ms month view for a parent with 3 children) without new infrastructure
-
-**Context.** NFR-4. A month query covers one range of at most 42 days, merging events, assignments, quizzes and timetable for three children.
+**Context.** FR-18 and FR-41 add the `absence-note` file context. FR-19, FR-26, FR-28, FR-33, FR-36 and FR-44 add notification types. FR-33 needs an .ics attachment link.
 
 **Decision.**
-- Resolve the user's audience keys once per request: the children's grade levels, sections, courses and roles.
-- Query `CalendarEvent` through the `[startAt, endAt]` index. Recurring events are matched by `startAt <= to AND (recurrenceUntil >= from OR recurrence = NONE AND endAt >= from)`.
-- Filter the audience in SQL on `EventAudience` with `OR` over those keys. Do not call `isUserInAudience` once per event.
-- Run the four source queries with `Promise.all`.
-- No caching layer.
+- **Files:** add an `absenceNoteResolver` to `src/server/files/contexts.ts`. It allows any linked parent (including the submitter), the homeroom teacher of the student's section, and ADMIN. Uploads reuse `FileUpload` and `files-service` validation, limited to PDF, JPG and PNG checked by `file-type` magic bytes.
+- **Notifications:** add these keys to `NOTIFICATION_TYPES` in `types.ts`, then send through the existing `notify()` / `notifyStudentAndParents()`:
 
-**Consequences.** A small, fixed number of indexed queries. Add a cache only if a measurement shows a miss. Drives: FR-32, NFR-4.
+  | Key | Default email |
+  | --- | --- |
+  | `absence_note.submitted` | false |
+  | `absence_note.reviewed` | true |
+  | `conference.slots_requested` | – |
+  | `conference.booked` | – |
+  | `conference.cancelled` | – |
+  | `consent.requested` | true |
+  | `consent.reminder` | true |
+
+- **.ics:** build it with the existing `buildCalendar` / `vevent` from `src/server/calendar/ical.ts`. Serve it from an authenticated GET per booked slot. The notification links to that URL.
+
+**Consequences.** There is no attachment pipeline. Email links to the .ics URL, which matches FR-33's "attachment link" wording.
+
+## ADR-10: Scheduled work goes in the existing cron route
+
+**Context.** FR-40 needs a maintenance run. The only scheduler is `POST /api/internal/email/dispatch`, which is protected by `CRON_SECRET` and already runs assignment reminders and quiz maintenance in isolated try-blocks.
+
+**Decision.** Add a `sendConsentDueReminders(now)` call to that route as another isolated try-block. It is idempotent through the `dueReminderSentAt` claim (ADR-3).
+
+**Consequences.** No new cron, worker or script. Reminder precision is limited by the cron interval.
+
+## ADR-11: Unavailable upstream data degrades gracefully
+
+**Context.**
+- FR-13: the PRD-12 `Announcement` model is missing. Only `src/server/announcements/audience.ts` exists.
+- FR-5, FR-14, FR-35: SH-14's dev phase failed. The `CalendarEvent` and `EventAudience` models exist, but there are no calendar pages or API.
+- Building either one would violate NFR-9, which says not to take on another PRD's scope.
+
+**Decision.**
+- **FR-13:** render an `EmptyState` ("No announcements") behind a single service function that returns `[]`. Do not add an Announcement model.
+- **FR-14:** query `CalendarEvent` directly with the existing `audienceWhereForUser(user, { studentIds: [child] })` and return the next 5. Expand recurrence with `src/server/calendar/recurrence.ts`.
+- **FR-35:** render booked slots inside the overview's Upcoming events and Action items cards as "My meetings" items. There is no calendar page to add them to.
+- **FR-5:** the calendar `studentId` filter is not implemented, because there is no calendar page.
+- **ConsentForm.eventId:** an optional FK to `CalendarEvent`, which exists.
+
+**Consequences.** FR-13 and FR-35 are delivered partially. They become complete without schema work once PRD-12 and PRD-14 land. `system-design.md` should record this.
+
+## ADR-12: Answers to intake's open questions
+
+**Context.** Intake forwarded seven unresolved questions. No user is available to answer them.
+
+**Decision.**
+
+| # | Question | Decision |
+| --- | --- | --- |
+| 1 | Announcements | See ADR-11 |
+| 2 | Calendar | See ADR-11 |
+| 3 | Shared component location | Reuse components where they are, under `src/components/<Name>/`. Do not move them (NFR-6). |
+| 4 | Student detail route | `/students/[id]` is the target for "View all" links, including `/students/[id]/attendance`. |
+| 5 | Pages that adopt the `sh_child` default (FR-5) | The existing `/assignments`, `/grades` and `/api/me/timetable` consumers, plus the new `/my-children/*`, `/conferences/[id]` and `/consent-forms` pages. |
+| 6 | Reminder notification key | `consent.reminder` for both the 48 h reminder and the manual reminder (FR-44). |
+| 7 | Blocked slots (FR-29) | `ConferenceSlot.blocked` column (ADR-3). |
+
+**Consequences.** All seven are recorded as assumptions. None blocks the work.
+
+## ADR-13: Access control and tests follow the existing patterns
+
+**Context.** NFR-5 requires server-side access control on every handler. NFR-7 sets the quality gates. FR-46 lists the required tests.
+
+**Decision.**
+- **Access control:**
+  - Every handler uses `withHandler` and `requireRole`.
+  - Parent and child scoping uses `assertCanViewStudent` / `getAccessibleStudentIds`.
+  - Homeroom scoping checks section membership against `Section` (teacher's own section).
+  - Consent tracking is limited to the form's creator and ADMIN.
+  - Teachers may target only courses they manage (`canTargetAudience`).
+- **Tests:**
+  - Unit tests in Vitest cover the pure modules: `absence-coverage`, `conference-slots`, and signature matching (`trim().toLowerCase()` equality).
+  - Integration tests in Vitest against the database cover approval/pre-fill, concurrent booking and notification suppression.
+  - Three Playwright specs cover the FR-46 flows.
+- Use `logger`, never `console.log`.
+
+**Consequences.** No new test tooling. Seed data (FR-45) extends `prisma/seed.ts` in place.

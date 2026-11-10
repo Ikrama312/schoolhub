@@ -1,311 +1,411 @@
 {
-  "ticketId": "SH-14",
-  "timestamp": "2026-11-10T00:30:00Z",
+  "ticketId": "SH-15",
+  "timestamp": "2026-11-10T14:00:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "entries": [
     {
-      "path": "package.json",
-      "taskId": "TASK-1",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "package-lock.json",
-      "taskId": "TASK-1",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/theme/theme.ts",
-      "taskId": "TASK-1",
-      "operation": "MODIFY"
-    },
-    {
       "path": "prisma/schema.prisma",
+      "taskId": "TASK-1",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "prisma/migrations/20261114000000_prd15_parent_portal/migration.sql",
+      "taskId": "TASK-1",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/lib/validators/absence-notes.ts",
       "taskId": "TASK-2",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "prisma/migrations/20261113000000_add_calendar/migration.sql",
+      "path": "src/lib/validators/conferences.ts",
       "taskId": "TASK-2",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/dates.ts",
-      "taskId": "TASK-3",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/lib/validators/calendar.ts",
-      "taskId": "TASK-3",
+      "path": "src/lib/validators/consent-forms.ts",
+      "taskId": "TASK-2",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/dates.test.ts",
-      "taskId": "TASK-3",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "tests/unit/calendar/validators.test.ts",
+      "path": "src/server/absence-notes/absence-coverage.ts",
       "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/calendar/recurrence.ts",
-      "taskId": "TASK-4",
+      "path": "src/server/conferences/conference-slots.ts",
+      "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/calendar/recurrence.test.ts",
-      "taskId": "TASK-4",
+      "path": "src/server/consent-forms/signature.ts",
+      "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/calendar/ical.ts",
-      "taskId": "TASK-5",
+      "path": "tests/unit/absence-notes/absence-coverage.test.ts",
+      "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/calendar/ical.test.ts",
-      "taskId": "TASK-5",
+      "path": "tests/unit/conferences/conference-slots.test.ts",
+      "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/announcements/audience.ts",
-      "taskId": "TASK-6",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/unit/calendar/audience.test.ts",
-      "taskId": "TASK-6",
+      "path": "tests/unit/consent-forms/signature.test.ts",
+      "taskId": "TASK-3",
       "operation": "CREATE"
     },
     {
       "path": "src/server/notifications/types.ts",
-      "taskId": "TASK-7",
+      "taskId": "TASK-4",
       "operation": "MODIFY"
     },
     {
-      "path": "src/server/calendar/calendar-service.ts",
+      "path": "src/server/files/contexts.ts",
+      "taskId": "TASK-4",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/files/validate.ts",
+      "taskId": "TASK-4",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/parent/selected-child.ts",
+      "taskId": "TASK-5",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/me/selected-child/route.ts",
+      "taskId": "TASK-5",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/components/ChildSwitcher/ChildSwitcher.tsx",
+      "taskId": "TASK-6",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/shell.tsx",
+      "taskId": "TASK-6",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/(app)/layout.tsx",
+      "taskId": "TASK-6",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/config/navigation.ts",
+      "taskId": "TASK-6",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/absence-notes/absence-notes-service.ts",
+      "taskId": "TASK-7",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/absence-notes/route.ts",
       "taskId": "TASK-8",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/calendar/sources.ts",
-      "taskId": "TASK-9",
+      "path": "src/app/api/absence-notes/[id]/route.ts",
+      "taskId": "TASK-8",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/calendar/maintenance.ts",
-      "taskId": "TASK-10",
+      "path": "src/app/api/absence-notes/[id]/review/route.ts",
+      "taskId": "TASK-8",
       "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/internal/email/dispatch/route.ts",
-      "taskId": "TASK-10",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/timetable/timetable-service.ts",
-      "taskId": "TASK-11",
-      "operation": "MODIFY"
     },
     {
       "path": "src/server/attendance/attendance-service.ts",
-      "taskId": "TASK-12",
+      "taskId": "TASK-9",
       "operation": "MODIFY"
     },
     {
       "path": "src/lib/validators/attendance.ts",
-      "taskId": "TASK-12",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/app/api/attendance/register/route.ts",
-      "taskId": "TASK-12",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/app/(app)/attendance/take/page.tsx",
-      "taskId": "TASK-13",
+      "taskId": "TASK-9",
       "operation": "MODIFY"
     },
     {
       "path": "src/app/(app)/attendance/take/RegisterForm.tsx",
+      "taskId": "TASK-9",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/(app)/my-children/[studentId]/absence/new/page.tsx",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/my-children/[studentId]/absence/new/AbsenceNoteForm.tsx",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/my-children/[studentId]/absence/page.tsx",
+      "taskId": "TASK-10",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/attendance/absence-notes/page.tsx",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/attendance/absence-notes/AbsenceNotesReviewClient.tsx",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/conferences/conferences-service.ts",
+      "taskId": "TASK-12",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/conferences/route.ts",
       "taskId": "TASK-13",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "tests/unit/attendance-register-form.test.tsx",
+      "path": "src/app/api/conferences/[id]/route.ts",
       "taskId": "TASK-13",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/api/events/route.ts",
+      "path": "src/app/api/conferences/[id]/availability/route.ts",
+      "taskId": "TASK-13",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/conferences/[id]/slots/route.ts",
+      "taskId": "TASK-13",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/conference-slots/[id]/route.ts",
+      "taskId": "TASK-13",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/conference-slots/[id]/book/route.ts",
+      "taskId": "TASK-13",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/conference-slots/[id]/cancel/route.ts",
+      "taskId": "TASK-13",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/conference-slots/[id]/ics/route.ts",
+      "taskId": "TASK-13",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/conferences/page.tsx",
       "taskId": "TASK-14",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/events/[id]/route.ts",
+      "path": "src/app/(app)/admin/conferences/ConferenceEventsClient.tsx",
       "taskId": "TASK-14",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/events/[id]/ics/route.ts",
-      "taskId": "TASK-14",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/events/[id]/rsvp/route.ts",
-      "taskId": "TASK-14",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/events/[id]/rsvps/route.ts",
-      "taskId": "TASK-14",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/calendar/route.ts",
+      "path": "src/app/(app)/conferences/page.tsx",
       "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/school-day/route.ts",
+      "path": "src/app/(app)/conferences/[id]/availability/page.tsx",
       "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/academic-years/[id]/term-breaks/route.ts",
+      "path": "src/app/(app)/conferences/[id]/availability/AvailabilityClient.tsx",
       "taskId": "TASK-15",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/me/calendar-feed/route.ts",
+      "path": "src/app/(app)/conferences/[id]/day/page.tsx",
+      "taskId": "TASK-15",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/conferences/[id]/page.tsx",
       "taskId": "TASK-16",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/me/calendar-feed/reset/route.ts",
+      "path": "src/app/(app)/conferences/[id]/BookingClient.tsx",
       "taskId": "TASK-16",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/calendar/feed/[token]/route.ts",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/public/events/route.ts",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/config/public-routes.ts",
-      "taskId": "TASK-16",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "tests/unit/public-routes.test.ts",
-      "taskId": "TASK-16",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/components/AudienceBuilder/AudienceBuilder.tsx",
+      "path": "src/server/consent-forms/consent-forms-service.ts",
       "taskId": "TASK-17",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/calendar/EventEditorDialog.tsx",
+      "path": "src/app/api/internal/email/dispatch/route.ts",
+      "taskId": "TASK-17",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/api/consent-forms/route.ts",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/calendar/EventDrawer.tsx",
+      "path": "src/app/api/consent-forms/[id]/route.ts",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/consent-forms/[id]/responses/route.ts",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/consent-forms/[id]/tracking/route.ts",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/consent-forms/[id]/remind/route.ts",
+      "taskId": "TASK-18",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/consent-forms/page.tsx",
       "taskId": "TASK-19",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/calendar/page.tsx",
+      "path": "src/app/(app)/consent-forms/new/page.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/consent-forms/new/ConsentFormForm.tsx",
+      "taskId": "TASK-19",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/consent-forms/[id]/page.tsx",
       "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/calendar/CalendarView.tsx",
+      "path": "src/app/(app)/consent-forms/[id]/ConsentResponseForm.tsx",
       "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/calendar/SourceChips.tsx",
+      "path": "src/app/(app)/consent-forms/[id]/tracking/page.tsx",
       "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/config/navigation.ts",
+      "path": "src/app/(app)/consent-forms/[id]/tracking/ConsentTrackingClient.tsx",
       "taskId": "TASK-20",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/account/calendar/page.tsx",
+      "path": "src/server/parent/overview-service.ts",
       "taskId": "TASK-21",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/account/calendar/SubscribeCard.tsx",
-      "taskId": "TASK-21",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/academic-years/[id]/page.tsx",
+      "path": "src/app/api/me/children/summary/route.ts",
       "taskId": "TASK-22",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/admin/academic-years/[id]/TermBreaksButton.tsx",
+      "path": "src/app/api/students/[id]/overview/route.ts",
       "taskId": "TASK-22",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/courses/[courseId]/assignments/AssignmentForm.tsx",
+      "path": "src/app/(app)/my-children/page.tsx",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/my-children/[studentId]/page.tsx",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/my-children/[studentId]/OverviewCards.tsx",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/dashboard/page.tsx",
       "taskId": "TASK-23",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/(app)/courses/[courseId]/quizzes/[quizId]/edit/QuizSettingsPanel.tsx",
-      "taskId": "TASK-23",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "prisma/seed.ts",
+      "path": "src/app/(app)/assignments/page.tsx",
       "taskId": "TASK-24",
       "operation": "MODIFY"
     },
     {
-      "path": "tests/integration/calendar/calendar-merge.test.ts",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
+      "path": "src/app/(app)/assignments/AssignmentList.tsx",
+      "taskId": "TASK-24",
+      "operation": "MODIFY"
     },
     {
-      "path": "tests/integration/calendar/audience-parity.test.ts",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
+      "path": "src/app/(app)/grades/page.tsx",
+      "taskId": "TASK-24",
+      "operation": "MODIFY"
     },
     {
-      "path": "tests/integration/calendar/school-day.test.ts",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
+      "path": "src/app/(app)/grades/GradesClient.tsx",
+      "taskId": "TASK-24",
+      "operation": "MODIFY"
     },
     {
-      "path": "tests/integration/calendar/events-rsvp.test.ts",
+      "path": "src/app/api/me/timetable/route.ts",
+      "taskId": "TASK-24",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "prisma/seed.ts",
+      "taskId": "TASK-25",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "tests/integration/absence-notes/absence-approval.test.ts",
       "taskId": "TASK-26",
       "operation": "CREATE"
     },
     {
-      "path": "tests/integration/calendar/feed-token.test.ts",
+      "path": "tests/integration/conferences/concurrent-booking.test.ts",
       "taskId": "TASK-26",
       "operation": "CREATE"
     },
     {
-      "path": "tests/e2e/calendar.spec.ts",
+      "path": "tests/e2e/absence-notes.spec.ts",
+      "taskId": "TASK-27",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/e2e/conferences.spec.ts",
+      "taskId": "TASK-27",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/e2e/consent-forms.spec.ts",
       "taskId": "TASK-27",
       "operation": "CREATE"
     }

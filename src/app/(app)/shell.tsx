@@ -34,6 +34,7 @@ import type { SessionUser } from '@/server/auth/requireRole';
 import { UserAvatar } from '@/components/UserAvatar/UserAvatar';
 import { NotificationBell } from '@/components/NotificationBell/NotificationBell';
 import { MessagesNavBadge } from '@/components/messaging/MessagesNavBadge';
+import { ChildSwitcher, type SwitcherChild } from '@/components/ChildSwitcher/ChildSwitcher';
 
 const DRAWER_WIDTH_EXPANDED = 256;
 const DRAWER_WIDTH_COLLAPSED = 64;
@@ -44,12 +45,25 @@ export interface AppShellProps {
   schoolShortName: string;
   /** PRD-13 FR-23: shows the Safeguarding nav entry. */
   safeguardingLead?: boolean;
+  /** PRD-15 FR-42: TEACHER is homeroom teacher of a current-year section. */
+  homeroom?: boolean;
+  /** PRD-15 FR-3/FR-6: PARENT's linked children and the resolved selection. */
+  linkedChildren?: SwitcherChild[];
+  selectedChildId?: string | null;
   children: React.ReactNode;
 }
 
 const DESKTOP_BREAKPOINT_PX = 1024;
 
-export function AppShell({ user, schoolShortName, safeguardingLead = false, children }: AppShellProps) {
+export function AppShell({
+  user,
+  schoolShortName,
+  safeguardingLead = false,
+  homeroom = false,
+  linkedChildren = [],
+  selectedChildId = null,
+  children,
+}: AppShellProps) {
   const { mode, setMode } = useColorScheme();
   const pathname = usePathname();
   // FR-31/NFR-4 fix the fork at exactly 1024px — MUI's own "lg" breakpoint
@@ -74,7 +88,7 @@ export function AppShell({ user, schoolShortName, safeguardingLead = false, chil
   };
 
   const drawerWidth = collapsed ? DRAWER_WIDTH_COLLAPSED : DRAWER_WIDTH_EXPANDED;
-  const items = navigationForRole(user.role, { safeguardingLead });
+  const items = navigationForRole(user.role, { safeguardingLead, homeroom });
   const fullName = `${user.firstName} ${user.lastName}`;
 
   const navList = (
@@ -151,6 +165,8 @@ export function AppShell({ user, schoolShortName, safeguardingLead = false, chil
           <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
             {schoolShortName}
           </Typography>
+
+          {user.role === 'PARENT' && <ChildSwitcher items={linkedChildren} selectedId={selectedChildId} />}
 
           <NotificationBell />
 

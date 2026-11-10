@@ -6,11 +6,12 @@ import { getAccessibleStudentIds } from '@/server/auth/student-access';
 import { getStudentGrades, type StudentGrades } from '@/server/gradebook/student-grades-service';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
+import { getSelectedChild } from '@/server/parent/selected-child';
 import { GradesClient } from './GradesClient';
 
 export const dynamic = 'force-dynamic';
 
-/** /grades — PRD-11 FR-27. STUDENT sees self; PARENT picks a linked child. */
+/** /grades — PRD-11 FR-27. STUDENT sees self; PARENT sees the selected child (PRD-15 FR-5: ?studentId= ▸ sh_child ▸ first). */
 export default async function GradesPage({ searchParams }: { searchParams: { studentId?: string } }) {
   const user = await requirePageRole('STUDENT', 'PARENT');
   const accessible = await getAccessibleStudentIds(user);
@@ -28,7 +29,7 @@ export default async function GradesPage({ searchParams }: { searchParams: { stu
       </>
     );
   }
-  const studentId = searchParams.studentId && children.some((c) => c.id === searchParams.studentId) ? searchParams.studentId : children[0].id;
+  const studentId = user.role === 'PARENT' ? ((await getSelectedChild(user, searchParams))?.studentId ?? children[0].id) : children[0].id;
   let data: StudentGrades;
   try {
     data = await getStudentGrades(user, studentId);
@@ -39,11 +40,11 @@ export default async function GradesPage({ searchParams }: { searchParams: { stu
   }
   return (
     <>
-      <PageHeader title="Grades" description={user.role === 'PARENT' ? undefined : 'Your current standing in each course.'} />
+      <PageHeader title="Grades" description={user.role === 'PARENT' ? `${data.student.firstName} ${data.student.lastName}` : 'Your current standing in each course.'} />
       <GradesClient
         key={studentId}
         initial={JSON.parse(JSON.stringify(data))}
-        linkedChildren={user.role === 'PARENT' ? children.map((c) => ({ id: c.id, name: `${c.firstName} ${c.lastName}` })) : []}
+        linkedChildren={[]}
       />
     </>
   );

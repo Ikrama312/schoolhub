@@ -7,7 +7,10 @@ import TextField from '@mui/material/TextField';
 import { StudentGradesView } from '@/components/gradebook/StudentGradesView';
 import type { StudentGrades } from '@/server/gradebook/student-grades-service';
 
-/** FR-27: parent child selector (empty for students) above the shared grades view. */
+/**
+ * FR-27: shared grades view with an optional per-page child selector. /grades passes no
+ * children (PRD-15 FR-5: the top-bar switcher picks the child); the course grades tab still does.
+ */
 export function GradesClient({ initial, linkedChildren: children, courseId }: { initial: StudentGrades; linkedChildren: { id: string; name: string }[]; courseId?: string }) {
   const router = useRouter();
   const pathname = usePathname();

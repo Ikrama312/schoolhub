@@ -12,6 +12,10 @@ import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOu
 import StraightenOutlinedIcon from '@mui/icons-material/StraightenOutlined';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import FamilyRestroomOutlinedIcon from '@mui/icons-material/FamilyRestroomOutlined';
+import SickOutlinedIcon from '@mui/icons-material/SickOutlined';
+import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
+import DrawOutlinedIcon from '@mui/icons-material/DrawOutlined';
 
 export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
@@ -25,11 +29,13 @@ export interface NavItem {
   /** PRD-13 FR-18: the shell renders a live badge for this key. */
   badge?: 'messages';
   /** PRD-13 FR-23: hidden unless the flag is set (the page still enforces access itself). */
-  requires?: 'safeguardingLead';
+  requires?: 'safeguardingLead' | 'homeroom';
 }
 
 export interface NavFlags {
   safeguardingLead?: boolean;
+  /** PRD-15 FR-42: TEACHER with a current-year homeroom section. */
+  homeroom?: boolean;
 }
 
 // Exported (PRD-04 TASK-3) so route handlers can call
@@ -43,6 +49,12 @@ export const ALL_ROLES: Role[] = ['ADMIN', 'TEACHER', 'STUDENT', 'PARENT'];
  */
 export const navigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: DashboardOutlinedIcon, roles: ALL_ROLES },
+  // PRD-15 FR-42. The parent "Absence notes" entry lands on /attendance/absence-notes, which redirects to the selected child's list.
+  { label: 'My children', href: '/my-children', icon: FamilyRestroomOutlinedIcon, roles: ['PARENT'] },
+  { label: 'Absence notes', href: '/attendance/absence-notes', icon: SickOutlinedIcon, roles: ['PARENT', 'ADMIN'] },
+  { label: 'Absence notes', href: '/attendance/absence-notes', icon: SickOutlinedIcon, roles: ['TEACHER'], requires: 'homeroom' },
+  { label: 'Conferences', href: '/conferences', icon: EventAvailableOutlinedIcon, roles: ['PARENT', 'TEACHER'] },
+  { label: 'Consent forms', href: '/consent-forms', icon: DrawOutlinedIcon, roles: ['PARENT', 'ADMIN'] },
   { label: 'Notifications', href: '/notifications', icon: NotificationsNoneIcon, roles: ALL_ROLES },
   { label: 'Messages', href: '/messages', icon: ChatBubbleOutlineIcon, roles: ALL_ROLES, badge: 'messages' },
   { label: 'My courses', href: '/my-courses', icon: MenuBookOutlinedIcon, roles: ['TEACHER', 'STUDENT', 'PARENT'] },
@@ -52,6 +64,7 @@ export const navigation: NavItem[] = [
   { label: 'Report cards', href: '/report-cards', icon: WorkspacePremiumOutlinedIcon, roles: ['TEACHER'] },
   { label: 'Attendance', href: '/admin/attendance', icon: FactCheckOutlinedIcon, roles: ['ADMIN'] },
   { label: 'Email log', href: '/admin/email-log', icon: MarkEmailUnreadOutlinedIcon, roles: ['ADMIN'] },
+  { label: 'Conferences', href: '/admin/conferences', icon: EventAvailableOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Sections', href: '/admin/sections', icon: GroupsOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Courses', href: '/admin/courses', icon: ClassOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Grading scales', href: '/admin/grading-scales', icon: StraightenOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },

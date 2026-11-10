@@ -1,7 +1,11 @@
+import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
+import { getCurrentUser } from '@/server/auth/requireRole';
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  // PRD-15 FR-8: the child overview is the parent landing page.
+  if ((await getCurrentUser())?.role === 'PARENT') redirect('/my-children');
   return (
     <div>
       <PageHeader title="Welcome to SchoolHub" />

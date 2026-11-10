@@ -2,8 +2,9 @@ import { z } from 'zod';
 
 /**
  * PRD-07 validation (FR-36), shared by RegisterForm and every attendance
- * handler. Role-dependent rules (EXCUSED = ADMIN only, the 14-day window,
- * future dates) live in the service against the user, not here.
+ * handler. Role-dependent rules (EXCUSED = ADMIN, or a TEACHER when an
+ * APPROVED absence note covers the student/date/period (PRD-15 FR-25); the
+ * 14-day window; future dates) live in the service against the user, not here.
  */
 
 export const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'] as const;

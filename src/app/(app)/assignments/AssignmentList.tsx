@@ -47,8 +47,9 @@ export interface AssignmentListProps {
   variant: 'grouped' | 'tabs';
   showCourse?: boolean;
   courses?: { id: string; name: string }[];
-  /** PARENT: linked children for the selector (FR-38); the page re-renders via ?studentId=. */
+  /** PARENT: linked children for a per-page selector (course tab only; /assignments uses the top-bar child switcher, PRD-15 FR-5). */
   childOptions?: { id: string; name: string }[];
+  /** PARENT: the child being viewed; carried into assignment links as ?studentId=. */
   studentId?: string;
 }
 
@@ -69,7 +70,7 @@ export function AssignmentList({ rows, timezone, variant, showCourse, courses, c
 
   const filtered = rows.filter((r) => !courseId || r.assignment.courseId === courseId);
   const link = (r: StudentAssignmentRow) =>
-    `/courses/${r.assignment.courseId}/assignments/${r.assignment.id}${childOptions?.length ? `?studentId=${studentId}` : ''}`;
+    `/courses/${r.assignment.courseId}/assignments/${r.assignment.id}${studentId && (childOptions?.length || !childOptions) ? `?studentId=${studentId}` : ''}`;
 
   const renderRows = (items: StudentAssignmentRow[]) =>
     items.map((r) => (

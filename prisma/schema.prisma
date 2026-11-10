@@ -108,6 +108,17 @@ model User {
   calendarEvents           CalendarEvent[]           @relation("CalendarEventCreator")
   eventRsvps               EventRsvp[]
   calendarFeedToken        CalendarFeedToken?
+  /// PRD-15
+  absenceNotesForStudent   AbsenceNote[]             @relation("AbsenceNoteStudent")
+  absenceNotesSubmitted    AbsenceNote[]             @relation("AbsenceNoteSubmitter")
+  absenceNotesReviewed     AbsenceNote[]             @relation("AbsenceNoteReviewer")
+  conferenceEventsCreated  ConferenceEvent[]         @relation("ConferenceEventCreator")
+  conferenceSlotsTeaching  ConferenceSlot[]          @relation("ConferenceSlotTeacher")
+  conferenceSlotsBooked    ConferenceSlot[]          @relation("ConferenceSlotParent")
+  conferenceSlotsFor       ConferenceSlot[]          @relation("ConferenceSlotStudent")
+  consentFormsCreated      ConsentForm[]             @relation("ConsentFormCreator")
+  consentResponsesFor      ConsentResponse[]         @relation("ConsentResponseStudent")
+  consentResponsesGiven    ConsentResponse[]         @relation("ConsentResponseParent")
 
   @@index([lastName, firstName, email])
   @@index([role, status])
@@ -1292,6 +1303,7 @@ model CalendarEvent {
   updatedAt          DateTime        @updatedAt
   audiences          EventAudience[]
   rsvps              EventRsvp[]
+  consentForms       ConsentForm[]
 
   @@index([startAt, endAt])
 }
@@ -1332,4 +1344,143 @@ model CalendarFeedToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String   @unique
   createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// PRD-15 Parent Portal (FR-1). Extra columns beyond the PRD (ADR-3):
+// ConferenceSlot.blocked, ConsentForm.lastRemindedAt, ConsentForm.dueReminderSentAt.
+// The partial unique index "one slot per teacher per child per event" lives in
+// the migration SQL -- Prisma can't express it.
+// ---------------------------------------------------------------------------
+
+enum AbsenceNoteStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AbsenceReason {
+  ILLNESS
+  MEDICAL_APPOINTMENT
+  FAMILY
+  RELIGIOUS
+  OTHER
+}
+
+enum ConsentResponseValue {
+  GRANTED
+  DECLINED
+}
+
+model AbsenceNote {
+  id            String            @id @default(cuid())
+  studentId     String
+  student       User              @relation("AbsenceNoteStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  submittedById String
+  submittedBy   User              @relation("AbsenceNoteSubmitter", fields: [submittedById], references: [id])
+  fromDate      DateTime          @db.Date
+  toDate        DateTime          @db.Date
+  partialDay    Boolean           @default(false)
+  periodIds     String[]          @default([])
+  reason        AbsenceReason
+  details       String?
+  fileId        String?
+  status        AbsenceNoteStatus @default(PENDING)
+  reviewedById  String?
+  reviewedBy    User?             @relation("AbsenceNoteReviewer", fields: [reviewedById], references: [id])
+  reviewNote    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([studentId, status, fromDate])
+  @@index([status, createdAt])
+}
+
+model ConferenceEvent {
+  id              String           @id @default(cuid())
+  title           String
+  date            DateTime         @db.Date
+  bookingOpensAt  DateTime
+  bookingClosesAt DateTime
+  slotMinutes     Int
+  gradeLevelIds   String[]         @default([])
+  createdById     String
+  createdBy       User             @relation("ConferenceEventCreator", fields: [createdById], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  slots           ConferenceSlot[]
+
+  @@index([date])
+}
+
+model ConferenceSlot {
+  id                 String          @id @default(cuid())
+  eventId            String
+  event              ConferenceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  teacherId          String
+  teacher            User            @relation("ConferenceSlotTeacher", fields: [teacherId], references: [id])
+  startsAt           DateTime
+  endsAt             DateTime
+  location           String?
+  bookedByParentId   String?
+  bookedByParent     User?           @relation("ConferenceSlotParent", fields: [bookedByParentId], references: [id])
+  bookedForStudentId String?
+  bookedForStudent   User?           @relation("ConferenceSlotStudent", fields: [bookedForStudentId], references: [id])
+  parentNote         String?
+  blocked            Boolean         @default(false)
+  bookedAt           DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([eventId, teacherId, startsAt])
+  @@index([bookedByParentId])
+}
+
+model ConsentForm {
+  id                String            @id @default(cuid())
+  title             String
+  description       String
+  dueAt             DateTime
+  eventId           String?
+  event             CalendarEvent?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  createdById       String
+  createdBy         User              @relation("ConsentFormCreator", fields: [createdById], references: [id])
+  lastRemindedAt    DateTime?
+  dueReminderSentAt DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  audiences         ConsentAudience[]
+  responses         ConsentResponse[]
+
+  @@index([dueAt])
+}
+
+/// type is GRADE_LEVEL | SECTION | COURSE only (enforced in zod).
+model ConsentAudience {
+  id     String       @id @default(cuid())
+  formId String
+  form   ConsentForm  @relation(fields: [formId], references: [id], onDelete: Cascade)
+  type   AudienceType
+  refId  String
+
+  @@index([formId])
+  @@index([type, refId])
+}
+
+model ConsentResponse {
+  id            String               @id @default(cuid())
+  formId        String
+  form          ConsentForm          @relation(fields: [formId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       User                 @relation("ConsentResponseStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  respondedById String
+  respondedBy   User                 @relation("ConsentResponseParent", fields: [respondedById], references: [id])
+  value         ConsentResponseValue
+  signature     String
+  comment       String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@unique([formId, studentId])
 }

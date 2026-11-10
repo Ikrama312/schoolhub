@@ -8,6 +8,7 @@ import { purgeOrphanFiles } from '@/server/files/purge';
 import { sendDueReminders } from '@/server/assignments/reminders';
 import { autoSubmitExpiredAttempts, sendAfterCloseResultsReleased } from '@/server/quiz/maintenance';
 import { processPendingMessageEmails } from '@/server/messaging/email';
+import { sendConsentDueReminders } from '@/server/consent-forms/consent-forms-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,15 @@ export const POST = withHandler(async (request: Request) => {
     logger.error('Message emails failed', { message: error instanceof Error ? error.message : String(error) });
   }
 
+  // PRD-15 FR-40: one 48 h consent reminder per form (claimed via dueReminderSentAt), isolated.
+  let consentReminders = { forms: 0, notified: 0 };
+  try {
+    consentReminders = await sendConsentDueReminders(new Date());
+    if (consentReminders.forms) logger.info('Consent due reminders sent', consentReminders);
+  } catch (error) {
+    logger.error('Consent due reminders failed', { message: error instanceof Error ? error.message : String(error) });
+  }
+
   if (Date.now() - lastPurgeAt > DAY_MS) {
     lastPurgeAt = Date.now();
     try {
@@ -74,5 +84,5 @@ export const POST = withHandler(async (request: Request) => {
       logger.error('Orphan file purge failed', { message: error instanceof Error ? error.message : String(error) });
     }
   }
-  return ok({ ...result, messageEmails });
+  return ok({ ...result, messageEmails, consentReminders });
 });

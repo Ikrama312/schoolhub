@@ -1,112 +1,56 @@
 {
-  "ticketId": "SH-14",
-  "timestamp": "2026-11-10T02:59:22Z",
+  "ticketId": "SH-15",
+  "timestamp": "2026-11-10T04:30:00Z",
   "phase": "ui-verification",
   "version": "1.0",
-  "status": "blocked",
-  "findings": [
-    {
-      "requirementId": "FR-9",
-      "surface": "/calendar page (EventCalendar month/week/agenda, Today/prev/next/date picker)",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: src/app/(app)/calendar/page.tsx and CalendarView.tsx (TASK-20) do not exist. Signed out, GET /calendar on :3001 just redirects to /login (middleware), so no page is behind it. Nothing to render."
-    },
-    {
-      "requirementId": "NFR-12",
-      "surface": "/calendar default view (month at 768 px or wider, agenda below 768 px)",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: Depends on the /calendar page (TASK-20), which does not exist."
-    },
-    {
-      "requirementId": "FR-10",
-      "surface": "Calendar source chips (School events, My assignments, My quizzes, My timetable, Holidays)",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: SourceChips.tsx and src/server/calendar/sources.ts (TASK-9/20) do not exist."
-    },
-    {
-      "requirementId": "FR-11",
-      "surface": "Parent child filter and child-name labels on deadlines",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: There is no calendar page or sources.ts. The audience resolver's studentIds filter exists, but no UI uses it."
-    },
-    {
-      "requirementId": "FR-12",
-      "surface": "Event drawer (title, category badge, school-tz time, location, Markdown description, audience chips, 'Add to my calendar' .ics, edit/delete)",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: EventDrawer.tsx (TASK-19) and /api/events/[id]/ics (TASK-14) do not exist."
-    },
-    {
-      "requirementId": "FR-13",
-      "surface": "Clicking an assignment or quiz deadline navigates to it",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: There is no calendar page and no deadline sources."
-    },
-    {
-      "requirementId": "FR-14",
-      "surface": "'New event' button and EventEditorDialog with AudienceBuilder, recurrence and RSVP fields",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: EventEditorDialog.tsx (TASK-18) and src/components/AudienceBuilder/AudienceBuilder.tsx (TASK-17) do not exist."
-    },
-    {
-      "requirementId": "FR-21",
-      "surface": "RSVP controls in the drawer (Yes/No/Maybe, guests, note; disabled after the deadline)",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: There is no drawer and no /api/events/[id]/rsvp."
-    },
-    {
-      "requirementId": "FR-22",
-      "surface": "Own RSVP response and totals; full RSVP list with CSV export for the creator and admins",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: There is no drawer and no /api/events/[id]/rsvps."
-    },
-    {
-      "requirementId": "FR-24",
-      "surface": "/account/calendar Subscribe section (private URL, copy, Google/Apple/Outlook instructions, Reset link)",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: account/calendar/page.tsx and SubscribeCard.tsx (TASK-21) do not exist. /api/me/calendar-feed does not exist either."
-    },
-    {
-      "requirementId": "FR-35",
-      "surface": "Sidebar nav entries for /calendar and /account/calendar",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: src/config/navigation.ts has no calendar entries (grep 'calendar' finds 0 matches)."
-    },
-    {
-      "requirementId": "FR-17",
-      "surface": "Today and timetable views show the holiday name instead of classes",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: getScheduleForDate is unchanged. timetable-service.ts:550/570 still has only the comment 'PRD-14 holidays hook in here'. There is no isSchoolDay (calendar-service.ts is missing)."
-    },
-    {
-      "requirementId": "FR-18",
-      "surface": "Teacher register: 'No classes today \u2014 <holiday>', a warning banner, and the 'Record attendance on a holiday anyway' confirmation",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: attendance/take/page.tsx and RegisterForm.tsx are unchanged (TASK-13 was not done)."
-    },
-    {
-      "requirementId": "FR-19",
-      "surface": "Non-blocking 'This date is a holiday (<title>).' warning in the assignment editor and quiz settings",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: AssignmentForm.tsx and QuizSettingsPanel.tsx are unchanged (TASK-23). There is no /api/school-day."
-    },
-    {
-      "requirementId": "FR-20",
-      "surface": "'Add term breaks' button on /admin/academic-years/[id]",
-      "verdict": "FAIL",
-      "notes": "NOT IMPLEMENTED: The page and TermBreaksButton.tsx (TASK-22) do not exist, and neither does the term-breaks API."
-    }
-  ],
-  "blockedReason": "Two reasons. (1) No SH-14 UI exists to verify. Dev shipped only TASK-1 to TASK-7 (deps, schema, validators, recurrence, iCal builder, audience resolver, notification types). Every UI task (TASK-13, TASK-17 to TASK-23) has no code on disk, and the only src changes are modified src/lib/dates.ts, src/server/notifications/types.ts and src/theme/theme.ts, plus new untracked src/lib/validators/calendar.ts, src/server/announcements/ and src/server/calendar/ (none of them UI). QA independently reports overallStatus FAIL (32 NOT-IMPLEMENTED). (2) Rendering was also blocked by the environment. On the existing `next dev` server at :3001 (this repo), the /login page renders without styles and never hydrates, so the credential form posts natively and reloads empty. Login failed for all 4 seeded roles (admin, teacher, parent, student), so no authenticated page could be rendered. The :3000 server belongs to a different checkout (~/Documents/forge/schoolhub) and returns 500 for every route. I did not restart the shared servers. No figma-readiness.json exists, so there was no design reference.",
-  "environment": {
-    "server": "http://localhost:3001 (next dev, cwd = this repo; not started by this phase)",
-    "driver": "/tmp/uiv-sh14/d2.cjs (Playwright 1.47.2 chromium, bypassCSP per ADR-4)",
-    "rawLog": "artifacts/ui-verification/uiv-raw-sh14.log",
-    "screenshots": "artifacts/ui-verification/screenshots-sh14/*-error.png",
-    "designReference": null
-  },
+  "status": "complete",
   "summary": {
-    "pass": 0,
-    "fail": 15,
-    "blocked": 0
-  }
+    "pass": 31,
+    "fail": 5,
+    "blocked": 2,
+    "headline": "Every SH-15 UI surface renders under MUI, and all three PRD flows work end to end (absence note → approve → EXCUSED, book a slot, sign consent). One defect affects several screens: dates and times are formatted in the browser or server timezone instead of SchoolSettings.timezone (NFR-8). On the teacher availability page, slots for a 3:00–5:00 PM range are listed as 01:00–03:00. FR-13 and FR-35 (and FR-5's calendar part) are the partial items ADR-11 accepted.",
+    "environment": "Rendered with `next dev` on :3201 (Chromium via Playwright, 1280 px and 390 px). The `next start` production build on :3200 serves pages, but nothing hydrates: next.config.js sends `script-src 'self'` with no nonce, so Next's inline bootstrap scripts are blocked. That config dates from the project-startup commit, not SH-15, and is the same issue as the known QA blocker 1. The shared :3000 (500 on every route) and :3001 (hangs) servers were not used. No figma-readiness.json exists, so the PRD text was the only design reference.",
+    "evidence": "artifacts/ui-verification/screenshots-sh15/ (38 PNGs, including 4 e2e end-of-flow captures in e2e/) and artifacts/ui-verification/uiv-raw-sh15.log"
+  },
+  "findings": [
+    { "requirementId": "FR-3", "surface": "Top-bar child switcher (2+ children)", "verdict": "PASS", "notes": "To get a two-child parent, a second ParentStudentLink was added temporarily and removed afterwards. The switcher renders as a Select with avatar and first name, and the menu lists Sam and Sara. Choosing Sara navigated to /my-children/<Sara> and set the sh_child cookie to Sara's id. Screenshots: parent2-switcher-open, parent2-after-switch." },
+    { "requirementId": "FR-4", "surface": "sh_child cookie fallback", "verdict": "PASS", "notes": "With sh_child=bogus-id, /assignments rendered for the first child (Sam Student) and threw no error. Screenshot: parent2-bogus-cookie." },
+    { "requirementId": "FR-5", "surface": "/assignments, /grades default to the selected child; calendar filter", "verdict": "FAIL", "notes": "/assignments and /grades show the selected child's name. After switching to Sara, /grades showed 'Sara Scholar' (parent2-grades-default). The calendar studentId filter has no UI because no PRD-14 calendar page exists. ADR-11 accepted this as partial." },
+    { "requirementId": "FR-6", "surface": "Top bar with one child", "verdict": "PASS", "notes": "A one-child parent sees the avatar and 'Sam' as plain text with no dropdown (parent-overview-1280)." },
+    { "requirementId": "FR-7", "surface": "/my-children (redirect when one child, cards when 2+)", "verdict": "PASS", "notes": "With one child, /dashboard lands on /my-children/<id>. With two children, /my-children shows a card per child with avatar, name, term attendance, missing-work count and average grade. These show '—', 0 and '—' because the local DB has no enrollments. Also checked at 390 px." },
+    { "requirementId": "FR-8", "surface": "Parent landing after sign-in", "verdict": "PASS", "notes": "GET /dashboard as a parent ends on the child overview with no extra clicks." },
+    { "requirementId": "FR-9", "surface": "Overview 'Today' card", "verdict": "PASS", "notes": "The card renders the empty state 'No classes scheduled today.' and a View all link. The child has no timetable in the local DB, so the populated and holiday variants were not seen." },
+    { "requirementId": "FR-10", "surface": "Overview 'Attendance' card", "verdict": "PASS", "notes": "The card shows the term rate ('—', Semester 1), 0 absences, 0 lates, a 'Report an absence' button and View all. The last-5-marks list was not seen because the child has no records." },
+    { "requirementId": "FR-11", "surface": "Overview 'Assignments' card", "verdict": "PASS", "notes": "The card renders the empty state 'Nothing missing or due this week.' and View all. The red missing styling was not seen because there is no data." },
+    { "requirementId": "FR-12", "surface": "Overview 'Recent grades' card", "verdict": "PASS", "notes": "The card renders the empty state 'No grades yet this term.' and View all. The populated list was not seen because there is no data." },
+    { "requirementId": "FR-13", "surface": "Overview 'Announcements' card", "verdict": "FAIL", "notes": "The card always shows the EmptyState 'No new announcements' and has no View all link. The PRD-12 model is absent, and ADR-11 accepted this as partial. The card is visually tidy." },
+    { "requirementId": "FR-14", "surface": "Overview 'Upcoming events' card", "verdict": "PASS", "notes": "The card renders 'Nothing coming up.' and a 'Conferences' link. The child is not in an eligible grade, so the empty state is expected." },
+    { "requirementId": "FR-15", "surface": "Overview 'Teachers' card", "verdict": "PASS", "notes": "The card renders 'No teachers yet.' and View all. The Message button was not seen because the child has no enrollments." },
+    { "requirementId": "FR-16", "surface": "Overview 'Action items' card", "verdict": "PASS", "notes": "The card renders 'You're all caught up.' and a 'Consent forms' link. Populated items were not seen in the UI. QA's integration test covers the data." },
+    { "requirementId": "FR-17", "surface": "Overview card layout and links", "verdict": "PASS", "notes": "There are 8 cards in a 2-column grid at 1280 px and a single column at 390 px, with no overflow or clipping. 7 cards have a footer link; Announcements has none (see FR-13). Suspense streaming can't be confirmed from screenshots, but every card painted." },
+    { "requirementId": "FR-18", "surface": "/my-children/[id]/absence/new form fields", "verdict": "PASS", "notes": "The form shows From and To MUI date pickers defaulting to today in the school timezone (11/09/2026 America/New_York), a Whole day / Specific periods radio, a Reason select (Illness), Details with a 0/1000 counter, an 'Attach a document (PDF, JPG or PNG)' button, and Cancel and Send note. The e2e run submitted a note through this form on my server." },
+    { "requirementId": "FR-18", "surface": "Absence form period checkboxes", "verdict": "BLOCKED", "notes": "The local DB has 0 bell-schedule periods, so 'Specific periods' shows a 'Periods' label with no checkboxes. Rendering of the checkboxes couldn't be checked. Minor UX point: when there are no periods, the group is blank, with no hint that the bell schedule is missing." },
+    { "requirementId": "FR-20", "surface": "Parent absence-note list", "verdict": "PASS", "notes": "The empty state reads 'No absence notes yet'. After the e2e submit, the table shows Dates, Periods (Whole day), Reason (Illness), an orange Pending chip and School's note, plus the 'Absence note sent to the school' toast. The parent nav 'Absence notes' entry redirects to this list." },
+    { "requirementId": "FR-21", "surface": "/attendance/absence-notes review queue", "verdict": "PASS", "notes": "As admin, the DataTable has Status, From and To filters, search and columns. The homeroom-teacher review flow (Review → dialog with the student → Approve) passed in e2e on my server. A teacher with no homeroom gets /forbidden, which is correct. Minor issues: the empty-grid overlay is clipped so only the top of the inbox icon shows (this looks like the shared DataTable), and the From/To filters are native date inputs (dd/mm/yyyy), not MUI X pickers." },
+    { "requirementId": "FR-22", "surface": "Approve / Reject dialog", "verdict": "PASS", "notes": "The Approve path ran in the e2e on my server and showed the 'Approved.' confirmation. I didn't capture a screenshot of the dialog or exercise Reject (note required) in the UI; QA unit tests cover Reject." },
+    { "requirementId": "FR-24", "surface": "Register 'Absence note' badge and EXCUSED pre-fill", "verdict": "PASS", "notes": "The register shows Ivy Ill with an 'Absence note' outlined chip, E selected, and the Excused 1 summary chip (e2e end screenshot)." },
+    { "requirementId": "FR-25", "surface": "Register EXCUSED button for a teacher", "verdict": "PASS", "notes": "The E toggle is enabled and pressed for the homeroom teacher when an approved note covers the student. The e2e asserted this on my server." },
+    { "requirementId": "FR-28", "surface": "/admin/conferences list and New event dialog", "verdict": "PASS", "notes": "The list shows 'Autumn conferences' with date, slot, Grade 7, an 'Open' chip, and Edit and Bookings actions. The first capture caught skeleton rows while the dev server was compiling; the retry showed 1 row. The dialog has Title, Conference date, Booking opens and closes, Slot length and an Eligible grade levels select." },
+    { "requirementId": "FR-29", "surface": "/conferences/[id]/availability", "verdict": "FAIL", "notes": "The layout and controls render: time ranges, Add range, Location, Save availability, and a slot list with Block and Delete icons. The slot times are wrong. The saved range reads 03:00 PM–05:00 PM, which is school time, but the 12 slots are listed as 01:00–01:10 … 02:50–03:00. AvailabilityClient.tsx:25 formats with `toLocaleTimeString` in the browser's timezone (here Asia/Karachi) instead of SchoolSettings.timezone (America/New_York). Any teacher whose browser timezone differs from the school's sees the wrong slot times. Fix: use formatInTimeZone with the school timezone, as BookingClient.tsx:37 does." },
+    { "requirementId": "FR-30", "surface": "/conferences/[id] parent booking page", "verdict": "PASS", "notes": "In e2e on my server, slot time buttons rendered ('Book 15:00 with Carl Conference', which is correct school time), the confirm dialog with a note worked, and the result was 'Booked for Bea: 15:00–15:10'. The seeded event returns 404 for the local parent because their child isn't in Grade 7, which is correct access behavior. Minor issues: a faint grey shape in the middle of the end screenshot, probably the dialog's exit transition; and the header line 'Booking closes 11/16/2026, 10:00:00 AM' uses server-local `toLocaleString` (see NFR-8)." },
+    { "requirementId": "FR-32", "surface": "Cancel booking control", "verdict": "PASS", "notes": "A red 'Cancel booking' button appears next to the booked slot. I didn't click it in the UI; QA integration tests cover the behavior." },
+    { "requirementId": "FR-33", "surface": "'Add to calendar' (.ics) link", "verdict": "PASS", "notes": "An 'Add to calendar' link appears next to the booked slot." },
+    { "requirementId": "FR-34", "surface": "/conferences/[id]/day teacher day view", "verdict": "PASS", "notes": "The page shows the heading, a 'Print / Save as PDF' button and 'No bookings yet.' (the seeded bookings were skipped in the local DB). It formats times with the school timezone. I didn't see a populated list or check print styles visually." },
+    { "requirementId": "FR-35", "surface": "Calendar 'My meetings' source", "verdict": "FAIL", "notes": "This isn't built: no PRD-14 calendar UI exists. Meetings appear only in the overview Upcoming events card. ADR-11 accepted this as partial." },
+    { "requirementId": "FR-36", "surface": "/consent-forms/new", "verdict": "PASS", "notes": "The form has Title, a Markdown Write/Preview description with a 0/10,000 counter, a 'Respond by' date-time picker, an optional linked calendar event and an audience builder. For a teacher the audience type is limited to Course; for admin it defaults to Grade level. Buttons are Cancel and 'Send to parents'." },
+    { "requirementId": "FR-37", "surface": "/consent-forms list and detail, respond with a signature", "verdict": "PASS", "notes": "The parent list renders 'Forms for Sam' with an empty state; Sam is outside the Grade 7 audience, so the seeded form returns 404, which is correct. In e2e on my server, the markdown description rendered (bold 'museum'), a mismatched signature showed 'Your signature must match your full name.', and a matching one showed 'Consent granted by Polly Parent on …'. Minor: in that screenshot the child avatar 'MM' and the user avatar 'PP' have no background colour. This is the shared UserAvatar, and it also happens for 'TT' on teacher pages." },
+    { "requirementId": "FR-38", "surface": "Change response", "verdict": "PASS", "notes": "A 'Change response' button appears after responding (before dueAt)." },
+    { "requirementId": "FR-39", "surface": "/consent-forms/[id]/tracking", "verdict": "PASS", "notes": "The page shows Granted, Declined and No response count chips, a Status filter, search, Export CSV, a 'Remind non-responders' button (disabled with 0 rows), and a DataTable with Student, Section, Status, Responded by, Responded at and Comment columns. Minor issues: the empty-grid overlay is clipped as in FR-21, and the 'Due …' line uses server-local time (see NFR-8)." },
+    { "requirementId": "FR-42", "surface": "Navigation entries per role", "verdict": "PASS", "notes": "Parent: My children, Absence notes, Conferences, Consent forms. Teacher: Conferences, plus Absence notes only for a homeroom teacher (seen in the e2e teacher shell, absent for teacher@schoolhub.test). Admin: Absence notes and Consent forms, plus Administration › Conferences." },
+    { "requirementId": "NFR-4", "surface": "MUI-only visual consistency", "verdict": "PASS", "notes": "Every SH-15 surface uses MUI components and the app theme: Roboto, Cards, DataGrid, Pickers, Dialog, Chips and the shared toast. I saw nothing that looks like a foreign UI kit. The one inconsistency is the native date inputs on the review-queue filters." },
+    { "requirementId": "NFR-8", "surface": "Date and time display in the school timezone (SH-15 UI)", "verdict": "FAIL", "notes": "Many SH-15 components format with `toLocale*`, which uses the browser or server timezone, not SchoolSettings.timezone. Affected: AvailabilityClient.tsx:25 (slot times, see FR-29); conferences/[id]/page.tsx:26 (booking closes); consent-forms/[id]/page.tsx:23,36 and consent-forms/page.tsx:18 (due date and event date); tracking/page.tsx:18 and ConsentTrackingClient.tsx:104,127; ConsentResponseForm.tsx:60; AbsenceNotesReviewClient.tsx:149,194; OverviewCards.tsx:35-36. Visible effect: the seeded consent form is due 2026-11-19 23:59 school time but shows 'Due 11/20/2026, 9:59:00 AM', which is the wrong day. Use the existing formatInSchoolTz helper (src/lib/dates), which day/page.tsx and the services already use." },
+    { "requirementId": "NFR-2", "surface": "Child overview paint time", "verdict": "PASS", "notes": "Measured informally only. On a warm dev server every card painted within the networkidle wait, and nothing stayed in a loading state. This is not a production timing measurement." },
+    { "requirementId": "FR-31", "surface": "Overlap / one-per-teacher error message in booking UI", "verdict": "BLOCKED", "notes": "Not rendered. Triggering the overlap message in the UI needs a child with two teachers and overlapping slots, and no such fixture exists locally or in the e2e specs. QA integration tests assert the exact message text ('You already have a meeting with … at 15:00')." }
+  ],
+  "blockedReason": null
 }

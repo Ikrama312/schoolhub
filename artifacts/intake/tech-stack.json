@@ -1,11 +1,10 @@
 {
-  "ticketId": "SH-14",
-  "timestamp": "2026-11-09T19:10:00Z",
+  "ticketId": "SH-15",
+  "timestamp": "2026-11-10T12:00:00Z",
   "phase": "intake",
   "version": "1.0",
-
   "techStack": "react",
-  "confidencePct": 99,
-  "detectionNotes": "Run mode '--brownfield --tech-stack react' declared in the PRD header. Fixed stack: Next.js 14 App Router, React 18, TypeScript strict, MUI v9 (@mui/material 9.5.0 installed) with Emotion (sx/styled/theme only — no Tailwind/CSS modules), MUI X v9 (data-grid, date-pickers, charts installed; x-scheduler NEW in this ticket, beta, version to pin via MUI MCP), Prisma + PostgreSQL 16, Auth.js v5, Zod, React Hook Form, date-fns + date-fns-tz, Vitest + Playwright. New libs implied by PRD: @mui/x-scheduler (required), 'ics' package (optional — hand-written builder allowed), node-ical (test-only, devDependency).",
+  "confidencePct": 98,
+  "detectionNotes": "PRD run mode '--brownfield --tech-stack react'; Platform Context fixes Next.js 14 App Router, React 18, TypeScript strict, MUI v9 + Emotion (no CSS modules/Tailwind), Prisma/PostgreSQL 16, Auth.js v5, Zod, React Hook Form, Vitest + Playwright. Confirmed in workspace (package.json, prisma/schema.prisma, src/app/(app)). Styling only via MUI theme/sx/styled(), so cssPreprocessor recorded as plain css.",
   "cssPreprocessor": "css"
 }

@@ -1,47 +1,62 @@
-# Coverage Report — SH-14 (PRD-14 School Calendar, Events & Holidays)
+# Coverage Report — SH-15 (PRD-15 Parent Portal)
 
-> This file replaces the SH-13 coverage report.
->
-> **Method.** `@vitest/coverage-v8` is not installed. QA did not add a dependency just to measure coverage. Instead, every exported function in the code Dev shipped was mapped by hand to the tests that execute it. Integration tests ran against real Postgres, with `TEST_DATABASE_URL` set to the dev database.
+> This file replaces the SH-14 coverage report.
 
-## Scope: what Dev actually shipped
+## Method
 
-Dev finished TASK-1 to TASK-7 of 27 tasks. **TASK-8 to TASK-27 have no code at all.** That covers every service, API route, page, seed change and the integration and E2E suites. The "not built" table below lists those files.
+The project has no instrumented coverage tool: `@vitest/coverage-v8` is not installed, and QA did not add a dependency for it. Coverage below is **behavioural**. Each exported function or page the Dev agent wrote is mapped to the automated test that exercises it.
 
-| File | Change | Exported functions / units | Covered by | Function coverage |
+Commands used:
+- `npx vitest run <files>` with `TEST_DATABASE_URL=$DATABASE_URL` (local Postgres :5433). Fixtures are tagged and deleted in `afterAll`.
+- `PORT=3100 APP_URL=http://localhost:3100 npx playwright test tests/e2e/{absence-notes,conferences,consent-forms}.spec.ts` against `npm run build` + `next start`.
+
+## Test inventory (SH-15)
+
+| File | Author | Kind | Tests | Result |
 |---|---|---|---|---|
-| `src/lib/dates.ts` (+18 lines) | MODIFY | `schoolMidnight`, `schoolDateOf`, `addDateDays` | `tests/unit/dates.test.ts` (4 SH-14 cases, including DST week) | 3/3 |
-| `src/lib/validators/calendar.ts` (211) | CREATE | `audienceInputSchema`, `eventInputSchema`/`checkEvent`, `eventPatchSchema`, `rsvpSchema`, `calendarQuerySchema`, `schoolDayQuerySchema`, `publicEventsQuerySchema` | `tests/unit/calendar/validators.test.ts` (12), `tests/unit/calendar/qa-sh14.test.ts` (3) | 7/7 |
-| `src/server/calendar/recurrence.ts` (85) | CREATE | `expandOccurrences` (plus internal `naive`, `fromNaive`, `overlaps`) | `recurrence.test.ts` (6), `qa-sh14.test.ts` (3) | 1/1 |
-| `src/server/calendar/ical.ts` (160) | CREATE | `escapeText`, `foldLine`, `vtimezone`, `vevent`, `buildCalendar` | `ical.test.ts` (10, parsed with node-ical), `qa-sh14.test.ts` (3) | 5/5 |
-| `src/server/announcements/audience.ts` (221) | CREATE | `audienceClausesForUser`, `audienceWhereForUser`, `audienceMatchesClauses`, `isUserInAudience`, `resolveAudienceUserIds`, `canTargetAudience` | `tests/unit/calendar/audience.test.ts` (6, mocked DB), **`tests/integration/calendar/qa-sh14.test.ts` (7, real Postgres, QA)** | 6/6 |
-| `src/server/notifications/types.ts` (+33) | MODIFY | 4 `event.*` registrations | `tests/unit/calendar/qa-sh14.test.ts` (QA) | 4/4 |
-| `prisma/schema.prisma` and migration `20261113000000_add_calendar` | MODIFY/CREATE | 4 enums, 4 models | `prisma migrate status` reports the schema up to date. `tests/integration/calendar/qa-sh14.test.ts` checks defaults, the composite RSVP PK, cascades and the unique token hash. | 4/4 models exercised |
-| `src/theme/theme.ts` (+2) | MODIFY | scheduler theme augmentation (type-only) | `npm run typecheck` ✅ | n/a |
-| `package.json` / lock | MODIFY | `@mui/x-scheduler@9.0.0-beta.15`, `node-ical@0.27.6`, scoped override | `npm ls @mui/x-internals` shows 9.17.0 overridden | n/a |
+| tests/unit/absence-notes/absence-coverage.test.ts | Dev | unit | 4 | pass |
+| tests/unit/conferences/conference-slots.test.ts | Dev | unit | 5 | pass |
+| tests/unit/consent-forms/signature.test.ts | Dev | unit | 2 | pass |
+| tests/integration/absence-notes/absence-approval.test.ts | Dev | integration (DB) | 4 | pass |
+| tests/integration/conferences/concurrent-booking.test.ts | Dev | integration (DB) | 3 | pass |
+| **tests/unit/parent-portal/qa-sh15-validators.test.ts** | **QA (new)** | unit | 16 | pass |
+| **tests/integration/parent-portal/qa-sh15.test.ts** | **QA (new)** | integration (DB) | 13 | pass |
+| tests/e2e/absence-notes.spec.ts | Dev (fixture fixed by QA) | Playwright | 2 | pass |
+| tests/e2e/conferences.spec.ts | Dev (fixture fixed by QA) | Playwright | 1 | pass |
+| tests/e2e/consent-forms.spec.ts | Dev (fixture fixed by QA) | Playwright | 1 | pass |
+| **Total** | | | **51** | **51 pass** |
 
-**Shipped code: 26 of 26 exported functions/units have at least one executing test (100% function coverage).**
+QA fix to the e2e fixtures: `conferences.spec.ts` and `consent-forms.spec.ts` both created a grade level with `order: max(order)+1`. Under parallel workers this collided on the unique `order` constraint, and the conferences spec failed 1 time in 1 parallel run. A random offset now matches the pattern the integration tests use. After the fix, 4/4 pass in parallel.
 
-### Branches still uncovered in shipped code
-- `audience.ts` `resolveOne`: `ROLE` with a null `refId`, and `GRADE_LEVEL` with `includeTeachers` only. Teacher clauses for courses outside the current year.
-- `audience.ts` `isUserInAudience([])`, the empty-audience early return.
-- `recurrence.ts`: the `MAX_STEPS` guard is never reached. A one-year weekly series yields 53 steps, which QA asserts.
-- `ical.ts` `vevent`: an all-day **series** (DATE-valued `UNTIL`) is not tested.
+## Per-module coverage
 
-## Not built (0% coverage, files missing)
+| Module | Functions covered by tests | Not covered |
+|---|---|---|
+| `src/lib/validators/absence-notes.ts` | `absenceNoteInputSchema`, `absenceNoteSchemaFor`, `reviewSchema` (QA unit) | `absenceNoteListQuery` (exercised only via the UI/e2e) |
+| `src/lib/validators/conferences.ts` | `conferenceEventInputSchema`, `bookingSchema`, `availabilitySchema` (QA unit) | `conferenceEventPatchSchema`, `slotPatchSchema`, list queries |
+| `src/lib/validators/consent-forms.ts` | `consentResponseSchema`, `trackingQuery` (QA) | `consentFormInputSchema` past-due refine |
+| `src/server/absence-notes/absence-coverage.ts` | `coversRecord` (Dev unit) | — |
+| `src/server/absence-notes/absence-notes-service.ts` | `submit`, `review`, `findCovering`, `assertHomeroomOrAdmin` (Dev integration + e2e) | `list` filters (status/date) are covered only via e2e page load |
+| `src/server/attendance/attendance-service.ts` (SH-15 edits) | pre-fill, EXCUSED rule, absent suppression (Dev integration; `attendance-qa` FR-10/FR-19 now passes) | — |
+| `src/server/conferences/conference-slots.ts` | `generateSlots`, `overlaps` (Dev unit) | — |
+| `src/server/conferences/conferences-service.ts` | `createEvent`, `setAvailability`, `patchSlot`, `book`, `cancel`, `teacherDay`/`listSlots(view=day)`, `listMyMeetings` (QA + Dev integration) | `updateEvent` (409 when booked), `removeSlot`, `listEvents`, `getEvent`, `slotIcs` body |
+| `src/server/consent-forms/consent-forms-service.ts` | `create`, `respond`, `tracking` (JSON + CSV), `remind`, `sendConsentDueReminders`, `assertConsentOwnerOrAdmin` (QA integration) | `list` (parent pending filter is reached indirectly via `getActionItems`) |
+| `src/server/consent-forms/signature.ts` | `signatureMatches` (Dev + QA unit) | — |
+| `src/server/parent/selected-child.ts` | `getSelectedChild` (QA unit, with mocked cookie/DB) | `setSelectedChildCookie` |
+| `src/server/parent/overview-service.ts` | `getOverview` (all 8 cards), `getActionItems`, `getUpcomingEvents` (QA integration) | `getChildrenSummary`; the card contents of today/attendance/assignments/grades/teachers are run but not value-asserted |
+| `src/server/files/contexts.ts` (`absenceNoteResolver`) | upload path covered by the e2e absence spec | resolver allow/deny matrix not unit-tested |
+| `src/server/notifications/types.ts` | all 7 new keys used by passing tests (`absence_note.*`, `conference.*`, `consent.*`) | — |
+| API routes (21 files under `src/app/api/**`) | thin wrappers (`withHandler → requireRole → Zod → service`). The e2e specs exercise booking, review, consent response and absence submission. | `selected-child`, `me/children/summary`, `students/:id/overview`, `conference-slots/:id/ics`, `availability`, `remind`, `tracking` are called directly through services, not over HTTP |
+| UI pages/components (32 `.tsx` files) | e2e covers the absence form, review queue + register, booking page, consent respond page | `ChildSwitcher`, `/my-children` summary cards, `/admin/conferences`, availability page, day view, consent create/tracking UI have **no automated UI test** |
+| `prisma/seed.ts` (`seedParentPortal`) | manual run state checked: event + 24 slots + calendar event + consent form present | the bookings, absence notes and 40% responses are skipped locally because the DB has no Grade 7 students with linked parents |
 
-| Task | Missing files |
-|---|---|
-| TASK-8 | `src/server/calendar/calendar-service.ts` |
-| TASK-9 | `src/server/calendar/sources.ts` |
-| TASK-10 | `src/server/calendar/maintenance.ts`. The dispatch route was not modified. |
-| TASK-11–13 | No changes to `timetable-service.ts`, `attendance-service.ts`, attendance validator, register route or page, `RegisterForm.tsx` |
-| TASK-14 | `src/app/api/events/route.ts`, `[id]/route.ts`, `[id]/ics`, `[id]/rsvp`, `[id]/rsvps` |
-| TASK-15 | `src/app/api/calendar/route.ts`, `src/app/api/school-day/route.ts`, `academic-years/[id]/term-breaks/route.ts` |
-| TASK-16 | `me/calendar-feed` (plus `reset`), `calendar/feed/[token]`, `public/events`. `public-routes.ts` was not modified. |
-| TASK-17–22 | `AudienceBuilder.tsx`, `EventEditorDialog.tsx`, `EventDrawer.tsx`, `calendar/page.tsx`, `CalendarView.tsx`, `SourceChips.tsx`, `account/calendar/*`, `admin/academic-years/[id]/*`. `navigation.ts` was not modified. |
-| TASK-23 | No warnings in `AssignmentForm.tsx` or `QuizSettingsPanel.tsx` |
-| TASK-24 | `prisma/seed.ts` has no calendar events |
-| TASK-25–27 | `tests/integration/calendar/{calendar-merge,audience-parity,school-day,events-rsvp,feed-token}.test.ts`, `tests/e2e/calendar.spec.ts` |
+## Estimate
 
-Across all of PRD-14, 16 of the 61 entries in the ownership matrix are done (all TASK-1 to TASK-7 files). 31 CREATE files are missing. The 14 existing files that later tasks were meant to MODIFY were not touched. By task, 7 of 27 planned tasks are done (about 26%).
+- **Services and validators (logic):** about 80% of exported functions are exercised by tests. Every money-path or safety-path rule has a test: atomic booking, overlap, window, EXCUSED conversion, suppression, signature, one response per student, throttle, and the 48 h reminder.
+- **API route handlers:** about 35% are hit over HTTP. The rest are one-line delegations to tested services.
+- **UI:** about 30% of the new pages have Playwright coverage. The remaining admin and teacher screens are untested.
+
+## Gaps worth closing next
+1. Playwright for `ChildSwitcher` (FR-3/FR-6) and the `/my-children` multi-child summary (FR-7).
+2. Unit tests for the `absenceNoteResolver` access matrix (FR-41).
+3. `updateEvent` 409 when slots are booked, and `removeSlot` of a booked slot.

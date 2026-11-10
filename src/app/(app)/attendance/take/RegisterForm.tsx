@@ -39,7 +39,9 @@ function rowsFrom(register: Register): Record<string, Row> {
   return Object.fromEntries(
     register.students.map((s) => {
       const r = byId.get(s.id);
-      return [s.id, { status: r?.status ?? null, minutesLate: r?.minutesLate ?? 5, note: r?.note ?? '', noteOpen: Boolean(r?.note) }];
+      // PRD-15 FR-24: an approved absence note pre-fills EXCUSED; the teacher can still change it.
+      const status = r?.status ?? (s.prefilled ? 'EXCUSED' : null);
+      return [s.id, { status, minutesLate: r?.minutesLate ?? 5, note: r?.note ?? '', noteOpen: Boolean(r?.note) }];
     }),
   );
 }
@@ -183,6 +185,7 @@ export function RegisterForm({ initial }: { initial: Register }) {
               <Stack direction="row" spacing={1.5} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <UserAvatar userId={s.id} name={name} />
                 <Typography sx={{ flexGrow: 1, minWidth: 120 }}>{name}</Typography>
+                {s.absenceNoteId && <Chip size="small" color="info" variant="outlined" label="Absence note" />}
                 <ToggleButtonGroup
                   exclusive
                   value={row.status}
@@ -196,7 +199,7 @@ export function RegisterForm({ initial }: { initial: Register }) {
                       value={o.value}
                       color={o.color}
                       aria-label={`Mark ${name} ${o.word}`}
-                      disabled={locked || (o.value === 'EXCUSED' && !register.canExcuse)}
+                      disabled={locked || (o.value === 'EXCUSED' && !(register.canExcuse || s.excusable))}
                       sx={{ minWidth: 44, minHeight: 44, fontWeight: 600 }}
                     >
                       {o.short}

@@ -1,114 +1,107 @@
-# QA Report — SH-14 (PRD-14 School Calendar, Events & Holidays)
+# QA Report — SH-15 (PRD-15 Parent Portal: Child Switcher, Absence Notes & Conference Booking)
 
 ## QA Summary
 
-- ticketId: SH-14
-- timestamp: 2026-11-10T00:49:09Z
-- overallStatus: FAIL
-- requirementsChecked: 49
-- requirementsPassed: 5
-- requirementsFailed: 44
+- ticketId: SH-15
+- timestamp: 2026-11-10T03:59:36Z
+- overallStatus: PARTIAL
+- requirementsChecked: 56
+- requirementsPassed: 53
+- requirementsFailed: 3
 
-> `requirementsFailed` counts **12 FAIL**, meaning partly built, plus **32 NOT-IMPLEMENTED**, meaning no code exists.
+> `requirementsFailed` is **2 FAIL** (partly built: FR-5, FR-35) plus **1 NOT-IMPLEMENTED** (FR-13). All three depend on PRD-12 Announcements or the PRD-14 calendar UI, and neither exists in this workspace. The Architect accepted these three as partial in ADR-11. They are listed here so they aren't lost. Everything SH-15 owns end to end passes.
 >
-> This file replaces the SH-13 QA report.
+> This file replaces the SH-14 QA report.
 
 ## Headline findings
 
-### 1. Dev phase incomplete: 7 of 27 tasks shipped (blocking)
-`task-completion-markers.json` lists TASK-1 to TASK-7 only. `dev-rerun-count.json` shows 3 Dev runs, and earlier runs hit the turn limit. TASK-8 to TASK-27 have **no code**:
-- no calendar service
-- no API routes
-- no `/calendar` or `/account/calendar` pages
-- no holiday integration in timetable or attendance
-- no seed data
-- no integration or E2E suites
+1. **The build and gates are green for SH-15.** `npm run typecheck` is clean, `npm run lint` is clean and `npm run build` succeeds. All 51 SH-15 tests pass: 27 unit, 20 DB integration, 4 Playwright.
+2. **Dev's self-report matches reality.** All 27 tasks are marked complete, and all 81 paths in `file-ownership-matrix.json` exist. A scan found no `TODO`/`FIXME`/stub markers in them. The only intentional stub is `listUnreadAnnouncements()`, which returns `[]` (FR-13, see below).
+3. **No regressions from SH-15.** The full suite with DB shows 9 failures in parallel and 1 when each suite runs alone. All of them pre-date SH-15:
+   - `attendance-qa` **FR-22 A→P→A** fails. QA confirmed this by swapping in the HEAD (`SH-14`) `attendance-service.ts`: the same test fails there too, and the file was restored afterwards.
+   - The same baseline run also failed **FR-10/FR-19, "teacher re-saves admin-EXCUSED row"**. SH-15 **fixes** this one.
+   - `auth-forms`, `lockout` and `useToast` unit failures come from untouched files.
+   - `email-dispatch`, `qa-sh9` and the other `attendance-qa` cases fail only under parallel shared-DB runs and pass in isolation.
+4. **Flaky e2e fixture fixed.** `conferences.spec.ts` and `consent-forms.spec.ts` raced on `gradeLevel.order = max+1` under parallel workers, and the conferences spec failed in the first run. QA changed both to use a random offset. Now 4/4 pass in parallel.
+5. **Seed observation (FR-45, minor).** The seeded "Science Museum Trip" form is created by Tom, a TEACHER, with a GRADE_LEVEL audience. The consent service would refuse that for a teacher (FR-36: teachers target only their courses). It is harmless as demo data, but the tracking page would show Tom owning a form he couldn't have created. Suggest `createdById: admin.id`.
+6. **Seed in the local DB is only partly visible.** The event, 24 slots, calendar event and consent form exist. The 2 bookings, 2 absence notes and 40% responses are skipped because the local DB has 0 Grade 7 students with linked parents. The skip is by design and is logged.
 
-31 of the 61 ownership-matrix files are missing (see `coverage-report.md`). PRD-14 cannot be used by any role. Every user-facing acceptance criterion (1 to 8) is unmet.
+## New QA tests
 
-### 2. What did ship is real and correct
-The shipped foundation is real code: the scheduler deps, the Prisma models and migration, date helpers, validators, the recurrence expander, the iCal builder, the audience resolver and the notification types. Nothing is a stub: there are no TODOs and no placeholder bodies. All of it passes its tests, including **17 new QA tests**, 7 of them on real Postgres.
-
-### 3. Dev test defect fixed by QA (test-only)
-`tests/unit/calendar/ical.test.ts:11` expected `'…b\;c…'`. In a JS string, `\;` is a plain `;`, so the test asserted the **pre-fix** behaviour and failed against the corrected `escapeText`. The RFC 5545 output `\;` is right. QA changed the expectation to `'…b\\;c…'`. **QA changed no product code.**
-
-### 4. Full suite not green, all failures pre-existing (NFR-10)
-| Run | Result |
-|---|---|
-| `vitest run` (no DB) | 410 pass, 2 fail, `lockout.test.ts` fails to load. **All three appear in the SH-11/SH-13 baseline:** `auth-forms` ForgotPasswordForm focus, `useToast` auto-hide, `lockout` next-auth ESM. |
-| `vitest run` (`TEST_DATABASE_URL` = dev DB) | 559/565. Baseline failures: `attendance-qa` FR-22 and FR-10/FR-19. Also `qa-sh9` FR-13/FR-42 and `attendance-qa` NFR-1 (perf) failed. **Both pass when re-run in isolation**, so they are flaky under parallel load. None of the failing files imports SH-14 code. |
-| `npm run typecheck` | ✅ clean |
-| `npm run lint` | ✅ no warnings or errors |
-| `prisma migrate status` | ✅ 14 migrations, schema up to date |
-| SH-14 tests (unit + QA integration) | ✅ **64/64** (Dev 47, including the fixed ical test, plus QA 17) |
+- `tests/unit/parent-portal/qa-sh15-validators.test.ts` (16 tests) covers:
+  - FR-2 rules: date order, 30-day span, 1,000-char details, periods only with partialDay, slotMinutes 5–60, 500-char parentNote.
+  - The FR-18 −14/+60 day window.
+  - FR-22: rejecting requires a note.
+  - The FR-37 signature rule.
+  - FR-4/FR-5 `sh_child`: a linked cookie is honoured, an unlinked cookie falls back to the first child, and `?studentId=` overrides the cookie.
+- `tests/integration/parent-portal/qa-sh15.test.ts` (13 tests, real DB) covers:
+  - Consent forms: create/notify, signature mismatch, one response per student across two parents, audit with IP, tracking and CSV, owner-only access, the 24 h remind throttle, the 48 h cron reminder sent once, and no responses after the due date.
+  - Conferences: the slots_requested notification, block and other-teacher 403, the exact cross-teacher overlap message, `.ics` link notifications, the day view, my meetings, cancel and re-book, and the closed window.
+  - Overview: action items, the access check, and timing for all 8 cards.
 
 ## Requirement Results
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| FR-1 | PASS | `package.json`: `@mui/x-scheduler` `9.0.0-beta.15` exact, `node-ical` `0.27.6`, scoped `@mui/x-internals` override. `npm ls` shows 9.17.0 overridden. `src/theme/theme.ts` augmentation passes `npm run typecheck`. |
-| FR-2 | PASS | `prisma/schema.prisma` has 4 enums and 4 models, with `@@id([eventId,userId])`, cascades and `@@index([startAt,endAt])`. Migration `20261113000000_add_calendar` is applied. `tests/integration/calendar/qa-sh14.test.ts` "TASK-2 schema…" checks the duplicate RSVP (P2002), the unique token hash and the cascade on event delete. |
-| FR-3 | PASS | `AudienceType` (SCHOOL/STAFF/ROLE/GRADE_LEVEL/SECTION/COURSE) is defined in the schema, with the resolver at `src/server/announcements/audience.ts`. `qa-sh14.test.ts` (integration): COURSE/SECTION/GRADE_LEVEL/SCHOOL/STAFF/ROLE resolve correctly, **and resolver ↔ user-side parity holds for all 10 fixture users**. |
-| FR-4 | FAIL | Partly built. The Zod rules are in `src/lib/validators/calendar.ts`, tested by `validators.test.ts` and `qa-sh14.test.ts` (title ≤150, description ≤5000, end ≥ start, until required and ≤1 year, guests 0–5). `schoolMidnight` exists (`dates.test.ts`). **Nothing stores events yet** (no calendar-service, TASK-8), so all-day midnight/exclusive-end storage is not wired. |
-| FR-5 | NOT-IMPLEMENTED | `isNoSchool` defaults to `false` in the schema and has no validator default. QA test "isNoSchool has no schema default" confirms this. The category-based default belongs in the missing `calendar-service.ts`. |
-| FR-6 | NOT-IMPLEMENTED | Only the `ADMIN_ONLY_CATEGORIES` constant exists. Nothing enforces it: no service and no `POST /api/events`. |
-| FR-7 | FAIL | Partly built. `canTargetAudience` is correct: `audience.test.ts` (mocked) and `qa-sh14.test.ts` (real DB: teacher and co-teacher may target their COURSE, homeroom teacher their SECTION, a non-homeroom teacher may not, SCHOOL denied). **No `POST /api/events`**, so the 403 acceptance path does not exist. |
-| FR-8 | NOT-IMPLEMENTED | `src/app/api/events/[id]/route.ts` and `calendar-service.ts` are missing. |
-| FR-9 | NOT-IMPLEMENTED | `src/app/(app)/calendar/page.tsx` and `CalendarView.tsx` are missing. |
-| FR-10 | NOT-IMPLEMENTED | `SourceChips.tsx` and `sources.ts` are missing. Only the label and colour constants exist in the validators. |
-| FR-11 | NOT-IMPLEMENTED | No calendar page and no `sources.ts`. The resolver's `studentIds` filter exists (`qa-sh14.test.ts`), but no code uses it. |
-| FR-12 | NOT-IMPLEMENTED | `EventDrawer.tsx` and `api/events/[id]/ics` are missing. |
-| FR-13 | NOT-IMPLEMENTED | No calendar page and no deadline sources. |
-| FR-14 | NOT-IMPLEMENTED | `EventEditorDialog.tsx` and `AudienceBuilder.tsx` are missing. |
-| FR-15 | FAIL | Partly built. `expandOccurrences` is correct: `recurrence.test.ts` (weekly, monthly on the 31st, until, DST) and `qa-sh14.test.ts` (in-progress occurrence, empty range, 1-year bound). **No `GET /api/calendar`** returns occurrences. Series edits are not implemented. |
-| FR-16 | NOT-IMPLEMENTED | `src/server/calendar/calendar-service.ts` (`isSchoolDay`) is missing. |
-| FR-17 | NOT-IMPLEMENTED | `timetable-service.ts` `getScheduleForDate` is unchanged (`git diff` is empty). |
-| FR-18 | NOT-IMPLEMENTED | Attendance service, route, page and `RegisterForm` are unchanged. |
-| FR-19 | NOT-IMPLEMENTED | `AssignmentForm.tsx` and `QuizSettingsPanel.tsx` are unchanged. |
-| FR-20 | NOT-IMPLEMENTED | `admin/academic-years/[id]` page and `term-breaks` route are missing. |
-| FR-21 | NOT-IMPLEMENTED | `api/events/[id]/rsvp` is missing. `rsvpSchema` exists (`validators.test.ts`), but nothing enforces deadlines. |
-| FR-22 | NOT-IMPLEMENTED | `api/events/[id]/rsvps` (CSV) and the drawer are missing. |
-| FR-23 | FAIL | Partly built. `event.rsvp_reminder` is registered (`qa-sh14.test.ts` unit). `src/server/calendar/maintenance.ts` and the dispatch hook are missing, so nothing sends it. |
-| FR-24 | NOT-IMPLEMENTED | `account/calendar/page.tsx` and `SubscribeCard.tsx` are missing. |
-| FR-25 | NOT-IMPLEMENTED | `api/me/calendar-feed` (plus `reset`) is missing. Only the `CalendarFeedToken.tokenHash` column exists. |
-| FR-26 | FAIL | Partly built. The RFC 5545 builder is correct: `ical.test.ts`, parsed by node-ical, covers escaping, folding, VTIMEZONE, RRULE with BYMONTHDAY, VALUE=DATE exclusive end, and URL on deadlines. `qa-sh14.test.ts` adds an empty feed, DST and non-DST VTIMEZONE, and a 75-octet boundary. **Nothing selects feed content** (no `sources.ts`, no feed route). |
-| FR-27 | NOT-IMPLEMENTED | `api/calendar/feed/[token]/route.ts` is missing. `public-routes.ts` is unchanged. |
-| FR-28 | FAIL | Partly built. `event.created` (email false) and `event.holiday_created` (email true) are registered (`qa-sh14.test.ts`). No create path sends them. |
-| FR-29 | FAIL | Partly built. `event.updated` is registered (`qa-sh14.test.ts`). No PATCH path sends it. |
-| FR-30 | NOT-IMPLEMENTED | `getPublicEvents` and `api/public/events` are missing. Only `publicEventsQuerySchema` exists. |
-| FR-31 | NOT-IMPLEMENTED | `getUpcomingEventsForUser` is missing. |
-| FR-32 | NOT-IMPLEMENTED | `api/calendar/route.ts` is missing. `calendarQuerySchema` (≤100 days) is tested, but nothing serves it. |
-| FR-33 | NOT-IMPLEMENTED | All `api/events/**` routes are missing. |
-| FR-34 | NOT-IMPLEMENTED | `api/school-day/route.ts` is missing. |
-| FR-35 | NOT-IMPLEMENTED | `src/config/navigation.ts` has no calendar entries. |
-| FR-36 | NOT-IMPLEMENTED | No edit or delete path exists, so nothing calls `audit()`. |
-| FR-37 | NOT-IMPLEMENTED | `prisma/seed.ts` has no calendar events (0 matches). |
-| NFR-1 | NOT-IMPLEMENTED | No calendar UI shipped. `grep` finds no banned imports (FullCalendar, react-datepicker, notistack, tailwind) in `src/`, but Drawer, Dialog and useToast usage cannot be verified without UI. |
-| NFR-2 | NOT-IMPLEMENTED | No MUI components were used yet, so there are no MCP lookups to verify. |
-| NFR-3 | FAIL | Partly built. DST-week tests pass for expansion (`recurrence.test.ts`), all-day midnight (`dates.test.ts`) and iCal (`ical.test.ts` "weekly RRULE keeps 15:30 local across DST"). There is no UI and no feed endpoint to render on the correct dates. |
-| NFR-4 | NOT-IMPLEMENTED | No month-view endpoint or page to measure. |
-| NFR-5 | FAIL | Partly built. The schema stores only `tokenHash` (unique, checked in `qa-sh14.test.ts`). No 32-byte token generation and no feed scoping exist. |
-| NFR-6 | PASS | `tests/unit/calendar/ical.test.ts` "buildCalendar parsed by node-ical" (6 cases) and `qa-sh14.test.ts` empty-feed parse. The generator output is valid per node-ical. |
-| NFR-7 | NOT-IMPLEMENTED | No route handlers or server pages exist, so there are no `requireUser`/`requireRole` checks to verify. |
-| NFR-8 | FAIL | Partly built. The shipped code follows conventions: cuid IDs, `createdAt`/`updatedAt` on the main models, client-safe Zod validators, services under `src/server/calendar/`, no `console.log`. There are no handlers to check for response shapes or error codes. |
-| NFR-9 | FAIL | Partly built. The shipped code reuses `assertCanManageCourse`, `AppError`, `formatInSchoolTz`/`fromZonedTime` and the `dateOnly` validator, with no duplicate helpers and no renames. The planned reuse of `getScheduleForDate`, `rateLimit`, `notify`, `audit` and the maintenance cron is not built. |
-| NFR-10 | FAIL | Lint ✅, typecheck ✅, SH-14 unit tests ✅ 57/57 (Dev 47 + QA 10). Of the required suites, **integration** (calendar merge, feed token reset, RSVP deadline) and **Playwright** (3 scenarios) do not exist. The full suite is not green (pre-existing failures, Headline 4). |
-| NFR-11 | PASS | No out-of-scope behaviour shipped. `roomId` is stored but unused (schema comment). Recurrence is NONE/WEEKLY/MONTHLY only (`recurrence.ts`). There are no exception or sync models. |
-| NFR-12 | NOT-IMPLEMENTED | No UI exists for browser support or the 768 px default-view rule. |
+| FR-1 | PASS | `prisma/schema.prisma` (AbsenceNote, ConferenceEvent, ConferenceSlot, ConsentForm/Audience/Response + 3 enums); migration `prisma/migrations/20261114000000_prd15_parent_portal`; all DB integration tests write these models |
+| FR-2 | PASS | `tests/unit/parent-portal/qa-sh15-validators.test.ts` › "FR-2 absence note rules", "FR-2 conference rules" |
+| FR-3 | PASS | `src/components/ChildSwitcher/`, `src/app/(app)/layout.tsx` (lists children + `getSelectedChild`), `POST /api/me/selected-child` → `setSelectedChildCookie`. Code-reviewed; no UI test (see coverage gaps) |
+| FR-4 | PASS | `src/server/parent/selected-child.ts`; QA unit "unlinked cookie falls back to the first child" |
+| FR-5 | FAIL | `/assignments`, `/grades` and `/api/me/timetable` default to the selected child, and `?studentId=` overrides it (QA unit "?studentId= overrides the cookie"; `src/app/(app)/{assignments,grades}/page.tsx`). **The calendar `studentId` filter is missing**: no calendar page or API exists (PRD-14 dev failed). ADR-11 accepted this as partial |
+| FR-6 | PASS | `ChildSwitcher` shows the name only, with no Select, for 1 child (code-reviewed) |
+| FR-7 | PASS | `src/app/(app)/my-children/page.tsx` (1 child → redirect; else cards); `getChildrenSummary` in `src/server/parent/overview-service.ts`. Not value-asserted by tests |
+| FR-8 | PASS | `src/app/(app)/dashboard/page.tsx` redirects PARENT → `/my-children`, which leads to the overview (≤2 clicks) |
+| FR-9 | PASS | `getToday` (holiday via `isNoSchool` CalendarEvent, else timetable); runs in QA `getOverview` test (8 cards) |
+| FR-10 | PASS | `getAttendanceSummary` (term rate, absences, lates, last 5) plus the "Report an absence" button in `OverviewCards.tsx` |
+| FR-11 | PASS | `getAssignmentsSummary` (MISSING + due ≤7 days) |
+| FR-12 | PASS | `getRecentGrades` (last 5 visible grades + current % per course) |
+| FR-13 | NOT-IMPLEMENTED | `listUnreadAnnouncements()` is a stub that always returns `[]`, and the card renders EmptyState. Blocked: the PRD-12 Announcement model is absent from the workspace (ADR-11) |
+| FR-14 | PASS | `getUpcomingEvents` (audience-filtered CalendarEvents + meetings, next 5); QA integration asserts the meetings appear |
+| FR-15 | PASS | `getTeachers` + "Message" button in `OverviewCards.tsx`. Caveat: `/messages?to=` doesn't prefill the recipient yet (ponytail note) |
+| FR-16 | PASS | QA integration "FR-16 + NFR-5: action items list the pending consent form and the open conference" |
+| FR-17 | PASS | `OverviewCards.tsx` `Shell` "View all" links per card; `<Suspense>` per card in `my-children/[studentId]/page.tsx` |
+| FR-18 | PASS | `absence/new/page.tsx` + `AbsenceNoteForm`; QA unit window test; e2e `absence-notes.spec.ts` "parent reports an absence for today" |
+| FR-19 | PASS | `absence-notes-service.ts` `submit` → PENDING + notify `absence_note.submitted` (homeroom + admins); `types.ts` email default false; e2e submit |
+| FR-20 | PASS | `src/app/(app)/my-children/[studentId]/absence/page.tsx` (list with status) |
+| FR-21 | PASS | `src/app/(app)/attendance/absence-notes/page.tsx` + `AbsenceNotesReviewClient` (status/date filters, record context); e2e "homeroom teacher approves" |
+| FR-22 | PASS | QA unit "reject requires a note"; Dev integration FR-23 (reviewedBy/At recorded; second review → 409) |
+| FR-23 | PASS | `tests/integration/absence-notes/absence-approval.test.ts` "approval converts ABSENT → EXCUSED and leaves PRESENT untouched" |
+| FR-24 | PASS | Dev integration "approved note pre-fills a later register"; e2e "register shows EXCUSED with a badge" |
+| FR-25 | PASS | Dev integration "unlocks EXCUSED only for covered students"; `attendance-qa` FR-10/FR-19 now passes (it failed on baseline) |
+| FR-26 | PASS | `absence-notes-service.ts` `review` → notify `absence_note.reviewed` with the reviewer note to linked parents; `types.ts` email default true |
+| FR-27 | PASS | Dev integration "attendance.absent is suppressed while a PENDING note covers the student" |
+| FR-28 | PASS | QA integration "FR-28: admin-created event notifies teachers of eligible grades"; `admin/conferences` UI (`ConferenceEventsClient`) |
+| FR-29 | PASS | QA integration "FR-29: availability generates slots; teacher can block…"; Dev integration "generates 3 slots" |
+| FR-30 | PASS | Dev integration concurrent booking (conditional UPDATE); e2e `conferences.spec.ts` "parent books a slot with a note" |
+| FR-31 | PASS | QA integration asserts the exact message `You already have a meeting with QA t1 at 15:00`; Dev integration ONE_PER_TEACHER |
+| FR-32 | PASS | QA integration "FR-32: cancel then re-book works in-window; after bookingClosesAt neither…" |
+| FR-33 | PASS | QA integration "FR-33: booking notifies parent and teacher with an .ics link"; cancel → `conference.cancelled` asserted in FR-32 test |
+| FR-34 | PASS | QA integration `teacherDay` asserts student + note; `src/app/(app)/conferences/[id]/day/page.tsx` has print styles |
+| FR-35 | FAIL | Meetings come from `listMyMeetings` (QA integration: 2 for parent, 1 for teacher) and show only in the overview "Upcoming events" card. **No calendar "My meetings" source**: the PRD-14 calendar UI doesn't exist (ADR-11) |
+| FR-36 | PASS | QA integration "FR-36: admin creates a grade-level form → both linked parents get consent.requested; teacher cannot target a grade" |
+| FR-37 | PASS | QA integration "FR-37: signature must match…"; e2e `consent-forms.spec.ts` "parent signs a consent form" |
+| FR-38 | PASS | QA integration "FR-38 + NFR-3: one response per student…" plus "no change after dueAt" |
+| FR-39 | PASS | QA integration "FR-39: tracking per student + CSV for owner/admin only" and "Remind … throttled to once per 24h" |
+| FR-40 | PASS | QA integration "FR-40: 48h-before-due reminder goes once…"; wired into `src/app/api/internal/email/dispatch/route.ts` (cron-secret guarded) |
+| FR-41 | PASS | `src/server/files/contexts.ts` `absenceNoteResolver` (linked parents, homeroom teacher, ADMIN) registered as `'absence-note'`; e2e upload path. Resolver matrix not unit-tested |
+| FR-42 | PASS | `src/config/navigation.ts` lines 52–57, 67 (parent: My children / Absence notes / Conferences / Consent forms; teacher: Absence notes if homeroom, Conferences; admin: Conferences, Consent forms, Absence notes) |
+| FR-43 | PASS | 21 route files under `src/app/api/{absence-notes,conferences,conference-slots,consent-forms,me,students}`; 20 call `requireRole`/`getCurrentUser`, and the 21st (internal dispatch) is CRON_SECRET-guarded |
+| FR-44 | PASS | `src/server/notifications/types.ts` lines 220–268 (7 keys incl. `consent.reminder`); all are emitted in passing tests |
+| FR-45 | PASS | `prisma/seed.ts` `seedParentPortal` (idempotent). Locally: event + 24 slots + trip event + form exist; family-dependent parts are skipped by design. See finding 5 (creator) |
+| FR-46 | PASS | All required tests exist and pass: unit (coverage/slots/signature), integration (approval, pre-fill, suppression, concurrent booking), Playwright (3 flows, 4 tests) |
+| NFR-1 | PASS | `tests/integration/conferences/concurrent-booking.test.ts` "two concurrent bookings of one slot → exactly one success, the other 409 SLOT_TAKEN" |
+| NFR-2 | PASS | Server-side proxy only: QA integration asserts all 8 overview cards resolve in under 1 s; cards stream through `<Suspense>`. Browser paint was not measured |
+| NFR-3 | PASS | QA integration asserts `AuditLog.ip = 203.0.113.7` on consent create/update; absence review route passes `request` to `audit()` (`absence-notes-service.ts:321`) |
+| NFR-4 | PASS | A static scan of 32 new `.tsx` files found only `@mui/*`, internal and Next imports; 0 banned libs; 0 `window.confirm/alert`; 10 files use `useToast`/`ConfirmDialog`. The mui-mcp lookup is reported in `dev-log.md`; QA can't re-verify that process step |
+| NFR-5 | PASS | QA integration: non-owner teacher and parent denied tracking, other teacher's slot → `NOT_SLOT_TEACHER`, unrelated teacher can't load the overview; Dev integration "only the homeroom teacher or ADMIN can review", cancel by non-booker 403 |
+| NFR-6 | PASS | New services in `src/server/{absence-notes,conferences,consent-forms,parent}/`; reuses `audit`, `notify`, `canTargetAudience`, `attendance-service` (edited in place), `toCsv`, `buildCalendar`, file contexts |
+| NFR-7 | PASS | typecheck + lint clean; Zod validators in `src/lib/validators/{absence-notes,conferences,consent-forms}.ts` shared by forms and handlers; 0 `console.log` in SH-15 source (the seed's existing `console.log` lines predate SH-15). Full suite failures predate SH-15 (finding 3) |
+| NFR-8 | PASS | `schoolToday(…, tz)` for the absence window (`absence-notes-service.ts:123`); `fromZonedTime` for slots; `@db.Date` for note dates and event date; Dev integration uses school-tz `today` |
+| NFR-9 | PASS | No payments, pickup or self-registration code; the diff is limited to PRD-15 files plus edits in place to attendance, nav, files and the dispatch cron |
+| NFR-10 | PASS | `parsePagination` in `absence-notes`, `conferences`, `consent-forms` and `consent-forms/:id/tracking` list routes; `q` and `sort` in the list Zod queries |
 
-## Checks run
-
-| Check | Result |
-|---|---|
-| Ownership matrix (61 entries) | TASK-1 to TASK-7: 16/16 present and non-stub (no TODO, FIXME or placeholder). TASK-8 to TASK-27: 31 CREATE files missing, 14 MODIFY files unchanged. |
-| SH-14 tests, `TEST_DATABASE_URL` set | ✅ 64/64 in 7 files |
-| QA fixture cleanup | ✅ 0 `qa-sh14` users left in the DB after the run |
-| Full suite, typecheck, lint | See Headline 4 |
-
-## QA test files added
-- `tests/integration/calendar/qa-sh14.test.ts` (7 tests, real Postgres): audience resolution for every AudienceType, resolver ↔ `isUserInAudience` parity, `audienceWhereForUser` SQL filter including the parent child-filter, dedupe and inactive-user exclusion, `canTargetAudience` on real rows, and the schema constraints and cascades.
-- `tests/unit/calendar/qa-sh14.test.ts` (10 tests): notification type defaults, `expandOccurrences` edge cases, iCal fold boundary, empty feed, DST and non-DST VTIMEZONE, validator boundaries, and the missing FR-5 default.
-- `tests/unit/calendar/ical.test.ts`: one wrong expectation corrected (Headline 3).
-
-## Recommendation
-Re-run the Dev phase for TASK-8 to TASK-27, then run QA again. The foundation from TASK-1 to TASK-7 is solid and tested, and can be built on unchanged. When Dev adds the calendar service, add a case to `tests/unit/calendar/qa-sh14.test.ts` (or Dev's service tests) for the **FR-5 category default**.
+## Recommended follow-ups (non-blocking)
+1. FR-13 / FR-35 / FR-5 calendar: finish them when PRD-12 Announcements and the PRD-14 calendar UI land.
+2. Set the seed consent form `createdById` to the admin (finding 5).
+3. Add `?to=` prefill on `/messages` (FR-15 caveat).
+4. Add Playwright tests for `ChildSwitcher` and `/my-children` (coverage gaps).

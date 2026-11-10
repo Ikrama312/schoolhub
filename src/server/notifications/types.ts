@@ -216,6 +216,63 @@ export const NOTIFICATION_TYPES = {
     mandatoryInApp: false,
     roles: ALL,
   },
+  // PRD-15 parent portal (FR-19, FR-26, FR-28, FR-33, FR-36, FR-40, FR-44).
+  'absence_note.submitted': {
+    label: 'Absence note submitted',
+    description: 'A parent submitted an absence note for a student you review.',
+    category: 'ATTENDANCE',
+    defaultEmail: false,
+    mandatoryInApp: false,
+    roles: ['TEACHER', 'ADMIN'],
+  },
+  'absence_note.reviewed': {
+    label: 'Absence note reviewed',
+    description: 'Your absence note was approved or rejected.',
+    category: 'ATTENDANCE',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['PARENT'],
+  },
+  'conference.slots_requested': {
+    label: 'Conference availability requested',
+    description: 'Parent–teacher conferences were scheduled; set your availability.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['TEACHER'],
+  },
+  'conference.booked': {
+    label: 'Conference booked',
+    description: 'A parent–teacher conference slot was booked.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['TEACHER', 'PARENT'],
+  },
+  'conference.cancelled': {
+    label: 'Conference cancelled',
+    description: 'A parent–teacher conference booking was cancelled.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['TEACHER', 'PARENT'],
+  },
+  'consent.requested': {
+    label: 'Consent form',
+    description: 'A consent form needs your response.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['PARENT'],
+  },
+  'consent.reminder': {
+    label: 'Consent form reminder',
+    description: 'A consent form you have not answered is due soon.',
+    category: 'COMMUNICATION',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['PARENT'],
+  },
 } as const satisfies Record<string, NotificationTypeDef>;
 
 export type NotificationType = keyof typeof NOTIFICATION_TYPES;

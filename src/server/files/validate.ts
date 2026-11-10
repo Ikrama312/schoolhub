@@ -39,6 +39,8 @@ export const ALLOWED: Record<string, Rule> = {
 };
 
 const LOGO_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+/** PRD-15 FR-18: absence-note evidence is PDF/JPG/PNG only. */
+const ABSENCE_NOTE_EXTS = ['pdf', 'png', 'jpg', 'jpeg'];
 const NAME_MAX = 150;
 
 /** Lower-case extension without the dot, or '' when there is none. */
@@ -69,6 +71,7 @@ export function checkType(ext: string, sniffed: string | undefined, context: str
   const rule = ALLOWED[ext];
   if (!rule) return error;
   if (context === 'logo' ? !LOGO_EXTS.includes(ext) : ext === 'svg') return error;
+  if (context === 'absence-note' && !ABSENCE_NOTE_EXTS.includes(ext)) return error;
 
   switch (rule.sniff) {
     case 'none':

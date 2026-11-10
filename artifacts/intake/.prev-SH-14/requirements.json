@@ -1,0 +1,102 @@
+{
+  "ticketId": "SH-14",
+  "timestamp": "2026-11-09T19:10:00Z",
+  "phase": "intake",
+  "version": "1.0",
+  "prdTitle": "PRD-14: School Calendar, Events & Holidays",
+  "prdTicketRef": "SCH-014 (PRD header). The pipeline ticket is SH-14.",
+  "runMode": "--brownfield --tech-stack react",
+  "brownfieldFindings": [
+    "DEPENDENCY GAP: PRD-12 (Announcements) is NOT present in the workspace. prisma/schema.prisma has no AudienceType enum and no Announcement model; no audience.ts helper or audience builder component exists anywhere under src/. PRD-14 FR-1 (EventAudience.type reuses AudienceType), FR-2.2 (reuse audience.ts), FR-3.5 (audience builder from PRD-12) and the 'Sports day' seed (ties to a PRD-12 announcement) all assume it. The Architect must decide whether SH-14 introduces a minimal AudienceType + audience resolver (in a form PRD-12 can adopt later) or blocks.",
+    "/admin/academic-years/[id] page does not exist (only the REST API under src/app/api/academic-years/[id] incl. terms and terms/generate). FR-5.5 'Add term breaks' needs a UI host; the page or an equivalent admin surface has to be created or the shortcut placed elsewhere.",
+    "@mui/x-scheduler is not in package.json (confirmed; @mui/material, x-charts, x-data-grid, x-date-pickers are pinned at 9.5.0). Neither 'ics' nor 'node-ical' is installed.",
+    "PRD-06 timetable service exists: src/server/timetable/timetable-service.ts exports getScheduleForDate (line ~542), getSchoolScheduleForDate and listSchoolDays/updateSchoolDays (teaching weekdays). src/server/attendance/attendance-service.ts calls getScheduleForDate for the register landing.",
+    "Existing GET/PUT /api/school-days (plural, PRD-06 teaching weekdays) is distinct from the new GET /api/school-day?date= (singular) in this PRD; both must coexist and neither may be renamed.",
+    "Rate limiter exists at src/server/rate-limit.ts (rateLimit) — reuse for the feed's 60 req/token/hour.",
+    "Maintenance runs on the internal dispatch cron (src/app/api/internal/email/dispatch/route.ts; PRD-10 precedent src/server/quiz/maintenance.ts) — the event.rsvp_reminder pass should hook in there.",
+    "Notification types are registered in src/server/notifications/types.ts (NOTIFICATION_TYPES, categories incl. COMMUNICATION/ACADEMIC).",
+    "No src/server/calendar/ directory exists yet; FR-5.1 names src/server/calendar/calendar-service.ts, consistent with the feature-subdirectory convention.",
+    "Latest migration is 20261112000000_add_direct_messaging; seed is prisma/seed.ts (npm run db:seed)."
+  ],
+
+  "functionalRequirements": [
+    { "id": "FR-1", "description": "Install @mui/x-scheduler pinned to the exact version found via the MUI MCP server before any other work in this PRD.", "confidence": "HIGH", "source": "PRD §Functional Requirements › FR-0 Dependency (1)" },
+    { "id": "FR-2", "description": "Add Prisma enums EventCategory, Recurrence, RsvpResponse and models CalendarEvent, EventAudience, EventRsvp (composite PK eventId+userId) and CalendarFeedToken exactly as specified, with cascade deletes and the [startAt, endAt] index, in one new migration.", "confidence": "HIGH", "source": "PRD §FR-1 Data model" },
+    { "id": "FR-3", "description": "EventAudience.type reuses the AudienceType enum from PRD-12; because that enum does not exist in the workspace, its values (at least SCHOOL, COURSE, SECTION, grade-level style targets implied by seed data) must be defined by this ticket or supplied by PRD-12.", "confidence": "LOW", "source": "PRD §FR-1 (EventAudience.type comment 'reuse enum from PRD-12'); §Seed Data (Grade 6–8, Grade 7 parents, course audience); brownfield finding" },
+    { "id": "FR-4", "description": "Validate events with Zod in src/lib/validators/calendar.ts: title ≤ 150 chars, description Markdown ≤ 5,000 chars, endAt ≥ startAt, all-day events stored as school-timezone midnight with exclusive endAt, recurrenceUntil required for WEEKLY/MONTHLY and ≤ 1 year after start, RSVP guests 0–5.", "confidence": "HIGH", "source": "PRD §FR-1 field comments; §FR-4 Recurrence; §Platform Context › Validation" },
+    { "id": "FR-5", "description": "isNoSchool defaults to true for HOLIDAY and TERM_BREAK categories and false otherwise.", "confidence": "HIGH", "source": "PRD §FR-1 (isNoSchool comment)" },
+    { "id": "FR-6", "description": "ADMIN may create events with any audience; isNoSchool, isPublic and the HOLIDAY/TERM_BREAK categories are admin-only.", "confidence": "HIGH", "source": "PRD §FR-2 Permissions (1)" },
+    { "id": "FR-7", "description": "TEACHER may create events only for COURSE audiences they manage or their homeroom SECTION, using the same rule as PRD-12's audience.ts (a SCHOOL-audience create by a teacher returns 403).", "confidence": "MEDIUM", "source": "PRD §FR-2 Permissions (2); Acceptance Criterion 7" },
+    { "id": "FR-8", "description": "Creators may edit/delete their own events; admins may edit/delete all events.", "confidence": "HIGH", "source": "PRD §FR-2 Permissions (3)" },
+    { "id": "FR-9", "description": "Add /calendar page using MUI X Scheduler EventCalendar with month (default ≥ 768 px), week (07:00–19:00 time grid, all-day row; viewConfig startTime 7, endTime 19) and agenda (default < 768 px; grouped by day, 30 days ahead, infinite scroll) views plus Today/previous/next/date-picker navigation; fall back to @mui/material + @mui/x-date-pickers (DateCalendar + List) only for behaviour missing from the Community version.", "confidence": "HIGH", "source": "PRD §FR-3 Calendar page (1)" },
+    { "id": "FR-10", "description": "Calendar sources are toggleable MUI Chips persisted in localStorage: School events (coloured by category), My assignments (due dates, subject colour), My quizzes (availability window end), My timetable (Week view only, light background blocks), Holidays.", "confidence": "HIGH", "source": "PRD §FR-3 (2)" },
+    { "id": "FR-11", "description": "Parents get a child filter (All children or one); deadline items for the selected children are labelled with the child's name.", "confidence": "HIGH", "source": "PRD §FR-3 (3); Acceptance Criterion 3" },
+    { "id": "FR-12", "description": "Clicking an event opens a right-anchored MUI Drawer showing title, category badge, time in school timezone, location, description (Markdown), audience chips, RSVP controls when enabled, 'Add to my calendar' (.ics download of that event) and edit/delete for permitted users.", "confidence": "HIGH", "source": "PRD §FR-3 (4)" },
+    { "id": "FR-13", "description": "Clicking an assignment or quiz deadline navigates to that assignment or quiz.", "confidence": "HIGH", "source": "PRD §FR-3 (4); Acceptance Criterion 3" },
+    { "id": "FR-14", "description": "ADMIN/TEACHER see a 'New event' button opening an editor Dialog with all model fields, the PRD-12 audience builder, recurrence options, RSVP toggle and RSVP deadline.", "confidence": "MEDIUM", "source": "PRD §FR-3 (5) (audience builder does not exist in workspace — see FR-3)" },
+    { "id": "FR-15", "description": "Recurring events (NONE/WEEKLY/MONTHLY-by-date) are stored once and expanded at read time by expandOccurrences(event, from, to) up to recurrenceUntil; the calendar API returns plain expanded occurrences; edits apply to the whole series.", "confidence": "HIGH", "source": "PRD §FR-4 Recurrence; §FR-3 (1); §Out of Scope; Acceptance Criterion 4" },
+    { "id": "FR-16", "description": "isSchoolDay(date) in src/server/calendar/calendar-service.ts returns false when the weekday is not a PRD-06 teaching day or any isNoSchool event with SCHOOL audience covers the date, and exposes the reason (e.g. holiday title).", "confidence": "HIGH", "source": "PRD §FR-5 Holidays integration (1); Acceptance Criterion 1" },
+    { "id": "FR-17", "description": "Update PRD-06 getScheduleForDate to return an empty list with reason 'Holiday: <title>' on non-school days; Today views show the holiday name instead of classes.", "confidence": "HIGH", "source": "PRD §FR-5 (2); Acceptance Criterion 1" },
+    { "id": "FR-18", "description": "Update PRD-07 teacher register landing to show 'No classes today — <holiday>' on non-school days; opening a register for such a date shows a warning banner and saving requires an extra 'Record attendance on a holiday anyway' confirmation.", "confidence": "HIGH", "source": "PRD §FR-5 (3); Acceptance Criterion 2" },
+    { "id": "FR-19", "description": "PRD-09 assignment editor and PRD-10 quiz settings show a non-blocking warning 'This date is a holiday (<title>).' when the due/close date is a non-school day, still allowing save.", "confidence": "HIGH", "source": "PRD §FR-5 (4); Acceptance Criterion 8" },
+    { "id": "FR-20", "description": "Admin 'Add term breaks' shortcut on /admin/academic-years/[id] creates TERM_BREAK no-school events for the gaps between consecutive terms.", "confidence": "MEDIUM", "source": "PRD §FR-5 (5) (host page does not exist in workspace — only the API)" },
+    { "id": "FR-21", "description": "When RSVP is enabled, audience members answer Yes/No/Maybe with guest count (parents) and optional note via PUT /api/events/:id/rsvp until rsvpDeadline; after the deadline the API rejects and the drawer controls are disabled.", "confidence": "HIGH", "source": "PRD §FR-6 RSVP (1); §API; Acceptance Criterion 6" },
+    { "id": "FR-22", "description": "The event drawer shows the user's own response and totals; the creator and admins see the full RSVP list with CSV export (GET /api/events/:id/rsvps?format=csv).", "confidence": "HIGH", "source": "PRD §FR-6 (1); §API" },
+    { "id": "FR-23", "description": "Register notification type event.rsvp_reminder; the maintenance run notifies non-responding audience members 48 hours before the RSVP deadline, once per event.", "confidence": "HIGH", "source": "PRD §FR-6 (2)" },
+    { "id": "FR-24", "description": "Add /account/calendar page with a 'Subscribe' section: private URL APP_URL/api/calendar/feed/<token>.ics, copy button, Google/Apple/Outlook instructions and 'Reset link' which invalidates the old token (old URL returns 404).", "confidence": "HIGH", "source": "PRD §FR-7 iCal feed (1); Acceptance Criterion 5" },
+    { "id": "FR-25", "description": "Feed tokens: GET /api/me/calendar-feed and POST /api/me/calendar-feed/reset return the URL; the raw token is shown only at creation/reset and stored hashed in CalendarFeedToken.", "confidence": "HIGH", "source": "PRD §API (me/calendar-feed rows); §NFR 3" },
+    { "id": "FR-26", "description": "The RFC 5545 text/calendar feed contains the user's school events (parents: all children's audiences) from 30 days past to 365 days ahead, assignment due dates and quiz close times with URL back to SchoolHub, RRULE for recurring events, a VTIMEZONE for the school timezone, and RFC escaping of commas, semicolons and newlines.", "confidence": "HIGH", "source": "PRD §FR-7 (2); Acceptance Criteria 4, 5" },
+    { "id": "FR-27", "description": "GET /api/calendar/feed/:token.ics is public (token-authenticated), rate limited to 60 requests per token per hour (429) and sends Cache-Control: private, max-age=900.", "confidence": "HIGH", "source": "PRD §FR-7 (3); §API" },
+    { "id": "FR-28", "description": "Register event.created, notifying audience members when an event starting within the next 30 days is created (email default false; HOLIDAY/TERM_BREAK email default true).", "confidence": "HIGH", "source": "PRD §FR-8 Notifications (1)" },
+    { "id": "FR-29", "description": "Register event.updated, notifying audience members once per edit when time or location of an upcoming event changes.", "confidence": "HIGH", "source": "PRD §FR-8 (2)" },
+    { "id": "FR-30", "description": "Expose getPublicEvents(from, to) and GET /api/public/events?from=&to= returning isPublic events for PRD-18.", "confidence": "HIGH", "source": "PRD §FR-9 (1); §API" },
+    { "id": "FR-31", "description": "Expose getUpcomingEventsForUser(user, limit) for PRD-16 dashboards.", "confidence": "HIGH", "source": "PRD §FR-9 (2)" },
+    { "id": "FR-32", "description": "GET /api/calendar?from=&to=&sources=&studentId= returns merged, expanded, audience-filtered items for any role; the requested range is limited to ≤ 100 days.", "confidence": "HIGH", "source": "PRD §API (first row)" },
+    { "id": "FR-33", "description": "Event CRUD API: POST /api/events (ADMIN, TEACHER with audience check); GET/PATCH/DELETE /api/events/:id (audience/creator/ADMIN); GET /api/events/:id/ics (audience, single-event download).", "confidence": "HIGH", "source": "PRD §API" },
+    { "id": "FR-34", "description": "GET /api/school-day?date= (any user) returns { isSchoolDay, reason }.", "confidence": "HIGH", "source": "PRD §API (last row)" },
+    { "id": "FR-35", "description": "Add /calendar (all roles) and /account/calendar entries to src/config/navigation.ts as needed.", "confidence": "MEDIUM", "source": "PRD §Platform Context › Code layout ('A PRD that adds a page adds its nav entry there'); §FR-3; §FR-7" },
+    { "id": "FR-36", "description": "Admin edits/deletes of events created by someone else write an AuditLog row via audit().", "confidence": "MEDIUM", "source": "PRD §Platform Context › Code layout (AuditLog rule); §FR-2 (3)" },
+    { "id": "FR-37", "description": "Seed 2026–2027 events: Thanksgiving break (26–27 Nov), Winter break (21 Dec – 1 Jan, TERM_BREAK), Semester 1 exams (11–15 Jan, EXAM, Grade 6–8), Parent–teacher evening (RSVP, seed date + 2 weeks, Grade 7 parents), Science fair (public), weekly Chess club (Tuesdays, Robotics Club course audience), Sports day (public, tied to the PRD-12 announcement).", "confidence": "HIGH", "source": "PRD §Seed Data" }
+  ],
+
+  "nonFunctionalRequirements": [
+    { "id": "NFR-1", "description": "UI is built only from @mui/material, @mui/icons-material and the allowed MUI X packages (incl. @mui/x-scheduler); banned libraries (FullCalendar, Tailwind, react-datepicker, notistack, etc.) are not imported; toasts via shared useToast(), side panels via Drawer, confirmations via Dialog; QA verifies no banned imports and every MUI import resolves to a documented component.", "confidence": "HIGH", "source": "PRD §Platform Context › UI component rule (1, 3, 5, 6)" },
+    { "id": "NFR-2", "description": "Every MUI component (especially beta @mui/x-scheduler: Quickstart, Views, Events, Timezones, Localization pages) is looked up via the MUI MCP server (useMuiDocs + fetchDocs) before use; if MCP is unreachable, stop and report a blocker.", "confidence": "HIGH", "source": "PRD §UI component rule (2); §FR-3 (1)" },
+    { "id": "NFR-3", "description": "All-day events and DST transitions in the school timezone render on the correct dates in both UI and iCal feed, with tests covering a DST-change week.", "confidence": "HIGH", "source": "PRD §Non-Functional Requirements 1" },
+    { "id": "NFR-4", "description": "A month view for a parent with 3 children loads in under 500 ms.", "confidence": "HIGH", "source": "PRD §Non-Functional Requirements 2" },
+    { "id": "NFR-5", "description": "Feed tokens are 32 random bytes stored hashed; the feed exposes no data beyond what the user can see in the app.", "confidence": "HIGH", "source": "PRD §Non-Functional Requirements 3" },
+    { "id": "NFR-6", "description": "The generated feed passes an RFC 5545 validator test (parsed with node-ical in tests).", "confidence": "HIGH", "source": "PRD §Non-Functional Requirements 4" },
+    { "id": "NFR-7", "description": "Every handler and server page enforces access server-side via requireUser/requireRole and per-entity checks; parents see only linked children's data, students only their own.", "confidence": "HIGH", "source": "PRD §Platform Context › Code layout; §Roles" },
+    { "id": "NFR-8", "description": "Follow platform conventions: thin Zod-parsing route handlers, services under src/server/calendar/, { data } / list / error response shapes and error codes, pagination/sort/search params, cuid IDs, createdAt/updatedAt, UTC storage displayed in SchoolSettings.timezone, logger instead of console.log.", "confidence": "HIGH", "source": "PRD §Platform Context › Code layout and conventions" },
+    { "id": "NFR-9", "description": "Reuse existing models, services, components and helpers (timetable-service, rate-limit, notify, audit, DataTable, useToast, maintenance cron); never re-scaffold, duplicate helpers or rename existing routes/models.", "confidence": "HIGH", "source": "PRD §Platform Context (intro paragraph)" },
+    { "id": "NFR-10", "description": "Keep npm run lint && npm run typecheck && npm run test passing and add: unit tests (occurrence expansion, isSchoolDay, iCal escaping and RRULE, all-day exclusive end), integration tests (calendar merge per role, feed token reset, RSVP deadline enforcement), Playwright (admin holiday → student Today view; parent RSVP; feed URL returns valid ICS).", "confidence": "HIGH", "source": "PRD §Assumptions and constraints; §Test Requirements" },
+    { "id": "NFR-11", "description": "Scope is fixed to this PRD: no room booking, no single-occurrence exceptions or complex recurrence, no two-way external sync, no behaviour owned by later PRDs (PRD-16 dashboards and PRD-18 public site only get service/API hooks).", "confidence": "HIGH", "source": "PRD §Out of Scope; §Assumptions and constraints; §FR-9" },
+    { "id": "NFR-12", "description": "Supports the last 2 versions of Chrome, Edge, Firefox and Safari; English-only UI; responsive with a 768 px breakpoint for default view.", "confidence": "HIGH", "source": "PRD §Assumptions and constraints; §FR-3 (1)" }
+  ],
+
+  "overallConfidencePct": 96,
+  "confidenceMethod": "HIGH=100, MEDIUM=70, LOW=40, averaged over 49 requirements (43 HIGH, 5 MEDIUM, 1 LOW).",
+
+  "clarificationLog": [
+    {
+      "round": 1,
+      "questions": [
+        "PRD-12 (Announcements: AudienceType enum, audience.ts, audience builder) is not in the workspace. Should SH-14 introduce a minimal AudienceType (SCHOOL, GRADE_LEVEL, SECTION, COURSE?) + resolver designed for PRD-12 to adopt, or is PRD-12 expected to land first?",
+        "/admin/academic-years/[id] has no page today. Should FR-20 create that page, or host 'Add term breaks' on an existing admin screen?",
+        "The 'Holidays' source and the 'School events' source both include HOLIDAY/TERM_BREAK events — should toggling 'School events' off still show holidays (i.e. Holidays wins / dedupe)?",
+        "RSVP guest count is annotated '(parents)' — are guests allowed only for PARENT responders (others forced to 0)?",
+        "Which feed contents apply to TEACHER and ADMIN (e.g. admins: all events or only those whose audience includes them)? Do teachers get deadlines for assignments/quizzes they set?",
+        "Is a 'Sports day' PRD-12 announcement expected to exist for the seed to link to, given PRD-12 is absent?"
+      ],
+      "unresolved": [
+        "AudienceType / audience.ts / audience builder ownership (PRD-12 missing) — proceeding on assumption the Architect defines a minimal, PRD-12-compatible version in this ticket (FR-3 LOW, FR-7/FR-14 MEDIUM).",
+        "Host page for 'Add term breaks' (FR-20 MEDIUM).",
+        "Holidays vs School events source overlap — default assumption: Holidays chip controls HOLIDAY/TERM_BREAK/isNoSchool events, School events chip controls the rest, no duplicates.",
+        "Guest count for non-parents — default assumption: parents only, others 0.",
+        "Teacher/admin feed scope — default assumption: same visibility as GET /api/calendar for that user (NFR-5).",
+        "Sports day seed linkage — default assumption: seed the event without an announcement link if no announcement exists."
+      ]
+    }
+  ],
+  "status": "complete"
+}

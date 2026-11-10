@@ -1,199 +1,133 @@
 {
-  "ticketId": "SH-14",
-  "timestamp": "2026-11-10T00:30:00Z",
+  "ticketId": "SH-15",
+  "timestamp": "2026-11-10T14:00:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "modules": [
     {
-      "name": "src/lib/dates.ts",
+      "name": "prisma",
       "dependsOn": []
     },
     {
-      "name": "src/lib/validators/calendar.ts",
+      "name": "src/lib/validators",
+      "dependsOn": [
+        "prisma"
+      ]
+    },
+    {
+      "name": "src/server/notifications",
       "dependsOn": []
     },
     {
-      "name": "src/server/announcements",
+      "name": "src/server/files",
       "dependsOn": [
-        "prisma",
-        "src/server/courses",
-        "src/server/db.ts"
+        "src/server/auth",
+        "src/server/absence-notes"
       ]
     },
     {
-      "name": "src/server/calendar/recurrence.ts",
+      "name": "src/server/parent",
       "dependsOn": [
-        "src/lib/dates.ts"
-      ]
-    },
-    {
-      "name": "src/server/calendar/ical.ts",
-      "dependsOn": [
-        "src/server/calendar/recurrence.ts",
-        "src/lib/dates.ts"
-      ]
-    },
-    {
-      "name": "src/server/calendar/calendar-service.ts",
-      "dependsOn": [
-        "prisma",
-        "src/lib/dates.ts",
-        "src/lib/validators/calendar.ts",
-        "src/server/calendar/recurrence.ts",
+        "src/server/auth",
+        "src/server/attendance",
+        "src/server/assignments",
+        "src/server/gradebook",
+        "src/server/timetable",
+        "src/server/calendar",
         "src/server/announcements",
+        "src/server/conferences",
+        "src/server/consent-forms",
+        "prisma"
+      ]
+    },
+    {
+      "name": "src/server/absence-notes",
+      "dependsOn": [
+        "src/server/auth",
         "src/server/notifications",
         "src/server/audit.ts",
-        "src/server/auth/tokens.ts",
-        "src/server/assignments (getSchoolTimezone)"
-      ]
-    },
-    {
-      "name": "src/server/calendar/sources.ts",
-      "dependsOn": [
-        "src/server/calendar/calendar-service.ts",
-        "src/server/calendar/recurrence.ts",
-        "src/server/announcements",
-        "src/server/timetable",
-        "src/server/assignments",
-        "src/server/quiz"
-      ]
-    },
-    {
-      "name": "src/server/calendar/maintenance.ts",
-      "dependsOn": [
-        "src/server/calendar/calendar-service.ts",
-        "src/server/announcements",
-        "src/server/notifications"
-      ]
-    },
-    {
-      "name": "src/server/timetable",
-      "dependsOn": [
-        "src/server/calendar/calendar-service.ts"
+        "src/server/attendance",
+        "src/lib/validators",
+        "prisma"
       ]
     },
     {
       "name": "src/server/attendance",
       "dependsOn": [
-        "src/server/timetable",
-        "src/server/calendar/calendar-service.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/events",
-      "dependsOn": [
-        "src/server/calendar/calendar-service.ts",
-        "src/server/calendar/ical.ts",
-        "src/server/csv.ts",
-        "src/lib/validators/calendar.ts",
-        "src/server/http.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/calendar",
-      "dependsOn": [
-        "src/server/calendar/sources.ts",
-        "src/server/calendar/calendar-service.ts",
-        "src/server/calendar/ical.ts",
-        "src/server/rate-limit.ts",
-        "src/lib/validators/calendar.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/me/calendar-feed",
-      "dependsOn": [
-        "src/server/calendar/calendar-service.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/public/events",
-      "dependsOn": [
-        "src/server/calendar/sources.ts",
-        "src/server/rate-limit.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/school-day",
-      "dependsOn": [
-        "src/server/calendar/calendar-service.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/academic-years/[id]/term-breaks",
-      "dependsOn": [
-        "src/server/calendar/calendar-service.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/internal/email/dispatch",
-      "dependsOn": [
-        "src/server/calendar/maintenance.ts"
-      ]
-    },
-    {
-      "name": "src/components/AudienceBuilder",
-      "dependsOn": [
-        "src/lib/validators/calendar.ts"
-      ]
-    },
-    {
-      "name": "src/app/(app)/calendar",
-      "dependsOn": [
-        "@mui/x-scheduler",
-        "src/components/AudienceBuilder",
-        "src/components/MarkdownView",
-        "src/components/MarkdownEditor",
-        "src/components/ConfirmDialog",
-        "src/components/DataTable",
-        "src/components/Toast",
-        "src/lib/validators/calendar.ts",
-        "src/lib/dates.ts"
-      ]
-    },
-    {
-      "name": "src/app/(app)/account/calendar",
-      "dependsOn": [
-        "src/components/ConfirmDialog",
-        "src/components/Toast"
-      ]
-    },
-    {
-      "name": "src/app/(app)/admin/academic-years/[id]",
-      "dependsOn": [
-        "src/components/ConfirmDialog",
-        "src/components/Toast"
-      ]
-    },
-    {
-      "name": "src/app/(app)/attendance/take",
-      "dependsOn": [
-        "src/server/attendance",
-        "src/components/ConfirmDialog"
-      ]
-    },
-    {
-      "name": "src/app/(app)/courses/[courseId] (AssignmentForm, QuizSettingsPanel)",
-      "dependsOn": [
-        "src/app/api/school-day"
-      ]
-    },
-    {
-      "name": "prisma/seed.ts",
-      "dependsOn": [
+        "src/server/absence-notes",
+        "src/server/notifications",
         "prisma"
+      ]
+    },
+    {
+      "name": "src/server/conferences",
+      "dependsOn": [
+        "src/server/auth",
+        "src/server/notifications",
+        "src/server/audit.ts",
+        "src/server/calendar",
+        "src/lib/validators",
+        "prisma"
+      ]
+    },
+    {
+      "name": "src/server/consent-forms",
+      "dependsOn": [
+        "src/server/auth",
+        "src/server/notifications",
+        "src/server/audit.ts",
+        "src/server/announcements",
+        "src/server/csv.ts",
+        "src/lib/validators",
+        "prisma"
+      ]
+    },
+    {
+      "name": "src/app/api",
+      "dependsOn": [
+        "src/server/http.ts",
+        "src/server/parent",
+        "src/server/absence-notes",
+        "src/server/conferences",
+        "src/server/consent-forms",
+        "src/server/attendance",
+        "src/lib/validators"
+      ]
+    },
+    {
+      "name": "src/components/ChildSwitcher",
+      "dependsOn": [
+        "src/components/UserAvatar"
+      ]
+    },
+    {
+      "name": "src/config/navigation.ts",
+      "dependsOn": []
+    },
+    {
+      "name": "src/app/(app)",
+      "dependsOn": [
+        "src/components",
+        "src/config/navigation.ts",
+        "src/server/parent",
+        "src/server/absence-notes",
+        "src/server/conferences",
+        "src/server/consent-forms",
+        "src/lib/validators"
+      ]
+    },
+    {
+      "name": "tests",
+      "dependsOn": [
+        "src/server/absence-notes",
+        "src/server/conferences",
+        "src/server/consent-forms",
+        "src/server/attendance"
       ]
     }
   ],
-  "forbiddenEdges": [
-    {
-      "from": "src/server/calendar/calendar-service.ts",
-      "to": "src/server/timetable",
-      "reason": "R2 import cycle"
-    },
-    {
-      "from": "src/server/calendar/calendar-service.ts",
-      "to": "src/server/calendar/sources.ts",
-      "reason": "R2 import cycle"
-    }
+  "notes": [
+    "src/server/absence-notes depends on src/server/attendance only for the pure attendance-rules.ts helpers (schoolToday, addDays); attendance-service.ts imports findCovering/coversRecord from absence-notes. absence-notes-service must never import attendance-service.ts (keeps the file-level graph acyclic).",
+    "src/server/files/contexts.ts imports homeroom lookup from absence-notes-service lazily (contexts are registered lazily by access.ts)."
   ]
 }

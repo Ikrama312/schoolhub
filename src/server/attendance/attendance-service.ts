@@ -9,6 +9,8 @@ import { notify, notifyStudentAndParents } from '@/server/notifications/notify';
 import { getScheduleForDate, getSchoolScheduleForDate } from '@/server/timetable/timetable-service';
 import { formatInSchoolTz, schoolNow } from '@/lib/dates';
 import type { RegisterKey, RegisterRecordInput, ReportFilters } from '@/lib/validators/attendance';
+import { findCovering, type CoveringNote } from '@/server/absence-notes/absence-notes-service';
+import { coversRecord } from '@/server/absence-notes/absence-coverage';
 import {
   addDays,
   canEdit,
@@ -101,6 +103,12 @@ async function activeRoster(db: Tx, key: RegisterKey, tz: string) {
   return students.sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
 }
 
+/** PRD-15: the first note (of `notes`) covering this student on the register's date/period. */
+function coveringNote(notes: CoveringNote[], key: RegisterKey, studentId: string): CoveringNote | undefined {
+  const rec = { date: key.date, periodId: isCourseKey(key) ? key.periodId : null };
+  return notes.find((n) => n.studentId === studentId && coversRecord(n, rec));
+}
+
 function sessionWhere(key: RegisterKey): Prisma.AttendanceSessionWhereInput {
   return isCourseKey(key)
     ? { courseId: key.courseId, periodId: key.periodId, date: toDbDate(key.date) }
@@ -188,12 +196,24 @@ export async function getRegister(user: AccessUser, key: RegisterKey) {
     }),
   ]);
   const edit = canEdit(user.role, key.date, today);
+  // PRD-15 FR-24/FR-25: APPROVED notes pre-fill EXCUSED (no record yet) and make EXCUSED selectable.
+  const approved = await findCovering(students.map((s) => s.id), { from: key.date, to: key.date }, ['APPROVED']);
+  const recorded = new Set((session?.records ?? []).map((r) => r.studentId));
 
   return {
     key,
     header,
     sessionId: session?.id ?? null,
-    students: students.map((s) => ({ ...s, avatarUrl: null as string | null })),
+    students: students.map((s) => {
+      const note = coveringNote(approved, key, s.id);
+      return {
+        ...s,
+        avatarUrl: null as string | null,
+        absenceNoteId: note?.id ?? null,
+        excusable: user.role === 'ADMIN' || !!note,
+        prefilled: !!note && !recorded.has(s.id),
+      };
+    }),
     records: (session?.records ?? []).map((r) => ({
       studentId: r.studentId,
       status: r.status,
@@ -216,8 +236,25 @@ export async function saveRegister(user: AccessUser, key: RegisterKey, records: 
   assertOpen(user, key.date, today);
   const edit = canEdit(user.role, key.date, today);
   if (!edit.ok) throw new AppError('FORBIDDEN', edit.reason ?? 'You cannot edit this register.');
-  if (user.role !== 'ADMIN' && records.some((r) => r.status === 'EXCUSED')) {
-    throw new AppError('FORBIDDEN', 'Only administrators can mark a student excused.');
+  // PRD-15 FR-25: EXCUSED needs ADMIN, or an APPROVED absence note covering the student/date/period.
+  // A row an admin already left EXCUSED may be saved back unchanged.
+  let excused = records.filter((r) => r.status === 'EXCUSED').map((r) => r.studentId);
+  if (user.role !== 'ADMIN' && excused.length) {
+    const kept = await prisma.attendanceRecord.findMany({
+      where: { studentId: { in: excused }, status: 'EXCUSED', session: sessionWhere(key) },
+      select: { studentId: true },
+    });
+    excused = excused.filter((id) => !kept.some((k) => k.studentId === id));
+  }
+  if (user.role !== 'ADMIN' && excused.length) {
+    const approved = await findCovering(excused, { from: key.date, to: key.date }, ['APPROVED']);
+    const uncovered = excused.filter((id) => !coveringNote(approved, key, id));
+    if (uncovered.length) {
+      throw new AppError('FORBIDDEN', 'A student can only be marked excused when an approved absence note covers them.', {
+        reason: 'NO_APPROVED_NOTE',
+        studentIds: uncovered,
+      });
+    }
   }
 
   const next: Rec[] = records.map((r) => ({
@@ -296,6 +333,11 @@ export async function saveRegister(user: AccessUser, key: RegisterKey, records: 
   );
 
   const notes = notificationsFor(diff);
+  // PRD-15 FR-27: no "marked absent" alert while a PENDING or APPROVED note covers the student.
+  if (notes.absent.length) {
+    const covering = await findCovering(notes.absent.map((r) => r.studentId), { from: key.date, to: key.date }, ['PENDING', 'APPROVED']);
+    notes.absent = notes.absent.filter((r) => !coveringNote(covering, key, r.studentId));
+  }
   const affected = [...notes.absent, ...notes.late, ...notes.corrected].map((r) => r.studentId);
   if (affected.length) {
     const names = new Map(

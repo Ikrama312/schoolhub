@@ -1,99 +1,177 @@
-# SH-14 File Structure — PRD-14 School Calendar, Events & Holidays
+# File Structure — SH-15 (PRD-15 Parent Portal)
 
-Phase: dev-planning · Ticket: SH-14 · Legend: `+` CREATE, `~` MODIFY. Task id in brackets.
-This replaces the stale SH-13 plan.
+Phase: dev-planning · Ticket: SH-15 · Generated 2026-11-10T14:00:00Z
+
+Planned tree of every file SH-15 creates or modifies. Each leaf is tagged `[OPERATION TASK-N]`; the exact list is `file-ownership-matrix.json`. Unlisted existing files are untouched (NFR-6: no moves, renames or re-scaffolding; ADR-1: `package.json` unchanged).
 
 ```
-package.json                                              ~ [TASK-1]  @mui/x-scheduler@9.0.0-beta.15 (exact), scoped @mui/x-internals override, node-ical@0.27.6 devDep
-package-lock.json                                         ~ [TASK-1]
-prisma/
-├── schema.prisma                                         ~ [TASK-2]  AudienceType, EventCategory, Recurrence, RsvpResponse; CalendarEvent, EventAudience, EventRsvp, CalendarFeedToken; User back-relations
-├── migrations/20261113000000_add_calendar/migration.sql  + [TASK-2]
-└── seed.ts                                               ~ [TASK-24] seedCalendar() + ROBOTICS course (D-7)
-src/
-├── theme/theme.ts                                        ~ [TASK-1]  import type {} from '@mui/x-scheduler/theme-augmentation'
-├── lib/
-│   ├── dates.ts                                          ~ [TASK-3]  schoolMidnight, schoolDateOf
-│   └── validators/
-│       ├── calendar.ts                                   + [TASK-3]  eventInput/Patch, rsvp, calendarQuery, schoolDayQuery, publicEventsQuery
-│       └── attendance.ts                                 ~ [TASK-12] registerPutBody.holidayOverride
-├── config/
-│   ├── navigation.ts                                     ~ [TASK-20] Calendar entry (ALL_ROLES)
-│   └── public-routes.ts                                  ~ [TASK-16] '/api/calendar/feed/', '/api/public/'
-├── server/
-│   ├── announcements/audience.ts                         + [TASK-6]  PRD-12 path: resolveAudienceUserIds, isUserInAudience, audienceWhereForUser, canTargetAudience
-│   ├── calendar/
-│   │   ├── recurrence.ts                                 + [TASK-4]  expandOccurrences (pure)
-│   │   ├── ical.ts                                       + [TASK-5]  RFC 5545 builder (pure)
-│   │   ├── calendar-service.ts                           + [TASK-8]  CRUD, RSVP, isSchoolDay, noSchoolDays, createTermBreaks, feed tokens
-│   │   ├── sources.ts                                    + [TASK-9]  getCalendarItems, getPublicEvents, getUpcomingEventsForUser
-│   │   └── maintenance.ts                                + [TASK-10] sendRsvpReminders
-│   ├── notifications/types.ts                            ~ [TASK-7]  event.created / holiday_created / updated / rsvp_reminder
-│   ├── timetable/timetable-service.ts                    ~ [TASK-11] both "PRD-14 holidays hook" lines → isSchoolDay
-│   └── attendance/attendance-service.ts                  ~ [TASK-12] noSchoolReason, holidayOverride (D-8)
-├── components/AudienceBuilder/AudienceBuilder.tsx        + [TASK-17]
-└── app/
-    ├── api/
-    │   ├── calendar/
-    │   │   ├── route.ts                                  + [TASK-15] GET /api/calendar
-    │   │   └── feed/[token]/route.ts                     + [TASK-16] GET /api/calendar/feed/<token>.ics
-    │   ├── events/
-    │   │   ├── route.ts                                  + [TASK-14] POST
-    │   │   └── [id]/
-    │   │       ├── route.ts                              + [TASK-14] GET/PATCH/DELETE
-    │   │       ├── ics/route.ts                          + [TASK-14]
-    │   │       ├── rsvp/route.ts                         + [TASK-14] PUT
-    │   │       └── rsvps/route.ts                        + [TASK-14] GET (+?format=csv)
-    │   ├── me/calendar-feed/
-    │   │   ├── route.ts                                  + [TASK-16] GET
-    │   │   └── reset/route.ts                            + [TASK-16] POST
-    │   ├── school-day/route.ts                           + [TASK-15] (singular; /api/school-days untouched)
-    │   ├── public/events/route.ts                        + [TASK-16]
-    │   ├── academic-years/[id]/term-breaks/route.ts      + [TASK-15]
-    │   ├── attendance/register/route.ts                  ~ [TASK-12] pass holidayOverride
-    │   └── internal/email/dispatch/route.ts              ~ [TASK-10] isolated sendRsvpReminders block
-    └── (app)/
-        ├── calendar/
-        │   ├── page.tsx                                  + [TASK-20] server, requirePageUser
-        │   ├── CalendarView.tsx                          + [TASK-20] client, EventCalendar
-        │   ├── SourceChips.tsx                           + [TASK-20]
-        │   ├── EventDrawer.tsx                           + [TASK-19]
-        │   └── EventEditorDialog.tsx                     + [TASK-18]
-        ├── account/calendar/
-        │   ├── page.tsx                                  + [TASK-21]
-        │   └── SubscribeCard.tsx                         + [TASK-21]
-        ├── admin/academic-years/[id]/
-        │   ├── page.tsx                                  + [TASK-22]
-        │   └── TermBreaksButton.tsx                      + [TASK-22]
-        ├── attendance/take/
-        │   ├── page.tsx                                  ~ [TASK-13] "No classes today — <reason>"
-        │   └── RegisterForm.tsx                          ~ [TASK-13] warning Alert + ConfirmDialog → holidayOverride
-        └── courses/[courseId]/
-            ├── assignments/AssignmentForm.tsx            ~ [TASK-23] holiday warning
-            └── quizzes/[quizId]/edit/QuizSettingsPanel.tsx ~ [TASK-23] holiday warning
-tests/
-├── unit/
-│   ├── dates.test.ts                                     ~ [TASK-3]
-│   ├── public-routes.test.ts                             ~ [TASK-16]
-│   ├── attendance-register-form.test.tsx                 ~ [TASK-13]
-│   └── calendar/
-│       ├── validators.test.ts                            + [TASK-3]
-│       ├── recurrence.test.ts                            + [TASK-4]  weekly, monthly-31st, until bound, DST week
-│       ├── ical.test.ts                                  + [TASK-5]  escaping, folding, RRULE, VALUE=DATE, node-ical parse
-│       └── audience.test.ts                              + [TASK-6]  canTargetAudience
-├── integration/calendar/
-│   ├── calendar-merge.test.ts                            + [TASK-25] per role incl. parent with 3 children
-│   ├── audience-parity.test.ts                           + [TASK-25] resolver parity over seed users
-│   ├── school-day.test.ts                                + [TASK-25] isSchoolDay, recurring no-school, term-break gaps
-│   ├── events-rsvp.test.ts                               + [TASK-26] teacher SCHOOL → 403, RSVP deadline 409, parent-only guests
-│   └── feed-token.test.ts                                + [TASK-26] reset → old 404, new 200 + node-ical valid
-└── e2e/calendar.spec.ts                                  + [TASK-27]
+schoolhub/
+├── prisma/
+│   ├── migrations/
+│   │   └── 20261114000000_prd15_parent_portal/
+│   │       └── migration.sql  [CREATE TASK-1]
+│   ├── schema.prisma  [MODIFY TASK-1]
+│   └── seed.ts  [MODIFY TASK-25]
+├── src/
+│   ├── app/
+│   │   ├── (app)/
+│   │   │   ├── admin/
+│   │   │   │   └── conferences/
+│   │   │   │       ├── ConferenceEventsClient.tsx  [CREATE TASK-14]
+│   │   │   │       └── page.tsx  [CREATE TASK-14]
+│   │   │   ├── assignments/
+│   │   │   │   ├── AssignmentList.tsx  [MODIFY TASK-24]
+│   │   │   │   └── page.tsx  [MODIFY TASK-24]
+│   │   │   ├── attendance/
+│   │   │   │   ├── absence-notes/
+│   │   │   │   │   ├── AbsenceNotesReviewClient.tsx  [CREATE TASK-11]
+│   │   │   │   │   └── page.tsx  [CREATE TASK-11]
+│   │   │   │   └── take/
+│   │   │   │       └── RegisterForm.tsx  [MODIFY TASK-9]
+│   │   │   ├── conferences/
+│   │   │   │   ├── [id]/
+│   │   │   │   │   ├── BookingClient.tsx  [CREATE TASK-16]
+│   │   │   │   │   ├── availability/
+│   │   │   │   │   │   ├── AvailabilityClient.tsx  [CREATE TASK-15]
+│   │   │   │   │   │   └── page.tsx  [CREATE TASK-15]
+│   │   │   │   │   ├── day/
+│   │   │   │   │   │   └── page.tsx  [CREATE TASK-15]
+│   │   │   │   │   └── page.tsx  [CREATE TASK-16]
+│   │   │   │   └── page.tsx  [CREATE TASK-15]
+│   │   │   ├── consent-forms/
+│   │   │   │   ├── [id]/
+│   │   │   │   │   ├── ConsentResponseForm.tsx  [CREATE TASK-20]
+│   │   │   │   │   ├── page.tsx  [CREATE TASK-20]
+│   │   │   │   │   └── tracking/
+│   │   │   │   │       ├── ConsentTrackingClient.tsx  [CREATE TASK-20]
+│   │   │   │   │       └── page.tsx  [CREATE TASK-20]
+│   │   │   │   ├── new/
+│   │   │   │   │   ├── ConsentFormForm.tsx  [CREATE TASK-19]
+│   │   │   │   │   └── page.tsx  [CREATE TASK-19]
+│   │   │   │   └── page.tsx  [CREATE TASK-19]
+│   │   │   ├── dashboard/
+│   │   │   │   └── page.tsx  [MODIFY TASK-23]
+│   │   │   ├── grades/
+│   │   │   │   ├── GradesClient.tsx  [MODIFY TASK-24]
+│   │   │   │   └── page.tsx  [MODIFY TASK-24]
+│   │   │   ├── layout.tsx  [MODIFY TASK-6]
+│   │   │   ├── my-children/
+│   │   │   │   ├── [studentId]/
+│   │   │   │   │   ├── OverviewCards.tsx  [CREATE TASK-23]
+│   │   │   │   │   ├── absence/
+│   │   │   │   │   │   ├── new/
+│   │   │   │   │   │   │   ├── AbsenceNoteForm.tsx  [CREATE TASK-10]
+│   │   │   │   │   │   │   └── page.tsx  [CREATE TASK-10]
+│   │   │   │   │   │   └── page.tsx  [CREATE TASK-10]
+│   │   │   │   │   └── page.tsx  [CREATE TASK-23]
+│   │   │   │   └── page.tsx  [CREATE TASK-23]
+│   │   │   └── shell.tsx  [MODIFY TASK-6]
+│   │   └── api/
+│   │       ├── absence-notes/
+│   │       │   ├── [id]/
+│   │       │   │   ├── review/
+│   │       │   │   │   └── route.ts  [CREATE TASK-8]
+│   │       │   │   └── route.ts  [CREATE TASK-8]
+│   │       │   └── route.ts  [CREATE TASK-8]
+│   │       ├── conference-slots/
+│   │       │   └── [id]/
+│   │       │       ├── book/
+│   │       │       │   └── route.ts  [CREATE TASK-13]
+│   │       │       ├── cancel/
+│   │       │       │   └── route.ts  [CREATE TASK-13]
+│   │       │       ├── ics/
+│   │       │       │   └── route.ts  [CREATE TASK-13]
+│   │       │       └── route.ts  [CREATE TASK-13]
+│   │       ├── conferences/
+│   │       │   ├── [id]/
+│   │       │   │   ├── availability/
+│   │       │   │   │   └── route.ts  [CREATE TASK-13]
+│   │       │   │   ├── route.ts  [CREATE TASK-13]
+│   │       │   │   └── slots/
+│   │       │   │       └── route.ts  [CREATE TASK-13]
+│   │       │   └── route.ts  [CREATE TASK-13]
+│   │       ├── consent-forms/
+│   │       │   ├── [id]/
+│   │       │   │   ├── remind/
+│   │       │   │   │   └── route.ts  [CREATE TASK-18]
+│   │       │   │   ├── responses/
+│   │       │   │   │   └── route.ts  [CREATE TASK-18]
+│   │       │   │   ├── route.ts  [CREATE TASK-18]
+│   │       │   │   └── tracking/
+│   │       │   │       └── route.ts  [CREATE TASK-18]
+│   │       │   └── route.ts  [CREATE TASK-18]
+│   │       ├── internal/
+│   │       │   └── email/
+│   │       │       └── dispatch/
+│   │       │           └── route.ts  [MODIFY TASK-17]
+│   │       ├── me/
+│   │       │   ├── children/
+│   │       │   │   └── summary/
+│   │       │   │       └── route.ts  [CREATE TASK-22]
+│   │       │   ├── selected-child/
+│   │       │   │   └── route.ts  [CREATE TASK-5]
+│   │       │   └── timetable/
+│   │       │       └── route.ts  [MODIFY TASK-24]
+│   │       └── students/
+│   │           └── [id]/
+│   │               └── overview/
+│   │                   └── route.ts  [CREATE TASK-22]
+│   ├── components/
+│   │   └── ChildSwitcher/
+│   │       └── ChildSwitcher.tsx  [CREATE TASK-6]
+│   ├── config/
+│   │   └── navigation.ts  [MODIFY TASK-6]
+│   ├── lib/
+│   │   └── validators/
+│   │       ├── absence-notes.ts  [CREATE TASK-2]
+│   │       ├── attendance.ts  [MODIFY TASK-9]
+│   │       ├── conferences.ts  [CREATE TASK-2]
+│   │       └── consent-forms.ts  [CREATE TASK-2]
+│   └── server/
+│       ├── absence-notes/
+│       │   ├── absence-coverage.ts  [CREATE TASK-3]
+│       │   └── absence-notes-service.ts  [CREATE TASK-7]
+│       ├── attendance/
+│       │   └── attendance-service.ts  [MODIFY TASK-9]
+│       ├── conferences/
+│       │   ├── conference-slots.ts  [CREATE TASK-3]
+│       │   └── conferences-service.ts  [CREATE TASK-12]
+│       ├── consent-forms/
+│       │   ├── consent-forms-service.ts  [CREATE TASK-17]
+│       │   └── signature.ts  [CREATE TASK-3]
+│       ├── files/
+│       │   ├── contexts.ts  [MODIFY TASK-4]
+│       │   └── validate.ts  [MODIFY TASK-4]
+│       ├── notifications/
+│       │   └── types.ts  [MODIFY TASK-4]
+│       └── parent/
+│           ├── overview-service.ts  [CREATE TASK-21]
+│           └── selected-child.ts  [CREATE TASK-5]
+└── tests/
+    ├── e2e/
+    │   ├── absence-notes.spec.ts  [CREATE TASK-27]
+    │   ├── conferences.spec.ts  [CREATE TASK-27]
+    │   └── consent-forms.spec.ts  [CREATE TASK-27]
+    ├── integration/
+    │   ├── absence-notes/
+    │   │   └── absence-approval.test.ts  [CREATE TASK-26]
+    │   └── conferences/
+    │       └── concurrent-booking.test.ts  [CREATE TASK-26]
+    └── unit/
+        ├── absence-notes/
+        │   └── absence-coverage.test.ts  [CREATE TASK-3]
+        ├── conferences/
+        │   └── conference-slots.test.ts  [CREATE TASK-3]
+        └── consent-forms/
+            └── signature.test.ts  [CREATE TASK-3]
 ```
 
-## Notes for Dev
+## Notes
 
-- **Import direction (R2):** timetable-service → calendar-service; sources.ts → (timetable-service, assignments, quiz, calendar-service). calendar-service never imports timetable-service or sources.ts.
-- **Public routes:** the system design doesn't mention it, but `src/config/public-routes.ts` must list `/api/calendar/feed/` and `/api/public/`, or the middleware will redirect the feed and the public events route to login.
-- **"Today view" (FR-17):** the only UI that uses `getScheduleForDate` is the teacher attendance landing (`attendance/take/page.tsx`). No student or parent Today view exists, and adding one is out of scope (NFR-11). The TASK-11 service change makes every schedule consumer return `[]` on holidays. For students, the e2e test checks the holiday on `/calendar`.
-- **RegisterForm:** the `[courseId]` and `section/[sectionId]` register pages pass `register` straight through, so `noSchoolReason` reaches the form with no page edits.
-- **MUI MCP gate (NFR-2):** before TASK-18, TASK-19 or TASK-20 is coded, look up the x-scheduler Quickstart, Views, Events, Editing, Timezone, Localization and Responsiveness pages. If MCP is unreachable, stop and report a blocker.
+- 63 files created, 18 modified, 0 deleted.
+- New server modules follow `src/server/<feature>/<feature>-service.ts`; pure helpers (`absence-coverage.ts`, `conference-slots.ts`, `signature.ts`) have no Prisma import so the FR-46 unit tests stay DB-free.
+- Route handlers live under `src/app/api/**/route.ts` (base path `/api`, not `/api/v1`).
+- `src/components/ChildSwitcher/` follows the existing `src/components/<Name>/` convention (ADR-12 #3).
+- `POST /api/files` needs no route change: the `absence-note` context is added through `files/contexts.ts` (access) and `files/validate.ts` (PDF/JPG/PNG only).
+- `/api/attendance/register` GET/PUT need no route change: the new EXCUSED pre-fill, rule and notification suppression all live in `attendance-service.ts`.
+- Partial by design (ADR-11): FR-13 Announcements card is an EmptyState; FR-35 'My meetings' appear only in overview cards; no calendar `studentId` filter (FR-5).

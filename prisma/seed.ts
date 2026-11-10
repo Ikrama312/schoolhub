@@ -164,6 +164,7 @@ async function main() {
   await seedQuizzes();
   await seedGradebook();
   await seedMessaging();
+  await seedParentPortal();
 }
 
 /** Deterministic PRNG so every seed run produces the same attendance (FR-38). */
@@ -739,6 +740,159 @@ async function seedMessaging() {
     });
   }
   logger.info('Seed: demo messaging ready', { threadsCreated: created });
+}
+
+/**
+ * PRD-15 FR-45: Grade 7 absence notes (one PENDING, one APPROVED), "Autumn conferences"
+ * 3 weeks out with Tom and Tina slots 15:00–17:00 at 10 min (two booked), and a
+ * "Science Museum Trip" consent form due in 10 days linked to a seeded calendar event,
+ * with ~40% of responses in. Idempotent (looked up by title / a "[seed]" marker).
+ * Grade 7 students and their parents are owned by other seeds: parts that need them are
+ * skipped, never created.
+ */
+async function seedParentPortal() {
+  const { schoolToday, addDays } = await import('../src/server/attendance/attendance-rules');
+  const { schoolMidnight } = await import('../src/lib/dates');
+  const { generateSlots } = await import('../src/server/conferences/conference-slots');
+  const { fromZonedTime } = await import('date-fns-tz');
+  const settings = await prisma.schoolSettings.findUniqueOrThrow({ where: { id: 'singleton' } });
+  const tz = settings.timezone;
+  const today = schoolToday(new Date(), tz);
+  const day = (d: string) => new Date(`${d}T00:00:00Z`);
+  const [grade7, admin, tom, tina] = await Promise.all([
+    prisma.gradeLevel.findUnique({ where: { name: 'Grade 7' } }),
+    prisma.user.findUnique({ where: { email: 'admin@schoolhub.test' } }),
+    prisma.user.findUnique({ where: { email: 'teacher@schoolhub.test' } }),
+    prisma.user.findUnique({ where: { email: 'teacher2@schoolhub.test' } }),
+  ]);
+  if (!grade7 || !admin || !tom || !tina) {
+    logger.info('Seed: parent portal skipped (Grade 7 or demo staff missing)');
+    return;
+  }
+
+  // Grade 7 students with at least one linked parent, in a stable order.
+  const families = await prisma.user.findMany({
+    where: { role: 'STUDENT', archivedAt: null, studentProfile: { gradeLevelId: grade7.id }, studentLinks: { some: {} } },
+    select: { id: true, studentLinks: { select: { parent: { select: { id: true, firstName: true, lastName: true } } }, orderBy: { createdAt: 'asc' } } },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+  });
+
+  // Absence notes.
+  if (families.length && (await prisma.absenceNote.count({ where: { details: { startsWith: '[seed]' } } })) === 0) {
+    const [first, second = first] = families;
+    await prisma.absenceNote.create({
+      data: {
+        studentId: first.id,
+        submittedById: first.studentLinks[0].parent.id,
+        fromDate: day(addDays(today, 1)),
+        toDate: day(addDays(today, 1)),
+        reason: 'ILLNESS',
+        details: '[seed] Fever overnight; keeping them home tomorrow.',
+      },
+    });
+    await prisma.absenceNote.create({
+      data: {
+        studentId: second.id,
+        submittedById: second.studentLinks[0].parent.id,
+        fromDate: day(addDays(today, 5)),
+        toDate: day(addDays(today, 6)),
+        reason: 'MEDICAL_APPOINTMENT',
+        details: '[seed] Orthodontist appointment out of town.',
+        status: 'APPROVED',
+        reviewedById: admin.id,
+        reviewNote: 'Thanks for letting us know.',
+        reviewedAt: new Date(),
+      },
+    });
+  } else if (!families.length) {
+    logger.info('Seed: absence notes and responses skipped (no Grade 7 students with parents)');
+  }
+
+  // Conferences.
+  let event = await prisma.conferenceEvent.findFirst({ where: { title: 'Autumn conferences' } });
+  if (!event) {
+    const date = addDays(today, 21);
+    event = await prisma.conferenceEvent.create({
+      data: {
+        title: 'Autumn conferences',
+        date: day(date),
+        bookingOpensAt: new Date(Date.now() - 86_400_000),
+        bookingClosesAt: schoolMidnight(date, tz),
+        slotMinutes: 10,
+        gradeLevelIds: [grade7.id],
+        createdById: admin.id,
+      },
+    });
+  }
+  const date = event.date.toISOString().slice(0, 10);
+  const range = [{ start: fromZonedTime(`${date}T15:00:00`, tz), end: fromZonedTime(`${date}T17:00:00`, tz) }];
+  for (const teacher of [tom, tina]) {
+    await prisma.conferenceSlot.createMany({
+      data: generateSlots(range, event.slotMinutes).map((g) => ({ eventId: event!.id, teacherId: teacher.id, startsAt: g.startsAt, endsAt: g.endsAt, location: 'Room 101' })),
+      skipDuplicates: true,
+    });
+  }
+  if (families.length && (await prisma.conferenceSlot.count({ where: { eventId: event.id, bookedByParentId: { not: null } } })) === 0) {
+    const child = families[0];
+    // Tom at 15:00 and Tina at 15:20 so the two bookings don't overlap (FR-31).
+    for (const [teacher, offset] of [[tom, 0], [tina, 2]] as const) {
+      const slot = await prisma.conferenceSlot.findFirst({ where: { eventId: event.id, teacherId: teacher.id }, orderBy: { startsAt: 'asc' }, skip: offset });
+      if (slot) {
+        await prisma.conferenceSlot.update({
+          where: { id: slot.id },
+          data: { bookedByParentId: child.studentLinks[0].parent.id, bookedForStudentId: child.id, bookedAt: new Date(), parentNote: '[seed] Would like to discuss progress this term.' },
+        });
+      }
+    }
+  }
+
+  // Consent form + linked calendar event.
+  let trip = await prisma.calendarEvent.findFirst({ where: { title: 'Science Museum Trip' } });
+  if (!trip) {
+    const tripDay = addDays(today, 12);
+    trip = await prisma.calendarEvent.create({
+      data: {
+        title: 'Science Museum Trip',
+        description: 'Grade 7 visit to the Springfield Science Museum.',
+        category: 'TRIP',
+        startAt: fromZonedTime(`${tripDay}T09:00:00`, tz),
+        endAt: fromZonedTime(`${tripDay}T15:00:00`, tz),
+        location: 'Springfield Science Museum',
+        createdById: admin.id,
+        audiences: { create: [{ type: 'GRADE_LEVEL', refId: grade7.id }] },
+      },
+    });
+  }
+  let form = await prisma.consentForm.findFirst({ where: { title: 'Science Museum Trip' } });
+  if (!form) {
+    form = await prisma.consentForm.create({
+      data: {
+        title: 'Science Museum Trip',
+        description:
+          'Grade 7 will visit the **Springfield Science Museum**.\n\n- Bus leaves at 09:00, back by 15:00\n- Bring a packed lunch\n- Cost is covered by the school',
+        dueAt: fromZonedTime(`${addDays(today, 10)}T23:59:00`, tz),
+        eventId: trip.id,
+        createdById: tom.id,
+        audiences: { create: [{ type: 'GRADE_LEVEL', refId: grade7.id }] },
+      },
+    });
+  }
+  const respondents = families.slice(0, Math.round(families.length * 0.4));
+  for (const [i, f] of respondents.entries()) {
+    const parent = f.studentLinks[0].parent;
+    await prisma.consentResponse.upsert({
+      where: { formId_studentId: { formId: form.id, studentId: f.id } },
+      update: {},
+      create: {
+        formId: form.id,
+        studentId: f.id,
+        respondedById: parent.id,
+        value: i % 4 === 3 ? 'DECLINED' : 'GRANTED',
+        signature: `${parent.firstName} ${parent.lastName}`,
+      },
+    });
+  }
+  logger.info('Seed: parent portal ready', { families: families.length, responses: respondents.length });
 }
 
 async function disconnectAll() {

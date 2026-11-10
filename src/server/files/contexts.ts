@@ -99,6 +99,24 @@ export const messageResolver: FileAccessResolver = async (user, file) => {
   return !!lead?.isSafeguardingLead && lead.status === 'ACTIVE';
 };
 
+/**
+ * 'absence-note' (PRD-15 FR-41): any parent linked to the note's student, the student's
+ * current homeroom teacher, or ADMIN. Lazy import: absence-notes-service → files-service → access → here.
+ */
+export const absenceNoteResolver: FileAccessResolver = async (user, file) => {
+  if (!user || !file.contextId) return false;
+  if (user.role === 'ADMIN') return true;
+  const note = await prisma.absenceNote.findUnique({ where: { id: file.contextId }, select: { studentId: true } });
+  if (!note) return false;
+  if (user.role === 'PARENT') {
+    const link = await prisma.parentStudentLink.findFirst({ where: { parentId: user.id, studentId: note.studentId }, select: { id: true } });
+    return link !== null;
+  }
+  if (user.role !== 'TEACHER') return false;
+  const { homeroomTeacherOf } = await import('@/server/absence-notes/absence-notes-service');
+  return (await homeroomTeacherOf(note.studentId)) === user.id;
+};
+
 /** 'logo': public, including anonymous (app shell, login page, emails). */
 export const logoResolver: FileAccessResolver = () => true;
 
@@ -109,4 +127,5 @@ export function registerBuiltInContexts(register: (context: string, resolver: Fi
   register('submission', submissionResolver);
   register('quiz', quizResolver);
   register('message', messageResolver);
+  register('absence-note', absenceNoteResolver);
 }

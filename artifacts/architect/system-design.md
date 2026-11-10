@@ -1,433 +1,297 @@
-# System Design: PRD-14 School Calendar, Events & Holidays
+# System Design: PRD-15 Parent Portal (Child Switcher, Absence Notes, Conference Booking, Consent Forms)
 
-Ticket: SH-14 · Phase: architect (arch-design-system) · Timestamp: 2026-11-09T23:58:00Z · Status: complete
+Ticket: SH-15 · Phase: architect (arch-design-system) · Timestamp: 2026-11-10T13:00:00Z · Status: complete
 
-Inputs:
-- `artifacts/intake/requirements.json`: 37 FR and 12 NFR, 96% confidence
-- `artifacts/intake/handoff-to-architect.json`
-- `artifacts/architect/tech-stack-decisions.md`: ADR-1 to ADR-13
-- `artifacts/architect/requirements-analysis-notes.md`: B1 to B19, D1 to D9, R1 to R4
+Inputs: `artifacts/intake/requirements.json` (FR-1 to FR-46, NFR-1 to NFR-10), `artifacts/intake/handoff-to-architect.json`, `artifacts/architect/tech-stack-decisions.md` (ADR-1 to ADR-13), `artifacts/architect/requirements-analysis-notes.md`.
 
-> This replaces the stale SH-13 `system-design.md`. `api-contracts.json` and `handoff-to-dev-planning.json` in this folder are still SH-13 until `arch-api-contracts` rewrites them.
+> This file replaces the SH-14 version. `api-contracts.json`, `handoff-to-dev-planning.json` and `threat-model-notes.json` are still from SH-14 until `arch-api-contracts` rewrites them.
 
 ---
 
 ## 1. Overview
 
-SH-14 adds a school calendar to the existing SchoolHub app (Next.js 14 App Router, Prisma/PostgreSQL, MUI 9). The pieces are:
+SH-15 adds a parent portal to the existing Next.js 14 / Prisma / MUI v9 brownfield app. It has five parts:
 
-- one Prisma migration
-- one server module, `src/server/calendar/`
-- a shared audience resolver, at the path PRD-12 will use
-- about a dozen thin route handlers
-- two new pages (`/calendar`, `/account/calendar`), plus one small admin page
-- small, targeted edits to timetable, attendance, the assignment and quiz editors, notifications, the cron, navigation and the seed
+1. **Child context:** the `sh_child` cookie, a top-bar switcher, and a default student on parent pages (FR-3 to FR-6).
+2. **Child overview:** `/my-children` and `/my-children/[studentId]`, built from eight streaming cards (FR-7 to FR-17).
+3. **Absence notes:** parents submit notes, teachers and admins review them, and approved notes connect to attendance (FR-18 to FR-27, FR-41).
+4. **Parent–teacher conferences:** admins create events, teachers set availability, and parents book slots atomically (FR-28 to FR-35).
+5. **Consent forms:** staff create forms, parents respond with a typed signature, and creators track responses and send reminders (FR-36 to FR-40).
 
-Design principles:
+All five use the existing building blocks:
 
-1. **One read path.** A single function, `getCalendarItems(user, range, sources, studentId?)`, feeds the `/calendar` API, the iCal feed, `getUpcomingEventsForUser`, and (with `sources=['events']`) the single-event visibility check. That way the feed cannot show anything the app hides (NFR-5).
-2. **Recurrence is expanded on the server, at read time.** A recurring event is stored once. Clients and the scheduler only ever receive plain occurrences. The feed emits RRULE (ADR-2, ADR-3).
-3. **One holiday rule.** `isSchoolDay` in calendar-service owns the teaching-weekday rule and the no-school-event rule. Timetable, attendance, the editors and `/api/school-day` all call it (ADR-8).
-4. **Reuse before writing.** The design reuses `rateLimit`, `notify`, `audit`, `hashToken`, `csv.ts`, `DataTable`, `ConfirmDialog`, `MarkdownView/Editor`, `useToast`, the dispatch cron, `getSchoolTimezone` and the access helpers (NFR-9).
+- `withHandler`, `requireRole` and `ok`/`AppError` from `src/server/http.ts`
+- `assertCanViewStudent` and `getAccessibleStudentIds` from `src/server/auth/student-access.ts`
+- `audit()` and `notify()` / `notifyStudentAndParents()`
+- The file contexts registry
+- The audience helpers in `src/server/announcements/audience.ts`
+- `attendance-rules.ts` (`schoolToday`, `attendanceRate`)
+- `src/server/calendar/ical.ts`
+- The cron route `/api/internal/email/dispatch`
 
-### Intake blockers and warnings
+The design adds **no new dependencies** (ADR-1) and moves or renames nothing (NFR-6).
 
-`handoff-to-architect.json` reports **no blockers** (`blockers: []`). It raises three warnings, resolved as follows:
+### Blockers and warnings from intake
 
-| Intake warning | Resolution | Ref |
+`handoff-to-architect.json` reports **`blockers: []`** at 95% confidence. Its warnings and the seven unresolved questions are settled as follows. Each is an assumption, not a blocker.
+
+| Intake warning / question | Design decision | Reqs |
 |---|---|---|
-| PRD-12 missing: no `AudienceType`, `audience.ts` or audience builder | SH-14 adds `enum AudienceType { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }` and `src/server/announcements/audience.ts`, exactly as PRD-12 §FR-1/FR-2 specify. It also adds a minimal MUI `AudienceBuilder`. PRD-12 adopts all three without changes. No Announcement models. | ADR-9, §3.3 |
-| `/admin/academic-years/[id]` page missing | Add a minimal ADMIN server page at that exact route with a read-only term list and an "Add term breaks" button. | ADR-10, §3.9 |
-| New dependencies | `@mui/x-scheduler@9.0.0-beta.15` (exact, installed first) with a scoped `@mui/x-internals` override. `node-ical@0.27.6` as an exact devDependency. Nothing else is added. | ADR-1, ADR-5 |
+| PRD-12 Announcement model absent | The Announcements card renders an `EmptyState`. `listUnreadAnnouncements()` returns `[]`. **FR-13 is partial.** | FR-13 |
+| SH-14 calendar has no API or pages | Upcoming events queries `CalendarEvent` directly through `audienceWhereForUser`. "My meetings" appear as overview items. There is no calendar `studentId` filter, because no calendar page exists. **FR-14 is complete. FR-35 and the calendar part of FR-5 are partial.** | FR-5, FR-14, FR-35 |
+| Shared components live under `src/components/<Name>/` | Reuse them in place. | NFR-6 |
+| Student detail route is `/students/[id]` | "View all" links point to `/students/[id]` tabs, `/assignments?studentId=` and `/grades?studentId=`. | FR-17 |
+| Which pages adopt `sh_child` | `/assignments`, `/grades`, `/api/me/timetable`, and all new SH-15 parent pages. | FR-5 |
+| Reminder notification key | One key, `consent.reminder`, for both the manual and the 48 h reminder. | FR-44 |
+| `attendance-service.ts:219` allows EXCUSED for ADMIN only | Replace the check: ADMIN, or an APPROVED note covers the record. | FR-25 |
+| Blocked slots | Add a `ConferenceSlot.blocked` column. | FR-29 |
 
-### Conflicts between the research inputs, and how this design settles them
+### Deviations from "exactly as specified" (FR-1)
 
-| Topic | arch-research-stack | arch-research-reqs | **Decision** |
-|---|---|---|---|
-| Audience shape | PRD-12 enum (6 values) with `refId` and `include*` flags | 4-value enum with `targetId` and `roles[]` | **ADR-9.** PRD-14 FR-1 itself defines `EventAudience` with `refId` / `includeStudents` / `includeParents` / `includeTeachers` (verified in `14-calendar.md` L128-137), and PRD-12 L96 defines the 6 values. "Grade 7 parents" = `GRADE_LEVEL` with `includeStudents=false, includeTeachers=false`. No `roles[]` column. |
-| Resolver path | `src/server/announcements/audience.ts` | `src/server/audience/audience.ts` | **`src/server/announcements/audience.ts`**, the path PRD-12 names, so PRD-12 doesn't need a rename. |
-| `getScheduleForDate` "reason" | Add `reason` to its return | Keep `ScheduleEntry[]`; callers fetch the reason separately | **Keep `ScheduleEntry[]`** (no churn for callers: attendance L130/L472, `getCurrentSlot`). Callers that need the holiday name call `isSchoolDay(date)` directly. FR-17's "reason" is delivered through `isSchoolDay` and `/api/school-day`. |
-| Email default per category (FR-28) | Not addressed | D5: a second type | **Two registry types:** `event.created` (`defaultEmail: false`) and `event.holiday_created` (`defaultEmail: true`, used for HOLIDAY/TERM_BREAK). Both keep the per-user preference override, and `notify.ts` is unchanged. This is a deliberate deviation (D-3 below). |
-| RSVP reminder "once" | `rsvpReminderSentAt` column | Same, claimed with conditional `updateMany` | Agreed: claim it with `updateMany({where:{id, rsvpReminderSentAt:null}})`. |
+The design adds three columns that the PRD does not list (ADR-3):
 
-### Deviations from the PRD's model and route list (all deliberate)
+| Column | Reqs | Purpose |
+|---|---|---|
+| `ConferenceSlot.blocked Boolean @default(false)` | FR-29 | A blocked slot survives availability regeneration. |
+| `ConsentForm.lastRemindedAt DateTime?` | FR-39 | 24 h throttle that holds across processes. |
+| `ConsentForm.dueReminderSentAt DateTime?` | FR-40 | Makes the 48 h reminder idempotent. |
 
-| ID | Deviation | Why | Traces to |
-|---|---|---|---|
-| D-1 | `CalendarEvent.rsvpReminderSentAt DateTime?` | Stores "once per event" for the reminder. Claimed atomically. | FR-23 |
-| D-2 | `EventAudience @@index([eventId])` and `@@index([type, refId])` | Audience filtering in SQL on the hot path. | NFR-4 |
-| D-3 | Extra notification type `event.holiday_created` | Per-category email default, within the existing preference model. | FR-28 |
-| D-4 | Back-relations on `User` (`calendarEvents`, `eventRsvps`, `calendarFeedToken`) and `onDelete: Cascade` FKs on `EventRsvp.userId` / `CalendarFeedToken.userId` | Prisma requires the relations. Cascade matches the "cascade deletes" instruction in FR-2. | FR-2 |
-| D-5 | Agenda view: 30-day page with next/prev in Community `EventCalendar`, instead of true infinite scroll | Community has no infinite agenda. If QA rejects this, the fallback is MUI `List` + native `IntersectionObserver` below 768 px, fetching the next 30-day window. Rejection triggers the fallback; it is not built up front. | FR-9, ADR-2 |
-| D-6 | `GET /api/me/calendar-feed` returns `url` only when it creates the first token, otherwise `{url:null, hasToken:true, createdAt}`. The page offers "Reset link". | The raw token cannot be re-shown because it is stored hashed. | FR-24, FR-25, NFR-5 |
-| D-7 | Seed a minimal ELECTIVE `ROBOTICS` course (teacher Tom, current year) only if it doesn't exist | The Chess club audience needs it, and it is absent from the seed. | FR-37 |
-| D-8 | Register save on a no-school date requires `holidayOverride: true` in the body, enforced on the server | Makes FR-18's extra confirmation a real rule, not only a UI dialog. | FR-18, NFR-7 |
-| D-9 | `GET /api/public/events` is rate limited per IP (`rateLimit('pubcal:'+ip, 120, 3_600_000)`) and range-capped at 100 days | Only unauthenticated JSON route; reuses the existing limiter. | FR-30, NFR-7 |
+The migration also adds a raw-SQL partial unique index on `ConferenceSlot(eventId, teacherId, bookedForStudentId) WHERE bookedForStudentId IS NOT NULL` (FR-31, ADR-4). If the PRD's model already has an equivalent field, use it and drop the extra column.
 
 ---
 
 ## 2. Component Breakdown
 
-### 2.1 Dependencies and config (do first)
+### 2.1 Data layer: one additive migration `…_prd15_parent_portal` (FR-1, FR-2, NFR-8)
 
-| Change | Ref |
-|---|---|
-| `npm i --save-exact @mui/x-scheduler@9.0.0-beta.15`. Nested override `"@mui/x-scheduler": {"@mui/x-internals": "9.17.0"}`. Verify with `npm ls @mui/x-internals`. If npm doesn't honour the nested override, fall back to a global `9.17.0`. | FR-1, ADR-1 |
-| `import type {} from '@mui/x-scheduler/theme-augmentation'` beside the theme | FR-9, ADR-1 |
-| `npm i -D --save-exact node-ical@0.27.6` | NFR-6 |
-| Before writing scheduler code, the dev phase looks up the Quickstart, Views, Events, Editing, Timezone, Localization and Responsiveness pages via MUI MCP (`useMuiDocs` + `fetchDocs`). If MCP is unreachable, stop and report a blocker. | NFR-2 |
-
-### 2.2 Data model: migration `20261113000000_add_calendar`
-
-```prisma
-enum AudienceType  { SCHOOL STAFF ROLE GRADE_LEVEL SECTION COURSE }   // PRD-12 values, owned here until PRD-12 lands
-enum EventCategory { HOLIDAY TERM_BREAK EXAM EVENT MEETING TRIP SPORTS DEADLINE OTHER }
-enum Recurrence    { NONE WEEKLY MONTHLY }
-enum RsvpResponse  { YES NO MAYBE }
-
-model CalendarEvent {
-  id                 String        @id @default(cuid())
-  title              String
-  description        String?
-  category           EventCategory
-  startAt            DateTime
-  endAt              DateTime
-  allDay             Boolean       @default(false)
-  location           String?
-  roomId             String?
-  recurrence         Recurrence    @default(NONE)
-  recurrenceUntil    DateTime?     @db.Date
-  isNoSchool         Boolean       @default(false)
-  rsvpEnabled        Boolean       @default(false)
-  rsvpDeadline       DateTime?
-  rsvpReminderSentAt DateTime?                                  // D-1
-  isPublic           Boolean       @default(false)
-  createdById        String
-  createdBy          User          @relation("CalendarEventCreator", fields: [createdById], references: [id])
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-  audiences          EventAudience[]
-  rsvps              EventRsvp[]
-  @@index([startAt, endAt])
-}
-
-model EventAudience {
-  id              String        @id @default(cuid())
-  eventId         String
-  event           CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  type            AudienceType
-  refId           String?       // gradeLevelId | sectionId | courseId | Role name (ROLE); null for SCHOOL/STAFF
-  includeStudents Boolean       @default(true)
-  includeParents  Boolean       @default(true)
-  includeTeachers Boolean       @default(true)
-  @@index([eventId])
-  @@index([type, refId])                                        // D-2
-}
-
-model EventRsvp {
-  eventId   String
-  event     CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  response  RsvpResponse
-  guests    Int           @default(0)
-  note      String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  @@id([eventId, userId])
-}
-
-model CalendarFeedToken {
-  userId    String   @id
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
-}
-```
-
-Exact field lists for `EventRsvp` follow PRD §FR-1. The dev agent copies any field this sketch omits from `14-calendar.md` L139-148. Traces to FR-2, FR-3, FR-23, NFR-4, NFR-8.
-
-### 2.3 Server modules
-
-| File | Exports | Notes | Reqs |
-|---|---|---|---|
-| `src/server/announcements/audience.ts` (new, PRD-12 path) | `resolveAudienceUserIds(audiences)`, `isUserInAudience(user, audiences)`, `audienceWhereForUser(user)` (Prisma `EventAudience` filter), `canTargetAudience(user, audience)` | Semantics are those of PRD-12 FR-2. `audienceWhereForUser` precomputes the user's keys once: their grade levels, sections and courses, the same for linked children (parents), the courses they teach and the sections they homeroom (teachers), and their role. It returns an `OR` over `{type, refId, include*}` so filtering happens in SQL (NFR-4). `canTargetAudience`: ADMIN → any. TEACHER → `COURSE` passes `assertCanManageCourse`, or `SECTION` where `homeroomTeacherId === user.id`. Everything else → false. | FR-3, FR-6, FR-7, FR-28, FR-29, FR-23, NFR-4, NFR-7 |
-| `src/server/calendar/recurrence.ts` (new, pure) | `expandOccurrences(event, from, to, tz)` | Steps in school-tz wall clock: +7 days, or +1 month on the same day of month, skipping months that lack the day. Duration is kept in wall-clock terms. Stops at the earlier of `recurrenceUntil` (end of that day, inclusive) and `to`. Occurrence id = `${eventId}:${occurrenceStartISO}`. | FR-15, FR-4, NFR-3, ADR-3 |
-| `src/server/calendar/ical.ts` (new, pure) | `escapeText`, `foldLine`, `vtimezone(tz, from, to)`, `vevent(item, tz)`, `buildCalendar(items, tz, window)` | All-day events use `VALUE=DATE` with an exclusive `DTEND`. Timed one-off events use UTC `Z`. Recurring events use `TZID` + `RRULE:FREQ=WEEKLY|MONTHLY;UNTIL=…Z` (+`BYMONTHDAY`). Deadlines are zero-duration VEVENTs with `URL`. Lines are CRLF and folded at 75 octets. | FR-12, FR-26, NFR-3, NFR-6, ADR-5 |
-| `src/server/calendar/calendar-service.ts` (new) | `getEvent`, `createEvent`, `updateEvent`, `deleteEvent`, `upsertRsvp`, `listRsvps`, `isSchoolDay`, `noSchoolDays(from,to)`, `createTermBreaks(yearId, actor)`, `getOrCreateFeedToken`, `resetFeedToken`, `findUserByFeedToken` | Owns every per-entity check (NFR-7). **Imports nothing from timetable-service** (R2). It reads `prisma.schoolDay` directly, and timetable-service imports *from* it. | FR-5..8, FR-16, FR-20..23, FR-25, FR-33, FR-34, FR-36 |
-| `src/server/calendar/sources.ts` (new) | `getCalendarItems`, `getPublicEvents`, `getUpcomingEventsForUser` | The merge in §3.1. It may import timetable-service, the assignment and quiz services, and calendar-service, because nothing imports it back except routes (R2). | FR-10, FR-11, FR-15, FR-26, FR-30..32 |
-| `src/server/calendar/maintenance.ts` (new) | `sendRsvpReminders(now)` | Selects events with `rsvpEnabled`, `rsvpDeadline ∈ (now, now+48h]` and `rsvpReminderSentAt = null`. For each, claims it via `updateMany({where:{id, rsvpReminderSentAt:null}, data:{rsvpReminderSentAt:now}})`. If `count===1`, resolves the audience minus existing RSVP userIds and calls `notify('event.rsvp_reminder')`. | FR-23, ADR-11 |
-| `src/lib/validators/calendar.ts` (new, client-safe) | `eventInputSchema`, `eventPatchSchema`, `rsvpSchema`, `calendarQuerySchema`, `schoolDayQuerySchema`, `publicEventsQuerySchema` | Rules: title ≤ 150; description ≤ 5000; `endAt ≥ startAt`; `recurrenceUntil` required for WEEKLY/MONTHLY and ≤ start + 1 year; guests 0–5; range `to − from ≤ 100 days`; `sources ⊆ {events, holidays, assignments, quizzes, timetable}`. All-day input is `yyyy-MM-dd` start and inclusive end. The **server** converts it to `[schoolMidnight(start), schoolMidnight(end+1))`. | FR-4, FR-21, FR-32, NFR-8 |
-| `src/lib/dates.ts` (edit) | add `schoolMidnight(dateStr, tz)`, `schoolDateOf(instant, tz)` | Pure and client-safe. The single source of all-day and date conversions. | FR-4, FR-16, NFR-3, ADR-4 |
-
-### 2.4 Edits to existing modules
-
-| File | Change | Reqs |
+| Model / enum | Key fields and constraints | Reqs |
 |---|---|---|
-| `src/server/timetable/timetable-service.ts` | At both `// PRD-14 holidays hook` lines, replace the inline `schoolDay` weekday check with `if (!(await isSchoolDay(date)).isSchoolDay) return [];`. The weekday rule now lives only in `isSchoolDay`, so the old check is deleted, not duplicated. The return type is unchanged. | FR-16, FR-17, NFR-9 |
-| `src/server/attendance/attendance-service.ts` | `getToday` and `getOverview` add `noSchoolReason: string \| null` from `isSchoolDay`. The register save path rejects with `VALIDATION_ERROR` "holidayOverride required" when the date is not a school day and `holidayOverride !== true` (D-8). | FR-18 |
-| Attendance landing + `RegisterForm.tsx` | Landing shows "No classes today — <reason>". The register shows a warning `Alert` banner, and the save button opens `ConfirmDialog` "Record attendance on a holiday anyway", which sends `holidayOverride: true`. | FR-18, NFR-1 |
-| Teacher/student/parent Today views (those consuming `getScheduleForDate`) | When `isSchoolDay` is false, show the holiday name instead of the empty class list. | FR-17 |
-| `AssignmentForm.tsx`, `QuizSettingsPanel.tsx` | On a `dueAt`/`availableUntil` change, `fetch('/api/school-day?date=')`. If false, show a non-blocking `<Alert severity="warning">This date is a holiday (<title>).</Alert>`. Save is unchanged. | FR-19, FR-34 |
-| `src/server/notifications/types.ts` | Add `event.created` (COMMUNICATION, defaultEmail false), `event.holiday_created` (COMMUNICATION, defaultEmail true), `event.updated` (COMMUNICATION, false) and `event.rsvp_reminder` (COMMUNICATION, false). All roles. | FR-23, FR-28, FR-29 |
-| `src/app/api/internal/email/dispatch/route.ts` | Add an isolated `try { await sendRsvpReminders(now) } catch (e) { logger.error(...) }` block, matching the quiz-maintenance block. | FR-23, NFR-9 |
-| `src/config/navigation.ts` | `{ label: 'Calendar', href: '/calendar', icon: CalendarMonth, roles: ALL_ROLES }`. `/account/calendar` gets no sidebar entry, as with the other `/account/*` pages. It is reached from the account area and a "Subscribe" link on `/calendar`. | FR-35 |
-| `prisma/seed.ts` | `seedCalendar()`, idempotent: match by title (+ startAt where it is stable). It seeds the 7 events from FR-37 and the ROBOTICS course if absent (D-7). "Sports day" has no announcement link. Grade 6–8 exams use three `GRADE_LEVEL` audiences. "Grade 7 parents" = `GRADE_LEVEL` with only `includeParents`. | FR-37 |
+| `enum AbsenceNoteStatus`, `AbsenceReason`, `ConsentResponseValue` | As specified in the PRD | FR-1 |
+| `AbsenceNote` | `studentId`, `submittedById`, `fromDate`/`toDate @db.Date`, `partialDay`, `periodIds String[]`, `reason`, `details`, `fileId?`, `status`, `reviewedById?`, `reviewNote?`, `reviewedAt?`. Index `(studentId, status, fromDate)` | FR-1, FR-18, FR-22 |
+| `ConferenceEvent` | `title`, `date @db.Date`, `bookingOpensAt`, `bookingClosesAt`, `slotMinutes` (5–60), eligible grade levels, `createdById` | FR-1, FR-28 |
+| `ConferenceSlot` | `eventId`, `teacherId`, `startsAt`, `endsAt`, `location?`, `bookedByParentId?`, `bookedForStudentId?`, `parentNote?` (≤ 500), **`blocked`**. Unique `(eventId, teacherId, startsAt)`, plus the partial unique index above | FR-1, FR-29 to FR-31 |
+| `ConsentForm` | `title`, `description` (Markdown), `dueAt`, `eventId?` FK to `CalendarEvent`, `createdById`, **`lastRemindedAt?`**, **`dueReminderSentAt?`** | FR-1, FR-36, FR-39, FR-40 |
+| `ConsentAudience` | `formId`, `type AudienceType` (GRADE_LEVEL, SECTION or COURSE, enforced in Zod), `refId` | FR-1, FR-36 |
+| `ConsentResponse` | `formId`, `studentId`, `respondedById`, `value`, `signature`, `comment?`. `@@unique([formId, studentId])` | FR-1, FR-38 |
 
-### 2.5 Route handlers (thin: requireUser/requireRole → Zod parse → service → `ok`/`apiError`)
+Validators live in `src/lib/validators/{absence-notes,conferences,consent-forms}.ts`. Forms and handlers share the same Zod schemas, which enforce the FR-2 limits with `.superRefine`. They also enforce the −14/+60 day window (FR-18) and the rule that a reject requires a note (FR-22). (NFR-7)
 
-| Route | Auth | Service call | Reqs |
-|---|---|---|---|
-| `GET /api/calendar?from&to&sources&studentId` | any user | `getCalendarItems` | FR-10, FR-11, FR-32, NFR-7 |
-| `POST /api/events` | ADMIN, TEACHER | `createEvent` | FR-5..7, FR-14, FR-28, FR-33 |
-| `GET /api/events/:id` | visible to user | `getEvent` (+`myRsvp`, totals, `canEdit`) | FR-12, FR-22, FR-33 |
-| `PATCH /api/events/:id` | creator, ADMIN | `updateEvent` | FR-6..8, FR-29, FR-33, FR-36 |
-| `DELETE /api/events/:id` | creator, ADMIN | `deleteEvent` | FR-8, FR-33, FR-36 |
-| `GET /api/events/:id/ics` | visible to user | `getEvent` → `buildCalendar([event])` | FR-12, FR-33 |
-| `PUT /api/events/:id/rsvp` | audience member | `upsertRsvp` | FR-21 |
-| `GET /api/events/:id/rsvps[?format=csv]` | creator, ADMIN | `listRsvps` → JSON or `csv.ts` | FR-22 |
-| `GET /api/me/calendar-feed` | any user | `getOrCreateFeedToken` | FR-24, FR-25 |
-| `POST /api/me/calendar-feed/reset` | any user | `resetFeedToken` | FR-24, FR-25 |
-| `GET /api/calendar/feed/[token]` (`.ics` stripped from param) | token | `findUserByFeedToken` → `rateLimit` → `getCalendarItems` → `buildCalendar` | FR-26, FR-27, NFR-5, NFR-6 |
-| `GET /api/school-day?date=` (new singular folder; `/api/school-days` untouched) | any user | `isSchoolDay` | FR-16, FR-19, FR-34 |
-| `GET /api/public/events?from&to` | public, IP rate limit | `getPublicEvents` | FR-30, D-9 |
-| `POST /api/academic-years/:id/term-breaks` | ADMIN | `createTermBreaks` | FR-20 |
+### 2.2 Server modules (NFR-6: `src/server/<feature>/`)
 
-Error mapping: not visible → 404 `NOT_FOUND`. Visible but not permitted → 403 `FORBIDDEN`. RSVP after the deadline, or with RSVP disabled → 409 `CONFLICT`. Feed token unknown → plain 404. Feed over the limit → 429 `RATE_LIMITED` + `Retry-After`. `arch-api-contracts` defines the exact shapes.
-
-### 2.6 UI
-
-| Path / component | Contents | Reqs |
+| Module | Responsibilities | Reqs |
 |---|---|---|
-| `src/app/(app)/calendar/page.tsx` (server) → `CalendarView.tsx` (client) | `requirePageUser`. `<EventCalendar>` from `@mui/x-scheduler/event-calendar`: `views={['month','week','agenda']}`, week `startTime:7, endTime:19`, agenda `dayCount:30`, `displayTimezone={tz}`, `readOnly`, `eventCreation={false}`. The default view is month at `useMediaQuery('(min-width:768px)')`, agenda below that. Controlled `events`, refetched on `onVisibleDateChange`/`onViewChange` with plain `fetch` and a small Map cache keyed by `from|to|sources|studentId`. The page opens the drawer when `?event=<id>` is present (notification links). | FR-9, FR-10, NFR-1, NFR-2, NFR-4, NFR-12 |
-| `SourceChips` | MUI `Chip`s: School events · My assignments · My quizzes · My timetable (Week view only) · Holidays. Stored in `localStorage['calendar.sources']`. Holidays = HOLIDAY/TERM_BREAK/`isNoSchool`; School events = everything else, with no overlap. `timetable` is fetched only in Week view. | FR-10 |
-| Child filter (PARENT only) | `Select`: "All children" or one child → `studentId`. Deadline titles get the child's name prefixed by the server. | FR-11 |
-| `EventDrawer` | Right-anchored `Drawer`: title, category `Chip`, time in school tz, location, `MarkdownView` description, audience chips, RSVP controls (`ToggleButtonGroup` + guests `TextField` for parents + note; disabled after the deadline), "Add to my calendar" (`<a href="/api/events/:id/ics" download>`), and edit/delete when `canEdit` (delete via `ConfirmDialog`). Creator/admin see an RSVP `DataTable` + CSV link. | FR-12, FR-21, FR-22, NFR-1 |
-| Deadline click | `onEventEditingStart` → `cancel()` → `router.push(item.href)` | FR-13 |
-| `EventEditorDialog` | "New event" button (ADMIN/TEACHER). React Hook Form + `eventInputSchema`. Fields: title, category (HOLIDAY/TERM_BREAK only for admins), all-day switch, date/time pickers (`@mui/x-date-pickers`), location, `MarkdownEditor`, `AudienceBuilder`, recurrence select + until date, RSVP switch + deadline, and admin-only `isNoSchool`/`isPublic`. Results go through `useToast`. | FR-4..7, FR-14 |
-| `src/components/AudienceBuilder/` (new shared) | Rows of type `Select` + entity `Autocomplete` (grade level / section / course / role) + three include `Checkbox`es. Types are filtered by `canTargetAudience` rules on the client. The server stays authoritative. | FR-3, FR-7, FR-14 |
-| `src/app/(app)/account/calendar/page.tsx` | "Subscribe" card: URL `TextField` (read-only) + copy (`navigator.clipboard`), Google/Apple/Outlook instructions as static text, and "Reset link" behind `ConfirmDialog`. When `url` is null: "Reset link to get a new URL" (D-6). | FR-24, FR-25 |
-| `src/app/(app)/admin/academic-years/[id]/page.tsx` | `requirePageRole('ADMIN')`. Year name, read-only term list (existing terms service), and an "Add term breaks" button + `ConfirmDialog` that shows the number of breaks created via toast. | FR-20 |
+| `src/server/parent/selected-child.ts` | `getSelectedChild(user, searchParams?)`, wrapped in React `cache()`. It resolves in this order: a linked `?studentId=`, then a linked `sh_child` cookie, then the first linked child (`listLinksForParent`). `setSelectedChildCookie(studentId)` validates the link before it writes the cookie (`httpOnly`, `sameSite=lax`, 1 year). | FR-3 to FR-6 |
+| `src/server/parent/overview-service.ts` | One function per card: `getToday`, `getAttendanceSummary`, `getAssignmentsSummary`, `getRecentGrades`, `listUnreadAnnouncements` (returns `[]`), `getUpcomingEvents` (next 5, `CalendarEvent` plus booked meetings), `getTeachers`, `getActionItems` (pending consent plus open conferences). `getChildrenSummary(parent)` builds the `/my-children` cards. Every function reuses the existing timetable, attendance, assignments and gradebook services. | FR-7, FR-9 to FR-16, FR-35 |
+| `src/server/absence-notes/absence-coverage.ts` | **Pure, no Prisma.** `coversRecord(note, { date, periodId })`. A whole-day note covers every period on each date in range. A partial note covers only its `periodIds`. A record with a null `periodId` (daily homeroom) is covered by any note for that date. | FR-23 to FR-25, FR-27, FR-46 |
+| `src/server/absence-notes/absence-notes-service.ts` | `submit` (sets PENDING, then `notify('absence_note.submitted')` to the homeroom teacher and ADMINs), `list` (scoped by role, paginated), `getForReview` (joins existing `AttendanceRecord`s), `review` (see §3.2), `findCovering(studentIds, dateRange, statuses)` for attendance-service, `homeroomTeacherOf(studentId)`. | FR-18 to FR-23, FR-26, FR-41 |
+| `src/server/attendance/attendance-service.ts` (changed in place) | `getRegister`: pre-fill EXCUSED and set `noteId`/`excusable` for each student covered by an APPROVED note. `saveRegister:219`: allow EXCUSED for ADMIN, or when an APPROVED note covers the record. `~:299`: before `notifyStudentAndParents`, drop `attendance.absent` for students covered by a PENDING or APPROVED note. | FR-24, FR-25, FR-27 |
+| `src/server/conferences/conference-slots.ts` | **Pure.** `generateSlots(ranges, slotMinutes)` and `overlaps(a, b)`. | FR-29, FR-31, FR-46 |
+| `src/server/conferences/conferences-service.ts` | `createEvent`/`updateEvent` (ADMIN), which notifies eligible teachers with `conference.slots_requested`. `setAvailability` uses one transaction to delete the teacher's unbooked, unblocked slots and insert the newly generated ones. Booked and blocked slots are never touched. `setSlotBlocked`, `removeSlot` (unbooked only), `listBookable(event, child)`, `book` and `cancel` (§3.3), `teacherDay(event, teacher)`, `listMyMeetings(user, range)`, `slotIcs(slot, user)`. | FR-28 to FR-35 |
+| `src/server/consent-forms/consent-forms-service.ts` | `create`: checks `canTargetAudience` for each audience row, then notifies parents of the resolved audience students with `consent.requested`. Also `listForParent`, `respond` (§3.4), `tracking` (JSON or CSV through `src/server/csv.ts`), `remind` (24 h claim on `lastRemindedAt`, else 429), and `sendConsentDueReminders(now)` (claims `dueReminderSentAt`). | FR-36 to FR-40 |
+| `src/server/consent-forms/signature.ts` | **Pure.** `signatureMatches(typed, fullName)` compares both values after `trim().toLowerCase()`. | FR-37, FR-46 |
+| `src/server/files/contexts.ts` (extended) | `absence-note` resolver grants read access to any linked parent, the homeroom teacher and ADMIN. Uploads allow PDF, JPG and PNG, checked with `file-type`. | FR-18, FR-41 |
+| `src/server/notifications/types.ts` (extended) | `absence_note.submitted` (email false), `absence_note.reviewed` (true), `conference.slots_requested`, `conference.booked`, `conference.cancelled`, `consent.requested` (true), `consent.reminder` (true) | FR-19, FR-26, FR-28, FR-33, FR-36, FR-40, FR-44 |
+| `src/app/api/internal/email/dispatch` (extended) | Adds an isolated try-block that calls `sendConsentDueReminders(now)`. | FR-40 |
+
+**Access helpers (NFR-5).** Every page and handler calls one of these:
+
+- `assertCanViewStudent`, for parent-to-child scoping
+- `assertHomeroomOrAdmin(user, studentId)`, in absence-notes-service, built on `Section.homeroomTeacherId` for the current-year `SectionMember`
+- `assertConsentOwnerOrAdmin(user, form)`
+- `requireRole`
+
+The `sh_child` cookie is never read except through `getSelectedChild`.
+
+### 2.3 API layer (FR-43)
+
+Route handlers are thin. They use `withHandler`, then Zod parse, then a service call, then `ok()`, all under `src/app/api/`. Every list endpoint supports `?page&pageSize≤100&sort&q` (NFR-10).
+
+| Area | Routes | Roles | Reqs |
+|---|---|---|---|
+| Child context | `POST /api/me/selected-child` | PARENT | FR-3, FR-4 |
+| Parent summaries | `GET /api/me/children/summary`, `GET /api/students/:id/overview` | PARENT (linked), staff via `assertCanViewStudent` | FR-7, FR-9 to FR-16 |
+| Absence notes | `GET/POST /api/absence-notes`, `GET /api/absence-notes/:id`, `POST /api/absence-notes/:id/review` | PARENT (own children), TEACHER (homeroom), ADMIN | FR-18 to FR-23, FR-26 |
+| Conferences | `GET/POST /api/conferences`, `GET/PATCH /api/conferences/:id`, `PUT /api/conferences/:id/availability`, `GET /api/conferences/:id/slots`, `PATCH/DELETE /api/conference-slots/:id`, `POST /api/conference-slots/:id/book`, `POST /api/conference-slots/:id/cancel`, `GET /api/conference-slots/:id/ics` | ADMIN (events), TEACHER (own availability), PARENT (book and cancel for the selected or linked child) | FR-28 to FR-34 |
+| Consent forms | `GET/POST /api/consent-forms`, `GET /api/consent-forms/:id`, `POST /api/consent-forms/:id/responses`, `GET /api/consent-forms/:id/tracking[?format=csv]`, `POST /api/consent-forms/:id/remind` | ADMIN, TEACHER (managed courses), PARENT (respond) | FR-36 to FR-39 |
+
+`arch-api-contracts` will write the exact request and response schemas.
+
+### 2.4 UI layer (NFR-4: MUI v9 only, with an mui-mcp lookup per component)
+
+| Route / surface | Kind | Key components | Reqs |
+|---|---|---|---|
+| `shell.tsx` top bar: `ChildSwitcher` | client | `Select`/`Menu` + `UserAvatar`. With one child it shows a name only. Changing the child POSTs to the selected-child route, then calls `router.refresh()`. | FR-3, FR-6 |
+| `src/config/navigation.ts` | config | Parent: My children, Absence notes, Conferences, Consent forms. Teacher: Absence notes (only if homeroom, via a `homeroom` flag passed like `safeguardingLead`) and Conferences. Admin: Conferences, Consent forms, Absence notes. | FR-42 |
+| `/dashboard` | server | If the role is PARENT, `redirect('/my-children')`. | FR-8 |
+| `/my-children` | server | With one child, `redirect` to the overview. Otherwise show summary `Card`s. | FR-7 |
+| `/my-children/[studentId]` | server, streaming | 8 async cards, each in `<Suspense fallback={<LoadingSkeleton/>}>` with a "View all" link | FR-9 to FR-17, NFR-2 |
+| `/my-children/[studentId]/absence/new` | client form | RHF + Zod, `DatePicker`, `RadioGroup` (whole day or periods), a `Checkbox` group from `Period`, `FileUpload` (`absence-note`) | FR-18 |
+| `/my-children/[studentId]/absence` (parent list) | server + `DataTable` | Status `Chip` | FR-20 |
+| `/attendance/absence-notes` | server + `DataTable` | Status and date filters. The detail `Dialog` shows the note, the document link, existing records, and Approve/Reject (reject requires a note). | FR-21, FR-22 |
+| Attendance register (existing) | changed | EXCUSED pre-fill + an "Absence note" `Chip` badge. The EXCUSED option is enabled per `excusable`. | FR-24, FR-25 |
+| `/admin/conferences` (list, plus new/edit form) | server + client form | `DataTable`, `DatePicker`/`DateTimePicker`, `Autocomplete` (grade levels) | FR-28 |
+| `/conferences/[id]/availability` | client | Time-range rows, location `TextField`, a slot list with remove and block `IconButton`s | FR-29 |
+| `/conferences/[id]` (parent) | client | One section per teacher of the child, with `Button`/`ToggleButton` slot buttons and an optional note `Dialog`. A 409 shows a toast and refetches. The parent's own booking has Cancel. | FR-30 to FR-32, NFR-1 |
+| `/conferences/[id]/day` (teacher) | server | `Table` of booked slots, with `@media print` through `sx` | FR-34 |
+| `/conferences` | server | Event list for each role | FR-42 |
+| `/consent-forms`, `/consent-forms/new`, `/consent-forms/[id]` | server + client form | `MarkdownEditor`/`MarkdownView`, an audience picker reusing the announcements audience UI pattern, an `Autocomplete` event link, a respond form (`RadioGroup` + signature `TextField` + comment) | FR-36 to FR-38 |
+| `/consent-forms/[id]/tracking` | server + `DataTable` | Status filter, CSV export link, "Remind non-responders" `Button` (409 or 429 produces a toast) | FR-39 |
+
+Toasts go through `useToast()` and confirmations through `ConfirmDialog`/`Dialog`. Nothing is imported from the banned list.
 
 ---
 
 ## 3. Data Flow
 
-### 3.1 Calendar read (`GET /api/calendar`, the feed, upcoming events)
+### 3.1 Child selection (FR-3 to FR-6)
 
 ```
-route → calendarQuerySchema (≤100 days) → getCalendarItems(user, {from,to,sources,studentId})
-  1. scope   = studentId ? resolveViewedStudent(user, studentId) : getAccessibleStudentIds(user)   (404 for others)
-  2. where   = audienceWhereForUser(user, scope)          // keys computed once
-  3. Promise.all([
-       events:      CalendarEvent where startAt < to AND (endAt > from OR (recurrence≠NONE AND recurrenceUntil ≥ from))
-                    AND (audiences some where) OR createdById=user  (ADMIN: no audience filter)
-                    → expandOccurrences(e, from, to, tz) → split into holidays / events by category+isNoSchool,
-       assignments: existing assignment service, PUBLISHED, dueAt ∈ [from,to), scoped students/courses,
-       quizzes:     existing quiz service, PUBLISHED, availableUntil ∈ [from,to),
-       timetable:   getPersonalTimetable(target) projected onto dates in range, skipping noSchoolDays(from,to)
-     ]) – only for requested sources
-  4. map → CalendarItem union {kind:'event'|'assignment'|'quiz'|'timetable', id, title, start, end, allDay, color, href?, childName?}
-```
-The feed calls the same function with `from=now−30d, to=now+365d`, sources minus timetable, and recurring events **unexpanded**. Instead of occurrences it gets the series rows so it can emit RRULE. The 100-day cap is skipped because the call is internal. Traces to FR-10, FR-11, FR-15, FR-26, FR-31, FR-32, NFR-4, NFR-5.
-
-### 3.2 Event write
-
-```
-POST/PATCH → eventInputSchema → createEvent/updateEvent(user, input)
-  - FR-6: non-admin + (isNoSchool | isPublic | HOLIDAY | TERM_BREAK) → 403
-  - FR-7: every audience must pass canTargetAudience(user, a) → else 403
-  - FR-8: PATCH/DELETE requires createdById===user.id or ADMIN
-  - FR-5: isNoSchool ??= category ∈ {HOLIDAY, TERM_BREAK}
-  - all-day → schoolMidnight conversion (FR-4)
-  - prisma.$transaction: event + replace audiences
-  - after commit:
-      FR-36 audit() if ADMIN && createdById≠user.id (update/delete)
-      FR-28 create: first occurrence within 30 days → notify(HOLIDAY|TERM_BREAK ? 'event.holiday_created' : 'event.created',
-            resolveAudienceUserIds(audiences) − creator, link '/calendar?event=<id>')
-      FR-29 update: startAt|endAt|allDay|location changed AND event upcoming → notify('event.updated') once
+Switcher change → POST /api/me/selected-child {studentId}
+  → assert ParentStudentLink → Set-Cookie sh_child (httpOnly) → router.refresh()
+Any parent page → getSelectedChild(user, searchParams)
+  → ?studentId (if linked) ▸ cookie (if linked) ▸ first linked child
 ```
 
-### 3.3 Audience resolution (PRD-12 FR-2 semantics)
+The cookie is untrusted. A stale or tampered value falls back to the first child and never errors.
 
-| Type | refId | Students (`includeStudents`) | Parents (`includeParents`) | Teachers (`includeTeachers`) |
-|---|---|---|---|---|
-| SCHOOL | null | all active users | | |
-| STAFF | null | ADMIN + TEACHER | | |
-| ROLE | role name | users with that role | | |
-| GRADE_LEVEL | gradeLevelId | `StudentProfile.gradeLevelId = refId` | their `ParentStudentLink` parents | teachers of current-year courses in sections of that grade |
-| SECTION | sectionId | current-year `SectionMember`s | their parents | homeroom teacher + teachers of courses in the section |
-| COURSE | courseId | ACTIVE `Enrollment`s | their parents | `teacherId` + `coTeacherIds` |
-
-Only ACTIVE, non-archived users count. `isUserInAudience` and `audienceWhereForUser` give the same answer as `resolveAudienceUserIds`. A property-style integration test loops over every seed user to check this (PRD-12 test requirement). Traces to FR-3, FR-7, NFR-7.
-
-### 3.4 School-day check
+### 3.2 Absence note lifecycle (FR-18 to FR-27)
 
 ```
-isSchoolDay(date) → d = schoolDateOf(date, tz), isoDay
-  1. SchoolDay[isoDay].isTeaching ?? isoDay ≤ 5   → false, reason 'Not a teaching day'
-  2. isNoSchool events with a SCHOOL audience where startAt < midnight(d+1) AND (endAt > midnight(d) OR recurring)
-     → expandOccurrences within that day → first hit → false, reason 'Holiday: <title>'
-  3. → { isSchoolDay: true, reason: null }
-noSchoolDays(from, to) = one query, same rules, returns Map<date, reason> (used by the timetable source; avoids N calls)
+Parent form ─(Zod)→ POST /api/absence-notes
+  → assertCanViewStudent → create PENDING (+fileId, context absence-note)
+  → notify(absence_note.submitted → homeroom teacher + ADMINs)
+
+Reviewer → POST /api/absence-notes/:id/review {decision, note}
+  → assertHomeroomOrAdmin → $transaction:
+       updateMany AbsenceNote where {id, status: PENDING} (count 0 → 409)
+       if APPROVED: load sessions in [fromDate,toDate] for student's sections;
+                    for each covered (date, periodId) via coversRecord:
+                      existing ABSENT record → EXCUSED, note "Absence note #<id>"
+                      session exists, no record → create EXCUSED record
+  → after commit: audit({ request }) (IP, NFR-3); notify(absence_note.reviewed → linked parents, incl. reviewNote)
+
+Register load (getRegister) → findCovering(APPROVED) → pre-fill EXCUSED + badge (future dates, FR-24)
+Register save (saveRegister) → EXCUSED allowed if ADMIN or APPROVED note covers (FR-25)
+                             → absent notifications filtered by PENDING|APPROVED coverage (FR-27)
 ```
-Callers: timetable-service (FR-17), attendance (FR-18), `/api/school-day` (FR-19, FR-34), timetable source in §3.1. Traces to FR-16..19, FR-34.
 
-### 3.5 RSVP
+Attendance rates recalculate without new code, because `attendanceRate()` counts records when it reads them (FR-23). A rejected note changes no records.
 
-`PUT /api/events/:id/rsvp` → `rsvpSchema` → `upsertRsvp`:
-1. Check the event is visible and `rsvpEnabled`. Otherwise 404 (not visible) or 409.
-2. Require `isUserInAudience`. Otherwise 403.
-3. Require `now < rsvpDeadline`. Otherwise 409.
-4. If the user is not a PARENT, force `guests = 0`.
-5. Upsert on `(eventId, userId)`.
-
-A recurring event has one RSVP for the whole series. The drawer gets `myRsvp` and totals `{yes, no, maybe, guests}` from `GET /api/events/:id`. Creator and admin read the full list via `/rsvps`, or `?format=csv` via `csv.ts`. Traces to FR-21, FR-22.
-
-### 3.6 Reminder job
-
-Cron `POST /api/internal/email/dispatch` → `sendRsvpReminders(now)` → claim → audience − responders → `notify('event.rsvp_reminder', link '/calendar?event=<id>')`. Traces to FR-23.
-
-### 3.7 iCal feed
+### 3.3 Conference booking (FR-28 to FR-33, NFR-1)
 
 ```
-GET /api/calendar/feed/<token>.ics
-  token = param.replace(/\.ics$/, '') → hashToken(token) → CalendarFeedToken by tokenHash (unique) → user ACTIVE?
-    no → 404 text/plain
-  rateLimit('calfeed:'+hash, 60, 3_600_000) → !ok → 429 + Retry-After
-  items = getCalendarItems(user, feed window, series mode)
-  body  = buildCalendar(items, tz, window)   // VTIMEZONE for transitions in window, RRULE for series
-  200 text/calendar; charset=utf-8, Cache-Control: private, max-age=900
+Admin creates event → notify(conference.slots_requested → teachers of eligible grade levels)
+Teacher PUT availability {ranges, location} → generateSlots → $transaction(delete unbooked&unblocked, insert new)
+Parent POST /api/conference-slots/:id/book {studentId, note?}
+  → assertCanViewStudent; now within [bookingOpensAt, bookingClosesAt] else 422
+  → $transaction:
+       overlap check vs parent's other booked slots at that time → 409 "You already have a meeting with <teacher> at <time>"
+       updateMany where {id, bookedByParentId: null, blocked: false} → count 0 → 409 "That slot was just taken"
+       P2002 on (eventId, teacherId, bookedForStudentId) → 409 (one per teacher per child)
+  → notify(conference.booked → parent + teacher, link /api/conference-slots/:id/ics)
+Cancel → before bookingClosesAt; clear booking fields → notify(conference.cancelled)
+Reschedule = cancel + book (client-side, FR-32)
 ```
-Token lifecycle:
-- `getOrCreateFeedToken` creates the row on first use from `randomBytes(32).toString('base64url')`, stores `hashToken(raw)`, and returns the URL once.
-- `resetFeedToken` upserts a new hash, so the old URL returns 404 immediately.
-- No raw token is ever logged.
 
-Traces to FR-24..27, NFR-5, NFR-6, ADR-6, ADR-7.
+### 3.4 Consent forms (FR-36 to FR-40)
 
-### 3.8 Public and dashboard hooks
+```
+Create → canTargetAudience per row → insert form+audiences → resolve audience students → linked parents
+       → notify(consent.requested)
+Respond POST …/responses {studentId, value, signature, comment?}
+  → assertCanViewStudent; now < dueAt else 422; signatureMatches(signature, parent full name) else 422
+  → upsert by (formId, studentId) → audit({ before, after, request })
+Tracking → audience students × responses → Granted/Declined/No response; ?format=csv
+Remind → updateMany where {id, lastRemindedAt null|< now-24h} count 0 → 429 → notify(consent.reminder → non-responders)
+Cron dispatch → forms with dueAt in (now, now+48h], dueReminderSentAt null → claim → notify(consent.reminder)
+```
 
-- `getPublicEvents(from, to)`: `isPublic` events, expanded, returning only public-safe fields (id, title, category, start, end, allDay, location, description). Traces to FR-30.
-- `getUpcomingEventsForUser(user, limit)`: `getCalendarItems(user, now..now+90d, ['events','holidays'])`, sorted, then the first `limit` items. No UI. Traces to FR-31, NFR-11.
+### 3.5 Overview rendering (FR-7 to FR-17, NFR-2)
 
-### 3.9 Term breaks
-
-`POST /api/academic-years/:id/term-breaks` (ADMIN) → `createTermBreaks`:
-1. Order the terms by `startDate`.
-2. For each consecutive pair where `next.start > prev.end + 1 day`, create an all-day TERM_BREAK with `isNoSchool=true` and a SCHOOL audience, from `prev.end+1` (inclusive) to `next.start` (exclusive).
-3. Skip any gap that already has a TERM_BREAK with the same span. This makes the call idempotent.
-4. Return `{ created }`.
-5. Write an `audit()` entry.
-
-Traces to FR-20.
+The server page calls `assertCanViewStudent` once. The header and switcher paint first. The eight cards then stream independently, each doing one or two indexed `select` queries in `overview-service`. `GET /api/students/:id/overview` calls the same functions for API consumers. All "today", window and due-date evaluation uses `schoolToday(now, SchoolSettings.timezone)` (NFR-8).
 
 ---
 
-## 4. Cross-cutting
+## 4. Testing and seed data (FR-45, FR-46, NFR-7)
 
-- **Time (NFR-3, NFR-8).**
-  - Storage is in UTC. Display uses `SchoolSettings.timezone`, read via the existing `getSchoolTimezone()`. No third copy is created.
-  - All-day events run from school-tz midnight with an exclusive end.
-  - Expansion steps in wall-clock time.
-  - The feed uses `VALUE=DATE` for all-day events and `TZID` + VTIMEZONE for series.
-  - The scheduler gets `displayTimezone`.
-  - One DST-week test fixture (America/New_York 2026-11-01, or the seed tz) runs through the expansion, the all-day path and the feed.
-- **Security (NFR-5, NFR-7).**
-  - Every route calls `requireUser`/`requireRole`, except the feed (hashed token) and public events (public fields only, IP limit).
-  - Per-entity checks live in calendar-service.
-  - Students see only themselves, and parents only their linked children (`getAccessibleStudentIds` / `resolveViewedStudent`).
-  - A non-visible event returns 404, so its existence doesn't leak.
-- **Performance (NFR-4).**
-  - A parent with 3 children in month view needs about 6 indexed queries, run in parallel.
-  - The audience is filtered in SQL, and holidays are found with one `noSchoolDays` query.
-  - There is no cache layer. Add one only if the Playwright timing or a measurement exceeds 500 ms.
-- **UI rules (NFR-1, NFR-12).**
-  - Only MUI, icons and MUI X (including the scheduler) are used. Toasts go through `useToast`, side panels through `Drawer`, and confirmations through `ConfirmDialog`/`Dialog`.
-  - English only. The breakpoint is 768 px.
-- **Scope (NFR-11).**
-  - Out of scope: per-occurrence exceptions, room booking (`roomId` is stored and unused), two-way sync, and dashboard or public-site UI.
-- **Tests (NFR-10).**
-  - Unit tests:
-    - `expandOccurrences`: weekly, monthly on the 31st, the until bound, a DST week
-    - `isSchoolDay`: weekday, holiday, recurring no-school
-    - `ical`: escaping `, ; \ \n`, folding, RRULE, VALUE=DATE exclusive end, node-ical parse
-    - all-day conversion
-    - term-break gap math
-    - `canTargetAudience`
-  - Integration tests:
-    - calendar merge per role (admin, teacher, student, parent with 3 children)
-    - feed token reset (old URL 404, new URL 200 and node-ical-valid)
-    - RSVP deadline (409) and parent-only guests
-    - audience resolver parity across seed users
-    - teacher SCHOOL create → 403
-  - Playwright:
-    - an admin creates a holiday, and the student's Today view shows the holiday name
-    - a parent RSVPs
-    - the feed URL returns a valid ICS
-  - `npm run lint && npm run typecheck && npm run test` stays green.
-
-### Risks carried forward
-
-| Risk | Mitigation |
-|---|---|
-| R1 Beta scheduler API drift | Exact pin, MCP lookup before use, and the scheduler used only as a read-only display (ADR-2). The D-5 fallback is pre-agreed. |
-| R2 Import cycle between timetable and calendar | The edges run one way: timetable-service → calendar-service, and sources.ts → (timetable, assignments, quizzes, calendar-service). calendar-service reads teaching weekdays via `prisma.schoolDay` and never imports timetable-service. |
-| R3 DST correctness across 4 code paths | Shared pure helpers in `src/lib/dates.ts` plus one shared DST fixture. |
-| R4 Audience is both the hot path and the security boundary | A single implementation plus the parity test. |
+- **Unit tests (Vitest):**
+  - `absence-coverage`: whole day, partial periods, multi-day, and a null `periodId`
+  - `conference-slots`: generation at range boundaries, `slotMinutes` 5 and 60, and overlap
+  - `signature`: case and whitespace
+- **Integration tests (Vitest + DB):**
+  - Approval converts ABSENT to EXCUSED and leaves PRESENT untouched.
+  - Future-register pre-fill.
+  - Two concurrent `book` calls run through `Promise.all`: exactly one succeeds and the other gets 409.
+  - `attendance.absent` is suppressed while a PENDING note covers the student.
+- **Playwright:**
+  - Absence note, then approve, then the register shows EXCUSED.
+  - Book a conference slot.
+  - Sign a consent form.
+- **Seed:** extend `prisma/seed.ts` in place:
+  - Grade 7: one PENDING and one APPROVED absence note.
+  - "Autumn conferences" 3 weeks out, with Tom and Tina slots 15:00–17:00 at 10 minutes each, two of them booked.
+  - "Science Museum Trip" consent form due in 10 days, linked to a seeded `CalendarEvent`, with about 40% of responses in.
+- **Gates:** `npm run lint && npm run typecheck && npm run test`. Use `logger`, never `console.log`.
 
 ---
 
 ## 5. Requirements Traceability
 
-| Req | Design element(s) |
+| Req | Design element |
 |---|---|
-| FR-1 | §2.1 exact pin `@mui/x-scheduler@9.0.0-beta.15` + scoped override (ADR-1) |
-| FR-2 | §2.2 migration `20261113000000_add_calendar`: enums, 4 models, cascades, `[startAt,endAt]` index |
-| FR-3 | §2.2 `AudienceType` (PRD-12 values); §2.3 `announcements/audience.ts`; §3.3 resolution table |
-| FR-4 | §2.3 `validators/calendar.ts` + `schoolMidnight`; §3.2 all-day conversion |
-| FR-5 | §3.2 `isNoSchool ??= HOLIDAY/TERM_BREAK` in `createEvent` |
-| FR-6 | §3.2 admin-only field check; §2.6 editor hides admin fields |
-| FR-7 | §2.3 `canTargetAudience`; §3.2 check on create/patch |
-| FR-8 | §3.2 creator/ADMIN guard on PATCH/DELETE |
-| FR-9 | §2.6 `CalendarView` with `EventCalendar` views/viewConfig/breakpoint; D-5 agenda fallback |
-| FR-10 | §2.6 `SourceChips` + localStorage; §3.1 `sources` param, holidays/events split |
-| FR-11 | §2.6 parent child filter; §3.1 `studentId` scope + `childName` |
-| FR-12 | §2.6 `EventDrawer`; §2.5 `GET /api/events/:id`, `/ics` |
-| FR-13 | §2.6 deadline click → `router.push(href)` |
-| FR-14 | §2.6 `EventEditorDialog` + `AudienceBuilder` |
-| FR-15 | §2.3 `recurrence.ts` `expandOccurrences`; §3.1 read-time expansion |
-| FR-16 | §2.3 `isSchoolDay`; §3.4 |
-| FR-17 | §2.4 timetable-service hook + Today views |
-| FR-18 | §2.4 attendance `noSchoolReason`, `holidayOverride` (D-8), `RegisterForm` banner/confirm |
-| FR-19 | §2.4 `AssignmentForm` / `QuizSettingsPanel` warning via `/api/school-day` |
-| FR-20 | §2.6 `/admin/academic-years/[id]` page; §2.5 term-breaks route; §3.9 `createTermBreaks` |
-| FR-21 | §2.5 `PUT /api/events/:id/rsvp`; §3.5 `upsertRsvp` rules |
-| FR-22 | §2.5 `/rsvps[?format=csv]`; §2.6 drawer totals + `DataTable` |
-| FR-23 | §2.3 `maintenance.ts`; §2.4 cron hook + type; D-1 `rsvpReminderSentAt` |
-| FR-24 | §2.6 `/account/calendar`; §2.5 me/calendar-feed routes |
-| FR-25 | §3.7 token lifecycle with `hashToken`; D-6 |
-| FR-26 | §2.3 `ical.ts`; §3.7 feed build (window, RRULE, VTIMEZONE, escaping) |
-| FR-27 | §2.5 feed route; §3.7 rate limit + Cache-Control |
-| FR-28 | §2.4 types `event.created` + `event.holiday_created` (D-3); §3.2 notify on create |
-| FR-29 | §2.4 type `event.updated`; §3.2 notify on time/location change |
-| FR-30 | §3.8 `getPublicEvents`; §2.5 `/api/public/events` (D-9) |
-| FR-31 | §3.8 `getUpcomingEventsForUser` |
-| FR-32 | §2.5 `GET /api/calendar`; §3.1 `getCalendarItems`; 100-day cap in validator |
-| FR-33 | §2.5 event CRUD + `/ics` routes |
-| FR-34 | §2.5 `GET /api/school-day` (singular, new folder) |
-| FR-35 | §2.4 `navigation.ts` Calendar entry |
-| FR-36 | §3.2 `audit()` on admin edits/deletes of other users' events |
-| FR-37 | §2.4 `seedCalendar()` + ROBOTICS course (D-7) |
-| NFR-1 | §2.6 MUI-only components; §4 UI rules |
-| NFR-2 | §2.1 MCP lookup gate before scheduler use |
-| NFR-3 | §2.3 wall-clock expansion, `dates.ts` helpers, ical VALUE=DATE/TZID; §4 DST fixture |
-| NFR-4 | §3.1 parallel indexed queries, SQL audience filter, D-2 index; §4 performance |
-| NFR-5 | §3.7 32-byte token, SHA-256 hash; §3.1 shared read path |
-| NFR-6 | §2.1 `node-ical` devDep; §4 parse tests |
-| NFR-7 | §2.5 auth column; §3.3; §4 security |
-| NFR-8 | §2.3 module layout under `src/server/calendar/`; thin routes; Zod; UTC storage |
-| NFR-9 | §1 reuse list; §2.4 edits instead of new helpers |
-| NFR-10 | §4 tests |
-| NFR-11 | §4 scope; §3.8 hooks only |
-| NFR-12 | §2.6 768 px breakpoint, English only |
+| FR-1 | §2.1 migration `…_prd15_parent_portal`, 3 enums and 6 models, 3 flagged extra columns |
+| FR-2 | §2.1 Zod validators `src/lib/validators/*` with `.superRefine` |
+| FR-3 | §2.2 `selected-child.ts`; §2.4 `ChildSwitcher`; `POST /api/me/selected-child` |
+| FR-4 | §3.1 `getSelectedChild` link validation and fallback |
+| FR-5 | §2.2 `getSelectedChild` used by `/assignments`, `/grades`, `/api/me/timetable` and new pages (calendar filter partial, ADR-11) |
+| FR-6 | §2.4 `ChildSwitcher` single-child mode |
+| FR-7 | §2.4 `/my-children`; `getChildrenSummary`; `GET /api/me/children/summary` |
+| FR-8 | §2.4 `/dashboard` redirects PARENT to `/my-children` |
+| FR-9 | `overview-service.getToday` (timetable + SchoolDay holidays) |
+| FR-10 | `overview-service.getAttendanceSummary` + link to the absence form |
+| FR-11 | `overview-service.getAssignmentsSummary` |
+| FR-12 | `overview-service.getRecentGrades` (visibility rules respected) |
+| FR-13 | `listUnreadAnnouncements` returns `[]` and the card shows an `EmptyState` (**partial**, PRD-12 absent) |
+| FR-14 | `overview-service.getUpcomingEvents` (`CalendarEvent` via `audienceWhereForUser` + recurrence) |
+| FR-15 | `overview-service.getTeachers` + Message link (PRD-13 compose) |
+| FR-16 | `overview-service.getActionItems` |
+| FR-17 | §3.5 Suspense per card + "View all" links |
+| FR-18 | §2.4 absence form; `absence-notes-service.submit`; `absence-note` file context |
+| FR-19 | §3.2 `notify(absence_note.submitted)` to homeroom teacher + ADMINs |
+| FR-20 | §2.4 parent absence list; `GET /api/absence-notes` |
+| FR-21 | §2.4 `/attendance/absence-notes`; `getForReview`; `assertHomeroomOrAdmin` |
+| FR-22 | §3.2 `POST /api/absence-notes/:id/review`, PENDING-only conditional update |
+| FR-23 | §3.2 approval transaction + `coversRecord` + `audit` |
+| FR-24 | §2.2 `getRegister` pre-fill + badge |
+| FR-25 | §2.2 `saveRegister:219` EXCUSED rule |
+| FR-26 | §3.2 `notify(absence_note.reviewed)` with reviewNote |
+| FR-27 | §2.2 attendance-service notification filter (~:299) |
+| FR-28 | §2.4 `/admin/conferences`; `createEvent`/`updateEvent`; `conference.slots_requested` |
+| FR-29 | §2.4 availability page; `setAvailability`, `generateSlots`, `blocked` column |
+| FR-30 | §3.3 conditional `updateMany` booking; `/conferences/[id]` |
+| FR-31 | §3.3 overlap check + partial unique index |
+| FR-32 | §3.3 booking-window guard; cancel; reschedule = cancel + book |
+| FR-33 | §3.3 `conference.booked`/`cancelled` + `GET /api/conference-slots/:id/ics` (`ical.ts`) |
+| FR-34 | §2.4 `/conferences/[id]/day`, print CSS |
+| FR-35 | `listMyMeetings`, shown as "My meetings" in overview Upcoming events and Action items (**partial**, no PRD-14 calendar page) |
+| FR-36 | §3.4 create + `canTargetAudience` + `consent.requested`; `/consent-forms/new` |
+| FR-37 | §3.4 respond + `signatureMatches`; overview Action items; `/consent-forms` |
+| FR-38 | `ConsentResponse @@unique(formId, studentId)` upsert + `audit` |
+| FR-39 | §3.4 tracking/CSV; remind with a `lastRemindedAt` 24 h claim |
+| FR-40 | §3.4 `sendConsentDueReminders` in the dispatch cron; `dueReminderSentAt` |
+| FR-41 | §2.2 `absence-note` resolver in `files/contexts.ts` |
+| FR-42 | §2.4 `src/config/navigation.ts` entries + homeroom flag |
+| FR-43 | §2.3 route table, `withHandler`/`requireRole`, standard shapes |
+| FR-44 | §2.2 `NOTIFICATION_TYPES` additions incl. `consent.reminder` |
+| FR-45 | §4 seed extensions |
+| FR-46 | §4 unit, integration and Playwright tests |
+| NFR-1 | §3.3 conditional update → 409 "That slot was just taken" + client refetch |
+| NFR-2 | §3.5 streaming cards, indexed `select` queries |
+| NFR-3 | `audit({ request })` on review, consent respond/change, conference admin edits |
+| NFR-4 | §2.4 MUI-only component map, with an mui-mcp lookup required per component |
+| NFR-5 | §2.2 access helpers on every page and handler; cookie only via `getSelectedChild` |
+| NFR-6 | §2.2 new `src/server/<feature>/` modules; existing files extended in place |
+| NFR-7 | §2.1 shared Zod validators; §4 gates; `logger` |
+| NFR-8 | `@db.Date` fields; `schoolToday` + `SchoolSettings.timezone` for all date rules |
+| NFR-9 | No Announcement or calendar subsystem built; FR-13, FR-35 and FR-5 calendar part degrade (ADR-11) |
+| NFR-10 | §2.3 list endpoints use standard pagination, sort and `q` |

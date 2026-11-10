@@ -1,19 +1,21 @@
 {
-  "ticketId": "SH-14",
-  "timestamp": "2026-11-09T19:12:00Z",
+  "ticketId": "SH-15",
+  "timestamp": "2026-11-10T12:00:00Z",
   "phase": "intake",
   "version": "1.0",
-
   "status": "complete",
-  "requirementsCount": 49,
-  "functionalCount": 37,
-  "nonFunctionalCount": 12,
-  "overallConfidencePct": 96,
+  "requirementsCount": 56,
+  "functionalCount": 46,
+  "nonFunctionalCount": 10,
+  "overallConfidencePct": 95,
   "blockers": [],
   "warnings": [
-    "PRD-12 dependency missing in workspace: no AudienceType enum, audience.ts or audience builder. Architect must decide whether SH-14 adds a minimal PRD-12-compatible version (FR-3, FR-7, FR-14, FR-37 Sports day).",
-    "/admin/academic-years/[id] page does not exist (API only) — FR-20 needs a host page.",
-    "@mui/x-scheduler (beta) must be installed and version-pinned via MUI MCP first (FR-1); node-ical needed as devDependency for NFR-6."
+    "SH-14 (PRD-14 Calendar) dev phase failed per artifacts/run-summary.json: CalendarEvent/EventAudience models exist but no calendar API or pages. FR-14, FR-35 ('My meetings'), FR-5 calendar filter and ConsentForm.eventId depend on it.",
+    "PRD-12 Announcement model absent (only src/server/announcements/audience.ts) — FR-13 overview Announcements card has no data source.",
+    "Shared components live under src/components/<Name>/ not src/components/shared/; student detail route is /students/[id].",
+    "Attendance-service currently restricts EXCUSED to ADMIN (attendance-service.ts:219) — FR-25 must relax this for teachers with an approved note; notification send path (attendance-service.ts ~line 299) is where FR-27 suppression hooks in.",
+    "ConferenceSlot has no 'blocked' field although FR-29 requires blocking individual slots — Architect to decide.",
+    "Previous SH-14 intake artifacts archived to artifacts/intake/.prev-SH-14/."
   ],
   "nextPhase": "architect"
 }
