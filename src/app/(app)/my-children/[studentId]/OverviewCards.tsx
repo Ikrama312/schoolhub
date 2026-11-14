@@ -14,6 +14,7 @@ import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import type { SessionUser } from '@/server/auth/requireRole';
 import {
   getActionItems,
+  getFeesSummary,
   getAssignmentsSummary,
   getAttendanceSummary,
   getRecentGrades,
@@ -23,6 +24,7 @@ import {
   listUnreadAnnouncements,
 } from '@/server/parent/overview-service';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
+import { formatMoney } from '@/lib/money';
 
 /** PRD-15 overview cards (FR-9 to FR-17). Async server components; each streams under its own Suspense. */
 
@@ -226,10 +228,19 @@ export async function TeachersCard({ user, studentId }: CardProps) {
 }
 
 export async function ActionsCard({ user, studentId }: CardProps) {
-  const items = await getActionItems(user, studentId);
+  const [items, fees] = await Promise.all([getActionItems(user, studentId), user.role === 'PARENT' ? getFeesSummary(user, studentId) : null]);
   return (
     <Shell title="Action items" href="/consent-forms" linkLabel="Consent forms">
-      {items.length === 0 ? (
+      {/* PRD-17 FR-40: shown only while the child has an outstanding balance. */}
+      {fees && (
+        <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }} component="section" aria-label="Fees">
+          <ListItemText primary="Fees" secondary={`Outstanding balance ${formatMoney(fees.outstanding, fees.currency)}`} />
+          <Button size="small" variant="outlined" component={Link} href={fees.href}>
+            View fees
+          </Button>
+        </Stack>
+      )}
+      {items.length === 0 && !fees ? (
         <Empty text="You're all caught up." />
       ) : (
         <List dense disablePadding>

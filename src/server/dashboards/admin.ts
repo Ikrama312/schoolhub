@@ -8,6 +8,7 @@ import { isSafeguardingLead } from '@/server/messaging/access';
 import { expandOccurrences } from '@/server/calendar/recurrence';
 import { loadTermPercents } from '@/server/gradebook/batch-grades';
 import { addDateDays, formatInSchoolTz, schoolDateOf, schoolDaysBack } from '@/lib/dates';
+import { outstandingTotal } from '@/server/fees/reports';
 import { cached, currentTerm, TAGS } from './insights';
 
 /** PRD-16 admin dashboard (FR-16–FR-22). Shared aggregates cached 15 min under dashboard:admin. */
@@ -34,12 +35,14 @@ export async function getKpis() {
   const day = await today();
   return cached(
     async () => {
-      const [activeStudents, activeTeachers, now, weekAgo, pendingAbsenceNotes] = await Promise.all([
+      const [activeStudents, activeTeachers, now, weekAgo, pendingAbsenceNotes, outstandingFees] = await Promise.all([
         prisma.user.count({ where: { role: 'STUDENT', status: 'ACTIVE', archivedAt: null } }),
         prisma.user.count({ where: { role: 'TEACHER', status: 'ACTIVE', archivedAt: null } }),
         getOverview(day),
         getOverview(addDateDays(day, -7)),
         prisma.absenceNote.count({ where: { status: 'PENDING' } }),
+        // PRD-17 FR-43
+        outstandingTotal(),
       ]);
       return {
         activeStudents,
@@ -48,9 +51,11 @@ export async function getKpis() {
         attendanceRateDelta: now.rate !== null && weekAgo.rate !== null ? Math.round((now.rate - weekAgo.rate) * 10) / 10 : null,
         registersMissingToday: now.missing.length,
         pendingAbsenceNotes,
+        outstandingFees,
       };
     },
-    ['dash', 'admin', 'kpis', day],
+    // v2: PRD-17 added outstandingFees; a new key so a pre-deploy cache entry is never read.
+    ['dash', 'admin', 'kpis-v2', day],
     ADMIN_CACHE,
   );
 }

@@ -107,6 +107,8 @@ export const updateUserSchema = z.object({
   phone: optionalPhoneSchema,
   /** PRD-13 FR-2: only an ADMIN may be a safeguarding lead (enforced in updateUser). */
   isSafeguardingLead: z.boolean().optional(),
+  /** PRD-17 FR-5: only an ADMIN may be a bursar (enforced in updateUser). */
+  isBursar: z.boolean().optional(),
   profile: z
     .object({
       dateOfBirth: z.coerce.date().refine(isValidStudentAge, {

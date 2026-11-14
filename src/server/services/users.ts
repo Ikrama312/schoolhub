@@ -83,6 +83,7 @@ function toUserDto(user: UserWithProfile) {
     status: user.status,
     phone: user.phone,
     isSafeguardingLead: user.isSafeguardingLead,
+    isBursar: user.isBursar,
     profile: buildProfile(user),
   };
 }
@@ -173,6 +174,7 @@ export async function createUser(input: CreateUserInput) {
 
 export async function updateUser(id: string, input: UpdateUserInput, options: { actorId?: string } = {}) {
   let leadChange: { old: boolean; new: boolean } | null = null;
+  let bursarChange: { old: boolean; new: boolean } | null = null;
   const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.user.findUniqueOrThrow({ where: { id } });
     const emailChanged = input.email !== undefined && input.email !== existing.email;
@@ -186,6 +188,13 @@ export async function updateUser(id: string, input: UpdateUserInput, options: { 
     if (input.isSafeguardingLead !== undefined && input.isSafeguardingLead !== existing.isSafeguardingLead) {
       leadChange = { old: existing.isSafeguardingLead, new: input.isSafeguardingLead };
     }
+    // PRD-17 FR-5 / D-14: same rule for the bursar flag.
+    if (input.isBursar === true && existing.role !== 'ADMIN') {
+      throw new AppError('VALIDATION_ERROR', 'Only administrators can be bursars.', { reason: 'BURSAR_REQUIRES_ADMIN' });
+    }
+    if (input.isBursar !== undefined && input.isBursar !== existing.isBursar) {
+      bursarChange = { old: existing.isBursar, new: input.isBursar };
+    }
 
     await tx.user.update({
       where: { id },
@@ -195,6 +204,7 @@ export async function updateUser(id: string, input: UpdateUserInput, options: { 
         email: input.email,
         phone: input.phone,
         isSafeguardingLead: input.isSafeguardingLead,
+        isBursar: input.isBursar,
       },
     });
 
@@ -230,6 +240,9 @@ export async function updateUser(id: string, input: UpdateUserInput, options: { 
   // NFR-11: old → new in user.update metadata (the route's own audit row lists changed fields).
   if (leadChange) {
     await audit({ actorId: options.actorId, action: 'user.update', entityType: 'User', entityId: id, metadata: { isSafeguardingLead: leadChange } });
+  }
+  if (bursarChange) {
+    await audit({ actorId: options.actorId, action: 'user.update', entityType: 'User', entityId: id, metadata: { isBursar: bursarChange } });
   }
   return result;
 }

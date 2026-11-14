@@ -10,6 +10,7 @@ import { expandOccurrences } from '@/server/calendar/recurrence';
 import { listMyMeetings } from '@/server/conferences/conferences-service';
 import { list as listConsentForms } from '@/server/consent-forms/consent-forms-service';
 import { addDateDays, schoolMidnight, schoolNow } from '@/lib/dates';
+import { outstandingByStudent } from '@/server/fees/reports';
 
 /**
  * PRD-15 child overview (FR-7, FR-9 to FR-16, FR-35, NFR-2). One function per
@@ -19,7 +20,7 @@ import { addDateDays, schoolMidnight, schoolNow } from '@/lib/dates';
  */
 
 const DAY_MS = 86_400_000;
-export const OVERVIEW_CARDS = ['today', 'attendance', 'assignments', 'grades', 'announcements', 'events', 'teachers', 'actions'] as const;
+export const OVERVIEW_CARDS = ['today', 'attendance', 'assignments', 'grades', 'announcements', 'events', 'teachers', 'actions', 'fees'] as const;
 export type OverviewCard = (typeof OVERVIEW_CARDS)[number];
 
 async function schoolTz(): Promise<string> {
@@ -177,6 +178,13 @@ export async function getActionItems(user: AccessUser, studentId: string) {
   ];
 }
 
+// PRD-17 FR-40: null when nothing is owed (the card is hidden). Callers have already checked access.
+export async function getFeesSummary(_user: AccessUser, studentId: string) {
+  const { byStudent, currency } = await outstandingByStudent([studentId]);
+  const outstanding = byStudent.get(studentId);
+  return outstanding && outstanding !== '0.00' ? { outstanding, currency, href: '/fees' } : null;
+}
+
 const CARD_FNS = {
   today: getToday,
   attendance: getAttendanceSummary,
@@ -186,6 +194,7 @@ const CARD_FNS = {
   events: getUpcomingEvents,
   teachers: getTeachers,
   actions: getActionItems,
+  fees: getFeesSummary,
 } satisfies Record<OverviewCard, (user: AccessUser, studentId: string) => Promise<unknown>>;
 
 /** GET /api/students/:id/overview: the same functions the streaming page uses. */

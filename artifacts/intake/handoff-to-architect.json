@@ -1,23 +1,28 @@
 {
-  "ticketId": "SH-16",
-  "timestamp": "2026-11-10T12:00:00Z",
+  "ticketId": "SH-17",
+  "timestamp": "2026-11-10T15:12:00Z",
   "phase": "intake",
   "version": "1.0",
 
   "status": "complete",
-  "requirementsCount": 58,
-  "functionalCount": 46,
+  "requirementsCount": 63,
+  "functionalCount": 51,
   "nonFunctionalCount": 12,
-  "overallConfidencePct": 91,
+  "overallConfidencePct": 92,
   "blockers": [],
   "warnings": [
-    "PRD-12 Announcement model is absent: FR-8 and FR-14 (announcement widgets) and FR-38 (announcement read rate) have no data source. Default is an empty state or an omitted metric.",
-    "PRD-14 has no calendar service or API, but the CalendarEvent model exists. FR-21 (upcoming events) should read the model directly.",
-    "FR-28 (LOW): 'one row per student per term, upserted' conflicts with the trend arrow and the snapshot history. The Architect must choose a history design.",
-    "'Missing' is derived, not stored (SubmissionStatus is SUBMITTED|RETURNED). Reuse the definition in src/server/assignments/reminders.ts with a 30-day window.",
-    "The hourly risk recompute should hook into the existing maintenance pass in src/app/api/internal/email/dispatch/route.ts.",
-    "Shared components live under src/components/<Name>/ (StatCard, DataTable, LoadingSkeleton), not src/components/shared/. The student tab registry is src/config/student-tabs.ts.",
-    "Previous SH-15 intake artifacts are archived in artifacts/intake/.prev-SH-15/."
+    "Invoice.number is non-null @unique but DRAFTs have no number. Default: make it String? @unique and assign it at issue.",
+    "InvoiceReminder (FR-7.2) is missing from the FR-1 schema. The Architect must define it; default is { id, invoiceId, kind, sentAt }.",
+    "FeePlan @@unique([termId, gradeLevelId]) does not cover annual plans (termId NULL). Enforce uniqueness per academicYearId + gradeLevelId in the service.",
+    "Sibling ordering for SIBLING_2ND / SIBLING_3RD_PLUS is ambiguous (FR-11, MEDIUM). Default: StudentProfile.enrollmentDate ascending, grouped by the shared ParentStudentLink.isPrimary parent.",
+    "Money must be Prisma Decimal end to end; AC1/AC2 values (2,235.00, −107.50) are the canonical unit-test fixtures.",
+    "DocumentSequence must be locked with SELECT … FOR UPDATE (raw query) inside the same interactive transaction as the invoice issue or payment save.",
+    "Hook the fee overdue and reminder runs into the existing maintenance pass: src/app/api/internal/email/dispatch/route.ts.",
+    "Shared components live under src/components/<Name>/ (StatCard, DataTable, ConfirmDialog, Toast), not src/components/shared/. The admin KPI service is src/server/dashboards/admin.ts and the parent overview is src/server/parent/overview-service.ts.",
+    "The FINANCE notification category already exists; only the three fees.* type keys need adding.",
+    "The PRD ticket id is SCH-017 and the task id is SH-17; artifacts use SH-17.",
+    "Previous SH-16 intake artifacts are archived in artifacts/intake/.prev-SH-16/."
   ],
+  "figmaDetected": false,
   "nextPhase": "architect"
 }

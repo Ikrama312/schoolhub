@@ -1,160 +1,97 @@
-# Requirements Analysis Notes: ticket SH-16
+# Requirements Analysis Notes: ticket SH-17
 
 Written by `arch-research-reqs` for `arch-design-system`. This is a supporting document, not a primary phase output.
-Source: `artifacts/intake/requirements.json` (2026-11-10T12:00:00Z), PRD-16 Role Dashboards, Reports & Early-Warning Insights. It has 46 FRs and 12 NFRs (58 requirements) at 91% confidence.
-`handoff-to-architect.json` lists **no blockers** and 7 warnings. §3 proposes a default for each open question so that `arch-design-system` can decide.
-The previous SH-15 version of this file was moved to `artifacts/architect/.prev-SH-15/`. The other files in `artifacts/architect/` are still SH-15 outputs until their owning sub-tasks overwrite them.
+Source: `artifacts/intake/requirements.json` (2026-11-10T15:10:00Z), PRD-17 Fees, Invoices & Payment Records. It has 51 FRs and 12 NFRs (63 requirements) at 92% confidence.
+`handoff-to-architect.json` lists **no blockers** and 11 warnings. §3 proposes a default for each open question so that `arch-design-system` can decide.
 
-## 1. Codebase facts verified (2026-11-10)
+Concern tags: **DATA** (schema/migration), **API** (route handler), **SVC** (service logic in `src/server/fees/`), **UI** (page/component), **JOB** (maintenance pass), **AUTH** (permission boundary), **NOTIFY**, **TX** (transaction/locking), **SEED**, **TEST**.
 
-| Fact | Where | Impact |
-|---|---|---|
-| The dashboard page is a placeholder. It already redirects PARENT to `/my-children` | `src/app/(app)/dashboard/page.tsx` | FR-1: replace the body and keep the redirect line |
-| `getAccessibleStudentIds(user)` returns `'ALL'` for ADMIN and `string[]` for TEACHER (active course enrolments + homeroom section members). `assertCanViewStudent` also exists | `src/server/auth/student-access.ts` | NFR-3, FR-7/29/42/43: one scope source. Students outside a teacher's scope get **FORBIDDEN**, not NOT_FOUND |
-| `src/server/dashboards/` and `src/server/reports/` do not exist | — | NFR-6: create both as new feature folders |
-| There is no `unstable_cache` or `revalidateTag` anywhere. Next is **14.2.18** | `package.json` | FR-23/24: `unstable_cache` + `revalidateTag` work on 14.2. There is no `'use cache'` |
-| `SchoolSettings.timezone` and `attendanceAlertThreshold` (default 90) exist. `schoolToday(now, tz)` and `addDays` exist | `schema.prisma:222`, `attendance/attendance-rules.ts` | NFR-7, FR-17, FR-25: reuse these. Do not write new date helpers |
-| `getCurrentTerm(date)` exists. `Term` has start and end dates and belongs to an academic year | `src/server/services/academicYears.ts:96` | FR-3, FR-15, FR-25, FR-33: use it as the "current term" source |
-| Attendance service exports `getOverview(date)` (registers taken/missing + status counts), `getReport(filters)`, `getBelowThreshold()`, `attendanceRate()` and `countStatuses()` | `attendance/attendance-service.ts`, `attendance-rules.ts` | FR-16 (missing registers, today's rate), FR-17, FR-25 (attendance signal), FR-35: reuse these. Check `getReport` filters before you write new SQL |
-| `computeStudentTerm`, `letterFor` and `isUngradedPastDue` are pure. `getStudentGrades(user, studentId, termId)` is the Grades-tab source | `gradebook/grade-calc.ts`, `student-grades-service.ts` | FR-13 "consistent with Grades tab", FR-19, FR-25, FR-36: call the same calc. Calling `getStudentGrades` per student will not scale to 600 students (NFR-1), so use a batch path that runs `computeStudentTerm` |
-| "Missing" is derived. `SubmissionStatus` = SUBMITTED \| RETURNED. `reminders.ts` uses `visibleWhere(now)` + `submissionType != NO_SUBMISSION` + no submission + not exempt. Its lookback is 8 days | `assignments/reminders.ts` | FR-11, FR-25, FR-37: extract one shared `missingWhere(window)` predicate. Risk needs a 30-day window |
-| Parent overview service has `getToday` (timetable plus `isNoSchool` holiday check), `getRecentGrades`, `getAssignmentsSummary` and `getUpcomingEvents` (CalendarEvent + `expandOccurrences`). `listUnreadAnnouncements` is a stub that returns `[]` (ADR-11 precedent) | `src/server/parent/overview-service.ts` | FR-10/11/12: student widgets can call these with `studentId = user.id`. FR-14 follows the same stub precedent. FR-21 copies the events query with a school-wide audience and no meetings |
-| `CalendarEvent` (recurrence, `isNoSchool`) and `expandOccurrences(event, from, to, tz)` exist. There is still no calendar service or API | `schema.prisma:1281`, `calendar/recurrence.ts` | FR-21: read the model directly and expand recurrences. This removes the warning's "non-recurring only" limit |
-| There is no `Announcement` model, only `announcements/audience.ts` | `schema.prisma` | FR-8, FR-14, FR-38: show an empty state or omit the metric |
-| `messaging/conversations.unreadCount(userId)`. `isSafeguardingLead(user)`. `safeguarding.listReports` | `src/server/messaging/` | FR-8 unread count. FR-16 KPI only when `isSafeguardingLead`. For the count, add `count` on open reports. Do not page through the list |
-| `audit({ action: 'auth.login.success' })` is written on login. `User.lastLoginAt` exists. `AuditLog` is indexed on `action` and `[actorId, createdAt]`, but not on `createdAt` alone | `auth/credentials.ts:83`, `schema.prisma:202` | FR-22: filter by action prefix and order by createdAt desc. This may need `@@index([createdAt])` for NFR-1. FR-38 parent sign-ins |
-| `Gender` enum, `Section.homeroomTeacherId`, `TimetableSlot` and `LessonProgress` exist | `schema.prisma` | FR-18, FR-32 (homeroom recipient), FR-39, FR-13/38 |
-| Notification types are a static map `NOTIFICATION_TYPES`. `notify()` is in `notify.ts` | `notifications/types.ts`, `notify.ts` | FR-32: add the key `insights.student_high_risk` (ACADEMIC, TEACHER, email default true) |
-| The cron dispatch route runs isolated try/catch passes on every call. The daily purge uses an in-memory `lastPurgeAt` | `src/app/api/internal/email/dispatch/route.ts` | FR-27: add a risk pass. The "at most once per hour" rule must be stored in the DB (`max(computedAt)`), not in memory, because there are multiple processes |
-| `csv.ts` exports `escapeCsvCell` and `toCsv(columns, rows)` | `src/server/csv.ts` | FR-30, FR-33: reuse these. They already guard against formula injection |
-| `studentTabs` registry, and `navigation` with `roles` + `requires` flags | `src/config/student-tabs.ts`, `navigation.ts` | FR-31, FR-40: append entries only |
-| `@mui/material`, `@mui/x-charts` and `@mui/x-data-grid` are 9.5.0. Prisma is 5.20, Zod 3.23 | `package.json` | NFR-4/5: no new dependencies are needed |
-| There is no `seed:large` script. The seed lives in `prisma/seed.ts` | `package.json` | FR-45/46 |
+Brownfield anchors I checked on disk:
+- `prisma/schema.prisma` has `User.archivedAt`, `StudentProfile.enrollmentDate @db.Date`, `ParentStudentLink` (with `isPrimary`), `AuditLog`, and `SchoolSettings.timezone`. There are no fee models yet.
+- `src/server/http.ts` already defines the `CONFLICT` (409) and `RATE_LIMITED` (429) codes and maps P2002 to CONFLICT. `src/server/rate-limit.ts` exists.
+- `src/server/email/dispatch.ts` already uses raw `FOR UPDATE SKIP LOCKED`, so the pattern for raw row locks inside Prisma is established.
+- The existing helpers are `src/server/audit.ts`, `src/server/csv.ts`, `src/server/notifications/`, `src/server/parent/overview-service.ts`, `src/server/dashboards/admin.ts`, and the maintenance route `src/app/api/internal/email/dispatch/route.ts`.
+- Shared UI lives at `src/components/{DataTable,StatCard,ConfirmDialog,Toast,PageHeader,charts,...}`. Validators live at `src/lib/validators/<feature>.ts`.
 
-## 2. Requirement → architectural concern
-
-Concern codes: **UI** = new UI surface, **SVC** = service/query, **API** = endpoint, **DM** = data-model change, **JOB** = background/cron, **AUTH** = auth/scope boundary, **CACHE**, **CFG** = config registry, **XC** = cross-cutting rule.
-
-### Dashboards shell
+## 1. Functional requirements
 
 | Req | Concern | Notes |
 |---|---|---|
-| FR-1 | UI, AUTH | `/dashboard` page switches on `getCurrentUser().role`. Keep the PARENT redirect. Use three role components under `src/app/(app)/dashboard/_components/` (or similar) |
-| FR-2 | UI | One async server component per widget inside `<Suspense fallback={<LoadingSkeleton/>}>` + a client error boundary with a Retry button (`router.refresh()`). This needs one shared `WidgetCard` wrapper (title, updated-ago, boundary). It is used by ~20 widgets, so the abstraction pays for itself |
-| FR-3 | SVC, XC | Greeting by the hour in `SchoolSettings.timezone` (NFR-7) + `getCurrentTerm().name`. Pure function `greetingFor(now, tz)`, which is unit-testable |
+| FR-1 | DATA | Three new enums. Add a fourth enum, `InvoiceReminderKind` (PRE_DUE_3D, DUE_PLUS_1, OVERDUE_14D, MANUAL), unless FR-3 uses a String. A single migration is enough. |
+| FR-2 | DATA, TX | 11 models with Decimal(10,2) money columns. Make `Invoice.number` and `Payment.receiptNumber` `String? @unique`, because drafts have no number (see §3 Q1). `DocumentSequence` needs a PK of (kind, year) so it can be row-locked. Add the indexes the list filters need: Invoice(status), (termId), (studentId), (dueDate). |
+| FR-3 | DATA, JOB | `InvoiceReminder { id, invoiceId, kind, sentAt }` with `@@index([invoiceId, kind])`. Idempotency for the automatic kinds comes from checking for an existing (invoiceId, kind) row. OVERDUE_14D repeats, so compare against the latest `sentAt` instead of using a unique constraint. |
+| FR-4 | DATA | Two new SchoolSettings columns. The currency is read by every money formatter (FR-35), and the footer is read by the print pages and the parent page (FR-33, FR-39). |
+| FR-5 | DATA, AUTH | `User.isBursar`. It must be added to the session/user payload, or looked up per request, by a new `requireBursar()` guard built on `requireRole('ADMIN')`. |
+| FR-6 | UI, API, SVC | CRUD for `/api/fees/items`. Archiving is a soft delete (archivedAt). A duplicate `code` returns CONFLICT through the P2002 mapping. Admin setup page with tabs. |
+| FR-7 | UI, API, SVC, TX | The plan PUT replaces all lines in one transaction (deleteMany + createMany). The uniqueness check for annual plans goes in the service (§3 Q3). The computed total can be derived on the client and recomputed on the server. |
+| FR-8 | UI, API, SVC | Validate PERCENT as 0–100 and FIXED as > 0 with Zod. `autoRule` is a nullable string enum. |
+| FR-9 | UI, API, SVC | `PUT /api/fees/students/:id/optional-fees` replaces the set for one year. Bulk assign by section loops over the section's enrolled students in one transaction. Only `isOptional` items can be assigned. |
+| FR-10 | UI, API, SVC | `PUT /api/fees/students/:id/discounts` handles manual discounts only. Auto-rule discounts are never assigned by hand. |
+| FR-11 | SVC, TEST | Pure function `detectSiblingRank(student, siblings)`: group by the primary parent, exclude archived students, sort by enrollmentDate ascending then dateOfBirth (§3 Q4), and return a 1-based rank. Rank ≥ 2 → SIBLING_2ND. Rank ≥ 3 → SIBLING_3RD_PLUS. Clarify in the design whether both apply at rank ≥ 3; the default is to apply only the most specific one. |
+| FR-12 | UI, API, SVC | `POST /api/fees/invoices/preview` is read-only and shares a pure `buildInvoiceDraft()` with generate. This is the main path for the NFR-5 performance target: load all students, plans, optional fees and discounts in a few batched queries, never one query per student. |
+| FR-13 | SVC | The skip rule is in §3 Q6. An `Invoice.feePlanId` (nullable) or `source` flag is needed to tell plan invoices from manual ones. |
+| FR-14 | API, SVC, TX, NOTIFY | Generate uses the same builder. "Create and issue" calls the shared `issueInvoice(tx, id)`, which allocates the number, sets dates in the school timezone and sets status. Notify after commit. Chunk large batches, or allocate a whole block of numbers with one locked increment (NFR-5). |
+| FR-15 | SVC, TEST | Pure Decimal function. Percent discounts apply to the non-optional subtotal, then fixed discounts apply, and the total is clamped at 0. Discount lines are stored as negative InvoiceLines. Use `Prisma.Decimal` with `ROUND_HALF_UP`. The AC1/AC2 fixtures are 2,235.00 and −107.50. |
+| FR-16 | TX, DATA, TEST | `nextNumber(tx, kind, year)`: a raw `SELECT … FOR UPDATE` on DocumentSequence (upsert the row first), then increment, inside the caller's interactive transaction. A rollback leaves no gap. The year is the school-timezone year of issue or receipt. |
+| FR-17 | UI, API, SVC | Server-paginated list on the existing DataTable. `paid` and `balance` are derived (total − amountPaid). Sort keys need whitelisting. |
+| FR-18 | API, SVC | The totals row is a separate aggregate (`SUM` of total and amountPaid) over the same `where` builder. "Overdue only" uses status OVERDUE after the on-read sweep (FR-25). `q` matches the student name or the invoice number. |
+| FR-19 | UI, API, SVC | Detail includes lines, allocations joined to payments (reversed allocations marked), and a timeline from AuditLog filtered by entity `Invoice` and the id. |
+| FR-20 | API, SVC | PATCH/DELETE return CONFLICT on any status except DRAFT. A hard delete is allowed only for DRAFT (NFR-2). `POST /issue` → `issueInvoice`. |
+| FR-21 | API, SVC, TX | `/adjust` adds a negative line, requires a reason, writes an audit entry and recomputes. The adjustment cannot push the total below amountPaid (that would create a credit, which is out of scope per NFR-11), so the design must define this guard. `/void` requires a reason and zero non-reversed allocations. |
+| FR-22 | UI | The PAID detail page links to the receipt print page of each allocated payment. No new API is needed beyond detail. |
+| FR-23 | UI, API, SVC | `POST /api/fees/invoices` creates a manual invoice with free-form lines, as a DRAFT or issued straight away. It does not count for the skip rule (FR-13). |
+| FR-24 | SVC, TEST | Single `recomputeInvoice(tx, id)`: `amountPaid = SUM(non-reversed allocations)`, then derive the status from FR-24. Every allocation, reversal and adjustment calls it. This is the NFR-1 invariant point. VOID and DRAFT are terminal or excluded. |
+| FR-25 | JOB, SVC | `markOverdue(now)` is a bulk UPDATE of ISSUED and PARTIALLY_PAID invoices with dueDate < school-today. Call it from the maintenance pass and at the start of the list, detail, dashboard and `/api/me/fees` reads. It is cheap and idempotent. |
+| FR-26 | UI, API, SVC, AUTH | `GET /api/fees/families/:parentId/open-invoices` returns the open invoices of every child linked to that parent, ordered by dueDate. The parentId is checked to be a PARENT user. |
+| FR-27 | UI, API | Zod: amount > 0 as a 2 dp string, method enum, receivedAt, payerName defaulting to the primary parent's name. |
+| FR-28 | SVC, TEST | Pure `autoAllocate(amount, openInvoices)` that fills the oldest due date first. Server validation: Σ allocations = amount, and each allocation ≤ the balance read **inside** the transaction. |
+| FR-29 | SVC | Check amount ≤ the family's outstanding balance inside the transaction and return VALIDATION_ERROR with the formatted message. Nothing is written. |
+| FR-30 | API, SVC, TX, NOTIFY | One transaction: lock and allocate the receipt number, insert the payment and its allocations, `recomputeInvoice` for each invoice, then audit. After commit, notify the family's parents with the receipt URL. The client navigates to the print page. |
+| FR-31 | API, SVC, TX | `/reverse`: set reversedAt and reversalReason, recompute the affected invoices, write an audit entry. Allocation rows are kept and filtered out by `payment.reversedAt IS NULL`. Reversing a payment twice returns CONFLICT. |
+| FR-32 | API, AUTH | ADMIN gets all payments. PARENT gets only payments with ≥ 1 allocation to an invoice of a linked child. Put this filter in one shared `parentScope(userId)` helper. |
+| FR-33 | UI, AUTH | Route `/fees/invoices/[id]/print` sits outside `/admin` because parents use it too. Page-level access check (NFR-4). A4 print styles go through sx `@media print`. |
+| FR-34 | UI, SVC, TEST | Same as FR-33, plus a pure `amountInWords(decimal, currency)` (§3 Q8). |
+| FR-35 | UI | One `formatMoney(value, currency)` helper in `src/lib/` using `Intl.NumberFormat`. Money values reach the client as strings and are formatted without float arithmetic beyond display. |
+| FR-36 | NOTIFY | Add three keys to `src/server/notifications/types.ts` under the existing FINANCE category for the PARENT role, with email on by default. |
+| FR-37 | JOB, NOTIFY, DATA | `sendDueReminders(now)` in the maintenance route. The schedule is computed in the school timezone. Insert the InvoiceReminder row and the notification together so a reminder is never sent twice. Recipients are all linked parents. |
+| FR-38 | API, SVC | `/remind` returns 429 RATE_LIMITED if an InvoiceReminder exists for the invoice within 24 h (any kind, or MANUAL only, which the design should choose). The default is any kind. |
+| FR-39 | UI, API, AUTH | `GET /api/me/fees` aggregates the children's invoices, payments, the summary and the footer. New `/fees` page for parents. |
+| FR-40 | SVC, UI | Extend `src/server/parent/overview-service.ts` with an outstanding balance per child and render a Fees card in `my-children`. |
+| FR-41 | AUTH, UI | Students get 403 on every fee route and have no nav entry. Covered by the guards in FR-45. |
+| FR-42 | UI, API, SVC | `/api/fees/dashboard` (KPIs, weekly trend) and `/api/fees/aging` (buckets, top 10 families). Use SQL aggregates. Aging days are counted from dueDate in the school timezone. The charts use MUI x-charts (NFR-6). |
+| FR-43 | SVC, UI | Add an outstanding total to `getKpis` in `src/server/dashboards/admin.ts` and one more StatCard. |
+| FR-44 | API | Three CSV endpoints through `src/server/csv.ts`. The invoices export reuses the FR-18 `where` builder. Read-only admins are allowed. |
+| FR-45 | AUTH | Guards: `requireRole('ADMIN')` for reads and `requireBursar()` for writes. PARENT reads go through `parentScope`. TEACHER and STUDENT get 403. Every write route also needs an explicit test for a non-bursar admin. |
+| FR-46 | UI | Add entries to `src/config/navigation.ts`: admin Fees with subpages, parent Fees. |
+| FR-47 | SEED | Extend the existing seed script so Alice gets isBursar, set the settings, add the items, and add the Sem 1 plans for G6–8. |
+| FR-48 | SEED | The seed must go through the same service functions (issue, payment) so the numbers and amountPaid stay consistent. The 3 OVERDUE invoices need back-dated due dates. |
+| FR-49 | TEST | Unit tests for the pure functions in FR-11, 15, 24, 28 and 34. Keeping these as pure functions is a design requirement. |
+| FR-50 | TEST | Integration tests against the DB: parallel `nextNumber`, reversal recompute, and a randomized pay/reverse sequence asserting that amountPaid = Σ allocations (NFR-1). |
+| FR-51 | TEST | One Playwright spec covering the bursar flow, then the parent flow. |
 
-### Teacher widgets (all scoped by `getAccessibleStudentIds` / taught courses, NFR-3)
-
-| Req | Concern | Notes |
-|---|---|---|
-| FR-4 | SVC, UI | Today's TimetableSlots for the teacher's courses + attendance session existence per (course, period, date). `getToday(user)` in attendance-service probably already covers this. Check it before writing a new query. Now/Next comes from period times in the tz |
-| FR-5 | SVC | Union of ungraded submissions (no grade on the linked GradeItem) and quiz attempts needing manual grading in the teacher's courses. Count + oldest 5 |
-| FR-6 | SVC | Assignments/quizzes due within 7 days. Submission rate = submissions / active enrolments. Use one grouped query, not N+1 |
-| FR-7 | SVC, AUTH | Read `StudentRiskSnapshot` filtered by accessible ids, order High > Medium, take 5. Do not compute live |
-| FR-8 | SVC | `messaging.unreadCount` + announcements empty state (§3 Q1) |
-| FR-9 | UI | Static links. No data. Check that the target routes exist (new announcement route is absent → omit or disable it, §3 Q1) |
-
-### Student widgets (scope = self)
-
-| Req | Concern | Notes |
-|---|---|---|
-| FR-10 | SVC | Reuse the parent `getToday(user, user.id)`, which already handles `isNoSchool` holidays |
-| FR-11 | SVC | Due in the next 7 days + missing items first. Share the missing predicate with FR-25/37 |
-| FR-12 | SVC | Reuse the parent `getRecentGrades` |
-| FR-13 | SVC | `getStudentGrades` (same as the Grades tab) + LessonProgress ratio + first incomplete visible lesson (`isLessonVisible`) |
-| FR-14 | SVC | Empty state (§3 Q1) |
-| FR-15 | SVC, UI | Term attendance rate via `countStatuses`/`attendanceRate` over the term range. Display with x-charts `Gauge` |
-
-### Admin widgets (ADMIN, cached)
-
-| Req | Concern | Notes |
-|---|---|---|
-| FR-16 | SVC, CACHE, AUTH | Counts: active students/teachers, `getOverview(today)` rate + missing registers, the same weekday −7 days for the delta, pending absence notes (`absence-notes` service), safeguarding count **only if** `isSafeguardingLead`. The cache key must vary on lead status, or the safeguarding count must be fetched uncached separately |
-| FR-17 | SVC, CACHE, UI | Daily rate for the last 30 **school days**. A school day is a date with ≥1 attendance session. That is simpler and more accurate than combining calendar + weekday logic. One `groupBy` on session date × status. `LineChart` + reference line at the threshold |
-| FR-18 | SVC, CACHE, UI | Active students grouped by current-year section → grade level × gender. Stacked `BarChart` |
-| FR-19 | SVC, CACHE, UI | Batch `computeStudentTerm` for all students in the current term → histogram in 10 % buckets, plus average and median. This is the most expensive admin query. See §4 |
-| FR-20 | SVC | Group snapshots by level and reason. Reads the snapshot table only |
-| FR-21 | SVC | The next 5 school-wide `CalendarEvent` occurrences via `expandOccurrences` (§3 Q2) |
-| FR-22 | SVC | `AuditLog` where `action startsWith user./report_card./settings.`, latest 10, actor joined |
-
-### Caching
-
-| Req | Concern | Notes |
-|---|---|---|
-| FR-23 | CACHE | `unstable_cache` wrappers in `src/server/dashboards/insights.ts`. Key = role scope (ADMIN: `'all'`; TEACHER: userId). Tags: `dashboard:admin`, `dashboard:teacher:<id>`, `insights:risk`. `revalidate` 900 s; risk 3600 s. Cached values must be JSON-serialisable, so convert Decimal/Date to number/string |
-| FR-24 | CACHE, API, UI | Return `computedAt` from each cached function → "Updated N min ago". `POST /api/dashboard/refresh` → `revalidateTag(...)` + `recomputeRisk({ force: true })`. Audit this admin action |
-| NFR-12 | CACHE, JOB | Satisfied by FR-23 (60 min) + FR-27 (hourly recompute) |
-
-### Early-warning risk
-
-| Req | Concern | Notes |
-|---|---|---|
-| FR-25 | SVC | `risk.ts` has two parts. (a) Pure `scoreSignals({ attendancePct, coursePcts, missingCount }, threshold)` → per-signal level. (b) A batch loader that collects the three inputs for all ACTIVE students in the current term in a few grouped queries. Thresholds: attendance `< threshold` → Medium, `< 80` → High. Grades: any `< 60` → Medium, `≥2 < 60` or any `< 50` → High. Missing: 3–4 → Medium, `≥5` → High |
-| FR-26 | SVC | Pure `combine(levels)`: any High or ≥2 Medium → High, exactly 1 Medium → Medium, otherwise none. Keep it in the same pure module as FR-25 for the NFR-9 unit tests |
-| FR-27 | DM, JOB | New model + migration. Unique `(studentId, termId)`. Indexes on `(termId, level)`. Add `RiskLevel` enum (HIGH, MEDIUM, NONE). Hook into the dispatch route as an isolated pass, gated on `max(computedAt) < now − 1h` |
-| FR-28 | DM | Conflicts with the "one row" rule. See §3 Q3 |
-| FR-29 | UI, AUTH, SVC | Page `/insights/at-risk` (ADMIN, TEACHER). Server-side scope filter. Use the shared `DataTable`. Reason chips are formatted from `reasons` JSON. "Message parents" = link to the existing new-conversation flow (PRD-13) |
-| FR-30 | SVC, API | The same service function serves the table and the CSV (`toCsv`), so their rows match. Filters: level, reason, grade level, section |
-| FR-31 | CFG, UI, AUTH | Add `{ key: 'insights', roles: ['ADMIN','TEACHER'] }` to `studentTabs` + page `/students/[id]/insights` with `assertCanViewStudent` |
-| FR-32 | JOB, XC | On upsert, if prev ∈ {none, MEDIUM} and new = HIGH, and there was no notification for this student in 14 days → `notify()` the homeroom teacher. A `lastHighNotifiedAt` column on the snapshot gives a DB-side 14-day claim, with no Notification table scan. If there is no homeroom teacher, skip and log |
-
-### Reports centre
+## 2. Non-functional requirements
 
 | Req | Concern | Notes |
 |---|---|---|
-| FR-33 | UI, SVC, API | `/admin/reports` with year/term selectors (`x-date-pickers` for ranges) and one sub-route per report. Use a `REPORTS` registry in `src/server/reports/index.ts`: `key → { schema (Zod), run(filters), columns }`. The page, the API and the CSV all use that one registry, which also makes FR-44's 404 for unknown keys trivial |
-| FR-34 | SVC | Enrollment: SectionMember/grade/gender groupings. Monthly new/archived from `createdAt`/`archivedAt` |
-| FR-35 | SVC | Reuse `attendance-service.getReport`/aggregate. Group by grade/section/course + daily trend + bottom 20 |
-| FR-36 | SVC | Batch `computeStudentTerm` grouped by course and subject + `letterFor`. Section comparison within the same grade × subject. Shares the batch loader with FR-19/FR-25 |
-| FR-37 | SVC | On-time/late = submission `submittedAt` vs `dueAt`. Missing = shared predicate. Group by course and teacher |
-| FR-38 | SVC | LessonProgress completion by course. Parent sign-ins = distinct `actorId` on `auth.login.success` in the last 7 and 30 days (and/or `lastLoginAt`). Announcement read rate is omitted (§3 Q1) |
-| FR-39 | SVC | Per teacher: courses, distinct students, TimetableSlot count/week, grading backlog (reuse the FR-5 query) |
+| NFR-1 | SVC, TX, TEST | Decimal end to end. The API transports money as strings. Only `recomputeInvoice` writes amountPaid. |
+| NFR-2 | SVC, DATA | No hard delete for issued invoices or payments (FR-20, FR-21, FR-31). Every mutation calls `audit()` with before/after inside the transaction. |
+| NFR-3 | TX | Fully covered by FR-16 if every issue path (generate, issue, manual, seed) goes through `nextNumber`. |
+| NFR-5 | SVC | Batch the reads, use createMany for lines, and issue in chunks inside transactions of a bounded size. The main risk is one transaction per student running into the Prisma interactive transaction timeout. |
+| NFR-4, NFR-7–NFR-10, NFR-12 | AUTH, API, UI | Conventions: thin Zod handlers under `src/app/api/fees/**` and `src/app/api/me/fees`, service in `src/server/fees/`, validators in `src/lib/validators/fees.ts`, MUI only, logger, school timezone through the existing helpers, A4 print through sx. |
+| NFR-6 | UI | The x-charts and x-data-grid docs must be checked through the MUI MCP server during dev. Out of scope for this phase. |
+| NFR-11 | SVC | Guards are needed against credits (overpayment FR-29, and the adjustment going below amountPaid in FR-21). No gateway or tax code. |
 
-### Navigation, API, seed
+## 3. Open questions → proposed defaults
 
-| Req | Concern | Notes |
+| # | Question | Proposed default |
 |---|---|---|
-| FR-40 | CFG | Add 'Reports' (ADMIN) and 'At-risk students' (ADMIN, TEACHER) after 'Dashboard' |
-| FR-41 | API, AUTH | `GET /api/dashboard/{teacher,student,admin}` use the same service functions as the widgets, plus `requireRole`. Refresh uses POST, ADMIN only |
-| FR-42 | API, AUTH | Zod query schema. **Intersect** the filtered ids with accessible ids so filters cannot widen scope. `?format=csv` → `text/csv` with a Content-Disposition header |
-| FR-43 | API, AUTH | `assertCanViewStudent`, then the snapshot + current signal values |
-| FR-44 | API | `reportKey` validated against the registry keys. Unknown key → 404 `NOT_FOUND` |
-| FR-45 | XC | `prisma/seed-large.ts` + `"seed:large"` script. Use a seeded PRNG (a small mulberry32, no new dependency) |
-| FR-46 | XC | The default seed builds ≥3 students per level. Tests should assert this by running `risk.ts` on the seed, not by hard-coding snapshot rows |
-
-### Non-functional
-
-| Req | Concern | Notes |
-|---|---|---|
-| NFR-1 | CACHE, SVC | Budget: 600 students × ~8 courses. Avoid per-student queries in risk, the grade distribution and reports. See §4 |
-| NFR-2 | UI, XC | Every chart needs an `aria-label` summary built from the data + a visually hidden table. Use the MUI `visuallyHidden` util from `@mui/utils`, which comes in with material. Risk badges always show text (High/Medium), never colour alone |
-| NFR-3 | AUTH | Enforce in the services (take `AccessUser`), not only in pages. Cached teacher data must be keyed per teacher id. **Never** share a teacher cache entry across users |
-| NFR-4 | XC | MUI only: StatCard, DataTable, Gauge/LineChart/BarChart, Chip, Skeleton |
-| NFR-5 | XC | The mui-mcp lookup is a dev/QA-phase process step and has no architectural impact. Flag it so dev-planning schedules it |
-| NFR-6 | XC | Validators go in `src/lib/validators/dashboards.ts`, `insights.ts` and `reports.ts`. Use thin handlers and standard response shapes. Paginate the at-risk list |
-| NFR-7 | XC | All windows (today, 7 days, 30 days, 30 school days) are computed from `schoolToday(now, tz)` |
-| NFR-8 | XC | Reuse is listed per row above. **Do not** fork the attendance/gradebook calcs |
-| NFR-9 | XC | Pure `risk-rules.ts` → boundary unit tests. Report integration tests on the seed. Playwright + axe per role |
-| NFR-10 | XC | Use `logger`, not `console.log` |
-| NFR-11 | XC | Rule-based only. No layout editor. No scheduled report emails |
-
-## 3. Open questions — proposed defaults for arch-design-system
-
-1. **Announcements (FR-8, FR-14, FR-38): proposed default is an empty state.** Render `EmptyState` with "Announcements not available yet", following the same stub pattern as `parent/overview-service.listUnreadAnnouncements` (ADR-11). Leave the announcement read rate out of the engagement report and add a note row. Hide 'New announcement' in FR-9 because the route does not exist. Record this as a dependency gap on PRD-12.
-2. **Upcoming events (FR-21): read `CalendarEvent` directly.** Copy the `getUpcomingEvents` approach from the parent overview service: school-wide audience, `expandOccurrences`, next 5. Recurrence expansion already exists, so recurring events can be included.
-3. **Snapshot history (FR-28): proposed option is (a), no new table.** Keep the unique `(studentId, termId)` row and add `previousLevel RiskLevel?` and `history Json` (an array capped at 10 entries of `{ level, reasons, computedAt }`, appended only when the level or the reasons change). That covers the trend arrow (level vs `previousLevel`) and the "short history" (FR-31) while keeping the "one row per student per term" rule in FR-27. Option (b), a `StudentRiskSnapshotHistory` table, is cleaner for analytics, but no requirement asks for it.
-4. **Missing-work definition (FR-11/25/37):** published (`visibleWhere`), `dueAt` within the window and in the past, `submissionType != NO_SUBMISSION`, no submission, no `GradeExemption`, student actively enrolled. Extract this into one shared function used by reminders, risk, the student widget and the completion report.
-5. **No-data students: no signal.** If a student has no attendance records, the attendance signal is none. If a course has a null percent, it is ignored.
-6. **"Their students":** `getAccessibleStudentIds` for the dashboard and list scope. The FR-32 notification goes **only** to the homeroom teacher (`Section.homeroomTeacherId` of the current-year section).
-7. **New (not in intake):** the cache key for the FR-16 safeguarding KPI. Fetch that count outside the shared admin cache, per user, because it is cheap. A shared cached value would otherwise leak the count to admins who are not safeguarding leads.
-8. **New:** with several cron processes, two could run the hourly recompute at the same time. Upserts are idempotent. The FR-32 notification needs an atomic claim (`updateMany where lastHighNotifiedAt < now−14d`), the same claim pattern that `reminders.ts` already uses.
-
-## 4. Performance hot spots (NFR-1)
-
-| Hot spot | Risk | Suggested approach |
-|---|---|---|
-| Grades for every student (FR-19, FR-25, FR-36) | `getStudentGrades` in a loop = 600 × several queries | One batch loader: load the grade items, grades, categories and overrides for the current term in ~5 queries, then run `computeStudentTerm` in memory. Share it across the three uses. FR-19 is cached for 15 min. Risk reads it only during recompute |
-| Attendance aggregates (FR-16/17/25/35) | Row scans over a year of records | `groupBy` on `(studentId, status)` and on `(session.date, status)`. Check the indexes on `AttendanceRecord(studentId)` and `AttendanceSession(date)` |
-| Missing work (FR-11/25/37) | Anti-join for each student × assignment | One query over the assignments in the window × active enrolments, minus submissions and exemptions, counted in memory |
-| AuditLog feed (FR-22) | No `createdAt` index | Add `@@index([createdAt])` if the seed:large measurement shows a slow query |
-| At-risk list (FR-29/42) | — | Read snapshot rows only. Paginate them and include the student/section joins |
+| Q1 | Draft invoice numbers | `number String? @unique`, assigned at issue. `receiptNumber` stays non-null, because a payment always gets its number on save. |
+| Q2 | InvoiceReminder shape | A `kind` enum as in FR-3. Idempotency is checked in the service. |
+| Q3 | Annual plan uniqueness | Uniqueness of (academicYearId, gradeLevelId, termId) is checked in the service (NULL-safe), plus the PRD's DB unique. |
+| Q4 | Sibling order | enrollmentDate ascending, then dateOfBirth (older first). Archived students are excluded. |
+| Q5 | createdAt and updatedAt | Add them to all fee models. |
+| Q6 | Skip rule | A non-VOID invoice with `feePlanId` set for the same student and term (annual: same year with termId NULL). Manual invoices do not cause a skip. |
+| Q7 | Throttle code | 429 RATE_LIMITED (the code already exists in `http.ts`). |
+| Q8 | Amount in words | USD wording; for other currencies, use the ISO code as the unit name ("… EUR and 00/100"). |
+| Q9 (new) | Adjustment below amountPaid | Reject with VALIDATION_ERROR, because it would create a credit balance (NFR-11). |
+| Q10 (new) | Sibling rule at rank ≥ 3 | Apply only SIBLING_3RD_PLUS when such a discount exists; otherwise fall back to SIBLING_2ND. |

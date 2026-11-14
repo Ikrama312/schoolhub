@@ -10,6 +10,8 @@ import { autoSubmitExpiredAttempts, sendAfterCloseResultsReleased } from '@/serv
 import { processPendingMessageEmails } from '@/server/messaging/email';
 import { sendConsentDueReminders } from '@/server/consent-forms/consent-forms-service';
 import { recomputeRiskSnapshots } from '@/server/dashboards/risk';
+import { markOverdue, sendInvoiceReminders } from '@/server/fees/maintenance';
+import { feeSettings } from '@/server/fees/ledger';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,6 +82,17 @@ export const POST = withHandler(async (request: Request) => {
     logger.error('Risk snapshot recompute failed', { message: error instanceof Error ? error.message : String(error) });
   }
 
+  // PRD-17 FR-25/FR-37: overdue sweep then reminders, isolated; both idempotent (InvoiceReminder unique key).
+  const fees = { overdue: 0, remindersSent: 0 };
+  try {
+    const now = new Date();
+    fees.overdue = (await markOverdue((await feeSettings(now)).today)).updated;
+    fees.remindersSent = (await sendInvoiceReminders(now)).sent;
+    if (fees.overdue || fees.remindersSent) logger.info('Fee maintenance ran', fees);
+  } catch (error) {
+    logger.error('Fee maintenance failed', { message: error instanceof Error ? error.message : String(error) });
+  }
+
   if (Date.now() - lastPurgeAt > DAY_MS) {
     lastPurgeAt = Date.now();
     try {
@@ -94,5 +107,5 @@ export const POST = withHandler(async (request: Request) => {
       logger.error('Orphan file purge failed', { message: error instanceof Error ? error.message : String(error) });
     }
   }
-  return ok({ ...result, messageEmails, consentReminders, riskSnapshots });
+  return ok({ ...result, messageEmails, consentReminders, riskSnapshots, fees });
 });

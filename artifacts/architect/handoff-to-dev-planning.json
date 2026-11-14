@@ -1,11 +1,11 @@
 {
-  "ticketId": "SH-16",
-  "timestamp": "2026-11-10T14:35:00Z",
+  "ticketId": "SH-17",
+  "timestamp": "2026-11-10T16:05:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "status": "complete",
-  "endpointCount": 7,
+  "endpointCount": 39,
   "blockers": [],
   "artifacts": [
     "artifacts/architect/tech-stack-decisions.md",
@@ -14,14 +14,14 @@
     "artifacts/architect/api-contracts.json"
   ],
   "notes": [
-    "There are 7 HTTP endpoints, all new: GET /api/dashboard/{teacher,student,admin}, POST /api/dashboard/refresh, GET /api/insights/at-risk, GET /api/students/:id/insights and GET /api/reports/:reportKey. There are also 4 non-HTTP contracts: recomputeRiskSnapshots, the insights.student_high_risk notification type, the pure risk-rules, and missingWork.",
-    "The base path is /api, not /api/v1. Envelopes, paginated() meta and error codes come from src/server/http.ts. CSV goes through src/server/csv.ts toCsv and ignores pagination.",
-    "Error policy: an unknown reportKey returns 404. assertCanViewStudent returns 403 for a denied ADMIN/TEACHER (existing helper behaviour). Out-of-scope filters on /api/insights/at-risk return an empty 200 list, never 403.",
-    "Decisions made beyond system-design: the at-risk list meta adds computedAt; refresh returns studentsComputed and skipped; the admin payload omits openSafeguardingReports unless the caller is a safeguarding lead; the reportFilters block fixes per-report filters and row shapes.",
-    "Dependency gaps carried from system-design (not blockers): announcements (FR-8, FR-14, FR-38) return [] with announcementsAvailable=false, and FR-21 reads CalendarEvent directly.",
-    "src/lib/validators/{dashboards,reports}.ts should mirror the query shapes in api-contracts.json.",
-    "artifacts/architect/threat-model-notes.json is still the stale SH-14 file. No architect sub-task owns it, so treat it as out of date.",
-    "The SH-15 api-contracts.json and handoff were moved to artifacts/architect/.prev-SH-15/."
+    "39 HTTP endpoints: 38 new routes under /api/fees/** plus /api/me/fees, and 1 existing route extended (PATCH /api/users/:id gains isBursar). Non-HTTP contracts: maintenance hooks in the existing internal dispatch route, 3 fees.* notification types, the getKpis and parent overview extensions, and the pure fee-math/money functions.",
+    "Money is always a 2 dp string and every money payload carries currency. Base path is /api. Envelopes, errors and pagination come from src/server/http.ts.",
+    "Error policy: state violations return 409 CONFLICT, the manual reminder throttle returns 429 RATE_LIMITED, a non-bursar write returns 403, an out-of-scope or unknown id returns 404, and an overpayment returns 400 with the exact FR-29 message.",
+    "GET /api/fees/invoices returns the filtered totals in meta.totals (FR-18). paginated() is typed with meta { page, pageSize, total }, so pass the meta object through a variable or widen that type. Do not hand-roll the envelope.",
+    "Ids with no HTTP surface (covered by system-design instead): FR-1, FR-2, FR-4 (schema), FR-46 (navigation), FR-47, FR-48 (seed), FR-50, FR-51, NFR-10 (tests) and NFR-6 (MUI-only UI).",
+    "Open assumption carried from system-design D-12: optional fees are billed on every plan invoice in the year. Confirm with the PRD owner; the change point is buildInvoiceDrafts.",
+    "artifacts/architect/threat-model-notes.json (SH-17) is addressed by system-design §3.8. The contracts add Zod bounds on every input and the 404-on-scope policy.",
+    "The SH-16 api-contracts.json and handoff were moved to artifacts/architect/.prev-SH-16/."
   ],
   "nextPhase": "dev-planning"
 }

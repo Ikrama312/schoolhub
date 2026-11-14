@@ -1,8 +1,8 @@
 {
-  "ticketId": "SH-16",
-  "timestamp": "2026-11-10T05:22:37.307Z",
+  "ticketId": "SH-17",
+  "timestamp": "2026-11-10T10:56:40.305Z",
   "phase": "dev",
   "version": "1.0",
-  "count": 3,
-  "firstPassAccepted": false
+  "count": 1,
+  "firstPassAccepted": true
 }

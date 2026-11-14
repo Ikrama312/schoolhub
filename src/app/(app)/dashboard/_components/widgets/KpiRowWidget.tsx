@@ -3,6 +3,7 @@ import { StatCard } from '@/components/StatCard/StatCard';
 import { UpdatedAgo } from '@/components/Widget/Widget';
 import type { AccessUser } from '@/server/auth/student-access';
 import { getKpis, getSafeguardingCount } from '@/server/dashboards/admin';
+import { formatMoney } from '@/lib/money';
 
 /** PRD-16 FR-16. The safeguarding card is a separate, uncached call and only for leads. */
 export async function KpiRowWidget({ user }: { user: AccessUser }) {
@@ -24,6 +25,8 @@ export async function KpiRowWidget({ user }: { user: AccessUser }) {
     },
     { label: 'Registers missing today', value: k.registersMissingToday },
     { label: 'Pending absence notes', value: k.pendingAbsenceNotes },
+    // PRD-17 FR-43
+    { label: 'Outstanding fees', value: formatMoney(k.outstandingFees.amount, k.outstandingFees.currency) },
     ...(safeguarding === null ? [] : [{ label: 'Open safeguarding reports', value: safeguarding }]),
   ];
   return (

@@ -1,0 +1,27 @@
+{
+  "ticketId": "SH-16",
+  "timestamp": "2026-11-10T14:35:00Z",
+  "phase": "architect",
+  "version": "1.0",
+
+  "status": "complete",
+  "endpointCount": 7,
+  "blockers": [],
+  "artifacts": [
+    "artifacts/architect/tech-stack-decisions.md",
+    "artifacts/architect/requirements-analysis-notes.md",
+    "artifacts/architect/system-design.md",
+    "artifacts/architect/api-contracts.json"
+  ],
+  "notes": [
+    "There are 7 HTTP endpoints, all new: GET /api/dashboard/{teacher,student,admin}, POST /api/dashboard/refresh, GET /api/insights/at-risk, GET /api/students/:id/insights and GET /api/reports/:reportKey. There are also 4 non-HTTP contracts: recomputeRiskSnapshots, the insights.student_high_risk notification type, the pure risk-rules, and missingWork.",
+    "The base path is /api, not /api/v1. Envelopes, paginated() meta and error codes come from src/server/http.ts. CSV goes through src/server/csv.ts toCsv and ignores pagination.",
+    "Error policy: an unknown reportKey returns 404. assertCanViewStudent returns 403 for a denied ADMIN/TEACHER (existing helper behaviour). Out-of-scope filters on /api/insights/at-risk return an empty 200 list, never 403.",
+    "Decisions made beyond system-design: the at-risk list meta adds computedAt; refresh returns studentsComputed and skipped; the admin payload omits openSafeguardingReports unless the caller is a safeguarding lead; the reportFilters block fixes per-report filters and row shapes.",
+    "Dependency gaps carried from system-design (not blockers): announcements (FR-8, FR-14, FR-38) return [] with announcementsAvailable=false, and FR-21 reads CalendarEvent directly.",
+    "src/lib/validators/{dashboards,reports}.ts should mirror the query shapes in api-contracts.json.",
+    "artifacts/architect/threat-model-notes.json is still the stale SH-14 file. No architect sub-task owns it, so treat it as out of date.",
+    "The SH-15 api-contracts.json and handoff were moved to artifacts/architect/.prev-SH-15/."
+  ],
+  "nextPhase": "dev-planning"
+}

@@ -114,6 +114,6 @@ describe('registry helpers', () => {
 
   it('groups types by category', () => {
     expect(typesInCategory('SYSTEM')).toEqual(['system.test']);
-    expect(typesInCategory('FINANCE')).toEqual([]);
+    expect(typesInCategory('FINANCE')).toEqual(['fees.invoice_issued', 'fees.payment_received', 'fees.overdue_reminder']); // PRD-17 FR-36
   });
 });

@@ -121,6 +121,15 @@ model User {
   consentResponsesGiven    ConsentResponse[]         @relation("ConsentResponseParent")
   /// PRD-16
   riskSnapshots            StudentRiskSnapshot[]
+  /// PRD-17 FR-5: meaningful only for ADMIN (enforced in services/users.ts).
+  isBursar                 Boolean                   @default(false)
+  invoicesForStudent       Invoice[]                 @relation("InvoiceStudent")
+  invoicesCreated          Invoice[]                 @relation("InvoiceCreator")
+  optionalFees             StudentOptionalFee[]
+  studentDiscounts         StudentDiscount[]
+  paymentsAsPayer          Payment[]                 @relation("PaymentPayer")
+  paymentsRecorded         Payment[]                 @relation("PaymentRecorder")
+  paymentsReversed         Payment[]                 @relation("PaymentReverser")
 
   @@index([lastName, firstName, email])
   @@index([role, status])
@@ -237,6 +246,9 @@ model SchoolSettings {
   /// PRD-07 FR-4
   attendanceMode           AttendanceMode @default(PER_PERIOD)
   attendanceAlertThreshold Int            @default(90)
+  /// PRD-17 FR-4: ISO 4217, single currency (NFR-11).
+  currency                 String         @default("USD")
+  invoiceFooter            String?
   createdAt                DateTime       @default(now())
   updatedAt                DateTime       @updatedAt
 }
@@ -246,17 +258,21 @@ model SchoolSettings {
 /// setCurrentAcademicYear(), never by a DB constraint (Postgres can't
 /// express "exactly one true" as a simple unique index).
 model AcademicYear {
-  id             String          @id @default(cuid())
-  name           String          @unique
-  startDate      DateTime        @db.Date
-  endDate        DateTime        @db.Date
-  isCurrent      Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  terms          Term[]
-  sections       Section[]
-  courses        Course[]
-  timetableSlots TimetableSlot[]
+  id               String               @id @default(cuid())
+  name             String               @unique
+  startDate        DateTime             @db.Date
+  endDate          DateTime             @db.Date
+  isCurrent        Boolean              @default(false)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  terms            Term[]
+  sections         Section[]
+  courses          Course[]
+  timetableSlots   TimetableSlot[]
+  feePlans         FeePlan[]
+  invoices         Invoice[]
+  optionalFees     StudentOptionalFee[]
+  studentDiscounts StudentDiscount[]
 }
 
 /// A term (semester/trimester/quarter) inside one academic year. onDelete:
@@ -264,17 +280,19 @@ model AcademicYear {
 /// the service layer checks this first to return a friendly 409 instead of
 /// a raw FK error.
 model Term {
-  id             String       @id @default(cuid())
+  id             String                @id @default(cuid())
   academicYearId String
-  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  academicYear   AcademicYear          @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
   name           String
-  startDate      DateTime     @db.Date
-  endDate        DateTime     @db.Date
+  startDate      DateTime              @db.Date
+  endDate        DateTime              @db.Date
   order          Int
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
   gradeItems     GradeItem[]
   riskSnapshots  StudentRiskSnapshot[]
+  feePlans       FeePlan[]
+  invoices       Invoice[]
 
   @@unique([academicYearId, name])
   @@unique([academicYearId, order])
@@ -292,6 +310,7 @@ model GradeLevel {
   updatedAt       DateTime         @updatedAt
   studentProfiles StudentProfile[]
   sections        Section[]
+  feePlans        FeePlan[]
 }
 
 /// "Mathematics" / "MATH". code is always stored upper-case (normalised in
@@ -1522,4 +1541,253 @@ model StudentRiskSnapshot {
   @@unique([studentId, termId])
   @@index([termId, level])
   @@index([termId, computedAt])
+}
+
+// ---------------------------------------------------------------------------
+// PRD-17 Fees, invoices & payment records (FR-1..FR-5, D-1..D-7). Money is Decimal(10,2) (NFR-1).
+// Partial unique indexes and CHECK constraints live in the migration SQL (ADR-5).
+// ---------------------------------------------------------------------------
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  CARD_TERMINAL
+  OTHER
+}
+
+enum DiscountKind {
+  PERCENT
+  FIXED
+}
+
+enum InvoiceReminderKind {
+  PRE_DUE_3D
+  DUE_PLUS_1
+  OVERDUE_14D
+  MANUAL
+}
+
+model FeeItem {
+  id            String               @id @default(cuid())
+  name          String
+  code          String               @unique
+  description   String?
+  defaultAmount Decimal              @db.Decimal(10, 2)
+  isOptional    Boolean              @default(false)
+  archivedAt    DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  planLines     FeePlanLine[]
+  optionalFees  StudentOptionalFee[]
+  invoiceLines  InvoiceLine[]
+}
+
+/// termId null = annual plan; annual uniqueness is a partial index (D-3).
+model FeePlan {
+  id             String        @id @default(cuid())
+  name           String
+  academicYearId String
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id])
+  termId         String?
+  term           Term?         @relation(fields: [termId], references: [id])
+  gradeLevelId   String
+  gradeLevel     GradeLevel    @relation(fields: [gradeLevelId], references: [id])
+  dueDays        Int           @default(30)
+  archivedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lines          FeePlanLine[]
+  invoices       Invoice[]
+
+  @@unique([termId, gradeLevelId])
+}
+
+model FeePlanLine {
+  id        String   @id @default(cuid())
+  feePlanId String
+  feePlan   FeePlan  @relation(fields: [feePlanId], references: [id], onDelete: Cascade)
+  feeItemId String
+  feeItem   FeeItem  @relation(fields: [feeItemId], references: [id])
+  amount    Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  @@unique([feePlanId, feeItemId])
+}
+
+model StudentOptionalFee {
+  id             String       @id @default(cuid())
+  studentId      String
+  student        User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  feeItemId      String
+  feeItem        FeeItem      @relation(fields: [feeItemId], references: [id])
+  amount         Decimal      @db.Decimal(10, 2)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([studentId, academicYearId, feeItemId])
+}
+
+/// autoRule: 'SIBLING_2ND' | 'SIBLING_3RD_PLUS' | null (manual), validated by Zod (FR-8, FR-11).
+model Discount {
+  id               String            @id @default(cuid())
+  name             String
+  kind             DiscountKind
+  value            Decimal           @db.Decimal(10, 2)
+  autoRule         String?
+  archivedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  studentDiscounts StudentDiscount[]
+  invoiceLines     InvoiceLine[]
+
+  @@index([autoRule])
+}
+
+model StudentDiscount {
+  id             String       @id @default(cuid())
+  studentId      String
+  student        User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  discountId     String
+  discount       Discount     @relation(fields: [discountId], references: [id])
+  note           String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([studentId, academicYearId, discountId])
+}
+
+/// number is assigned at issue (D-1). amountPaid and post-issue status are written only by
+/// ledger.recomputeInvoice (and markOverdue) (NFR-1). dueDays is kept so a draft knows its due date at issue.
+model Invoice {
+  id             String              @id @default(cuid())
+  number         String?             @unique
+  studentId      String
+  student        User                @relation("InvoiceStudent", fields: [studentId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear        @relation(fields: [academicYearId], references: [id])
+  termId         String?
+  term           Term?               @relation(fields: [termId], references: [id])
+  feePlanId      String?
+  feePlan        FeePlan?            @relation(fields: [feePlanId], references: [id])
+  status         InvoiceStatus       @default(DRAFT)
+  issueDate      DateTime?           @db.Date
+  dueDate        DateTime?           @db.Date
+  dueDays        Int                 @default(30)
+  subtotal       Decimal             @db.Decimal(10, 2)
+  discountTotal  Decimal             @db.Decimal(10, 2)
+  total          Decimal             @db.Decimal(10, 2)
+  amountPaid     Decimal             @default(0) @db.Decimal(10, 2)
+  notes          String?
+  voidedAt       DateTime?
+  voidReason     String?
+  createdById    String
+  createdBy      User                @relation("InvoiceCreator", fields: [createdById], references: [id])
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  lines          InvoiceLine[]
+  allocations    PaymentAllocation[]
+  reminders      InvoiceReminder[]
+
+  @@index([status, dueDate])
+  @@index([studentId])
+  @@index([termId])
+  @@index([academicYearId])
+}
+
+model InvoiceLine {
+  id           String    @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  feeItemId    String?
+  feeItem      FeeItem?  @relation(fields: [feeItemId], references: [id])
+  discountId   String?
+  discount     Discount? @relation(fields: [discountId], references: [id])
+  description  String
+  /// negative for discount and adjustment lines
+  amount       Decimal   @db.Decimal(10, 2)
+  isOptional   Boolean   @default(false)
+  isDiscount   Boolean   @default(false)
+  isAdjustment Boolean   @default(false)
+  reason       String?
+  sortOrder    Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([invoiceId])
+}
+
+/// Never deleted; reversal sets reversedAt (FR-31, NFR-2).
+model Payment {
+  id             String              @id @default(cuid())
+  receiptNumber  String              @unique
+  amount         Decimal             @db.Decimal(10, 2)
+  method         PaymentMethod
+  reference      String?
+  receivedAt     DateTime
+  payerName      String
+  payerParentId  String?
+  payerParent    User?               @relation("PaymentPayer", fields: [payerParentId], references: [id], onDelete: SetNull)
+  notes          String?
+  recordedById   String
+  recordedBy     User                @relation("PaymentRecorder", fields: [recordedById], references: [id])
+  reversedAt     DateTime?
+  reversedById   String?
+  reversedBy     User?               @relation("PaymentReverser", fields: [reversedById], references: [id])
+  reversalReason String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  allocations    PaymentAllocation[]
+
+  @@index([receivedAt])
+  @@index([payerParentId])
+}
+
+model PaymentAllocation {
+  id        String   @id @default(cuid())
+  paymentId String
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amount    Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  @@unique([paymentId, invoiceId])
+  @@index([invoiceId])
+}
+
+/// kind 'INV' | 'RCT'; gap-free per (kind, year) via SELECT ... FOR UPDATE (ADR-3).
+model DocumentSequence {
+  kind      String
+  year      Int
+  nextValue Int    @default(1)
+
+  @@id([kind, year])
+}
+
+/// D-2: automatic kinds always set scheduledFor (the idempotency key); MANUAL leaves it NULL.
+model InvoiceReminder {
+  id           String              @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  kind         InvoiceReminderKind
+  scheduledFor DateTime?           @db.Date
+  sentAt       DateTime            @default(now())
+  sentById     String?
+  createdAt    DateTime            @default(now())
+
+  @@unique([invoiceId, kind, scheduledFor])
+  @@index([invoiceId, kind, sentAt])
 }

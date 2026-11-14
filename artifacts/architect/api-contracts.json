@@ -1,293 +1,383 @@
 {
-  "ticketId": "SH-16",
-  "timestamp": "2026-11-10T14:30:00Z",
+  "ticketId": "SH-17",
+  "timestamp": "2026-11-10T16:00:00Z",
   "phase": "architect",
   "version": "1.0",
 
   "conventions": {
-    "replaces": "This file replaces the SH-15 contracts, which were moved to artifacts/architect/.prev-SH-15/api-contracts.json.",
-    "basePath": "/api. This is the existing SchoolHub convention, not /api/v1. Route files are src/app/api/**/route.ts. (FR-41, NFR-6)",
-    "handlerPipeline": "withHandler → requireRole → parseQuery with schemas from src/lib/validators/{dashboards,reports}.ts → one service call in src/server/dashboards/ or src/server/reports/ → ok(data) / paginated(rows, meta) / CSV Response. Everything comes from src/server/http.ts. Do not hand-roll envelopes. Scope is enforced inside services via getAccessibleStudentIds, not in the route. (NFR-3, NFR-6)",
+    "replaces": "Replaces the SH-16 contracts, moved to artifacts/architect/.prev-SH-16/api-contracts.json.",
+    "basePath": "/api (existing SchoolHub convention, not /api/v1). Fee routes are src/app/api/fees/**/route.ts; the parent route is src/app/api/me/fees/route.ts. (NFR-7)",
+    "handlerPipeline": "withHandler → guard from src/server/fees/access.ts → parseQuery/parseBody with schemas from src/lib/validators/fees.ts → one call into src/server/fees/fees-service.ts or reports.ts → ok(data) / paginated(rows, meta) / CSV Response. Envelopes, error mapping and pagination come from src/server/http.ts only. (NFR-7, NFR-9)",
+    "guards": {
+      "read": "requireFeeReader() = requireRole('ADMIN','PARENT'). TEACHER and STUDENT get 403 FORBIDDEN. PARENT reads are scoped with parentStudentIds(). (FR-41, FR-45, NFR-4)",
+      "adminRead": "requireRole('ADMIN'). Used for setup lists, dashboard, aging, exports and family lookups. (FR-45)",
+      "write": "requireBursar() = ADMIN + isBursar read from the DB on every request; otherwise 403 FORBIDDEN. (FR-5, FR-45)",
+      "idScope": "Every :id in a path goes through assertCanSeeInvoice/Payment/Student or assertParent. An id outside the caller's scope or one that does not exist returns 404 NOT_FOUND, so there is no existence oracle. (NFR-4)"
+    },
     "envelopes": {
       "success": "{ data: T }",
-      "list": "{ data: T[], meta: { page, pageSize, total } } via paginated(). ?page (default 1), ?pageSize (default 20, clamped to 100 by parsePagination). (NFR-6)",
+      "list": "{ data: T[], meta: { page, pageSize, total } } via paginated(). ?page defaults to 1; ?pageSize defaults to 20 and is clamped to 100 by parsePagination. (NFR-7)",
       "error": "{ error: { code, message, details? } }",
-      "csv": "?format=csv returns text/csv; charset=utf-8 with Content-Disposition: attachment; filename=\"<name>-<yyyy-MM-dd>.csv\". The body is toCsv(columns, rows) from src/server/csv.ts, which applies escapeCsvCell (formula-injection guard). CSV ignores pagination and returns every row matching the filters. (FR-30, FR-33, FR-35)"
+      "csv": "text/csv; charset=utf-8 with Content-Disposition: attachment; filename=\"<name>-<yyyy-MM-dd>.csv\". The body is toCsv() from src/server/csv.ts (formula-injection guard). Exports ignore pagination. Money columns are non-negative 2 dp strings. (FR-44)"
     },
+    "money": "Money is always a 2-decimal string such as \"2235.00\", never a JS number, in both requests and responses. Inputs accept a string or number and are parsed to Decimal; there are at most 2 dp and the value is at most 99999999.99. Negative values appear only on discount and adjustment lines. Every response that carries money also carries currency (the ISO 4217 code from SchoolSettings.currency). (NFR-1, FR-35)",
+    "dates": "Date-only fields (issueDate, dueDate, scheduledFor) are 'yyyy-MM-dd'. Instants (receivedAt, createdAt, reversedAt, sentAt) are ISO 8601 UTC. 'today' is schoolDateOf(now, SchoolSettings.timezone). (NFR-8)",
+    "freshness": "Every fee read (invoices, payments, families, dashboard, aging, exports, /api/me/fees) calls markOverdue(today) before querying, so statuses are never stale. (FR-25)",
+    "audit": "Every write audits after commit with before/after values (D-13). Actions are feeItem.create|update|archive, feePlan.create|update, discount.create|update|archive, studentOptionalFee.set, studentDiscount.set, invoice.create|update|delete|issue|adjust|void|remind, payment.create, payment.reverse and user.update (isBursar). GETs are not audited. (NFR-2)",
     "errorCodes": {
       "VALIDATION_ERROR": 400,
       "UNAUTHENTICATED": 401,
       "FORBIDDEN": 403,
       "NOT_FOUND": 404,
+      "CONFLICT": 409,
+      "RATE_LIMITED": 429,
       "INTERNAL": 500
     },
     "errorPolicy": [
-      "Wrong role → 403 FORBIDDEN from requireRole. (NFR-3)",
-      "GET /api/students/:id/insights uses assertCanViewStudent. ADMIN/TEACHER callers denied get 403 FORBIDDEN, matching the existing helper. A nonexistent student returns 404 NOT_FOUND. (FR-43, NFR-3)",
-      "Unknown reportKey → 404 NOT_FOUND (registry lookup, not a Zod 400). (FR-44)",
-      "Invalid filters (bad enum, from > to, pageSize > 100 is clamped not rejected) → 400 VALIDATION_ERROR. (NFR-6)",
-      "Filters are intersected with the caller's scope. A teacher filtering by a section outside scope gets an empty list (200), never 403 and never out-of-scope rows. (FR-42)"
-    ],
-    "dates": "Date-only fields are 'yyyy-MM-dd' strings. Instants are ISO 8601 UTC. Every 'today' / window rule is evaluated in SchoolSettings.timezone via the helpers in src/lib/dates.ts. (NFR-7)",
-    "caching": "Cached payloads carry computedAt (ISO string) so the UI can show 'Updated N min ago'. Uncached fields have no computedAt. Payloads contain no Date or Decimal objects. (FR-23, FR-24)",
-    "audit": "Only POST /api/dashboard/refresh calls audit({ action: 'dashboard.refresh', request }). GET endpoints are not audited, matching the existing admin read endpoints. (FR-24)"
+      "Zod failure, allocation sum ≠ amount, allocation > balance, adjustment that would leave total < amountPaid or < 0, or a non-optional item in optional-fees → 400 VALIDATION_ERROR. (FR-21, FR-28, D-10)",
+      "Overpayment → 400 VALIDATION_ERROR with message exactly \"Amount exceeds the family's outstanding balance of <formatMoney(outstanding, currency)>\" and details { outstanding }. Nothing is saved. (FR-29)",
+      "Wrong invoice state (PATCH/DELETE/issue on a non-DRAFT; adjust/void/remind on anything other than ISSUED/PARTIALLY_PAID/OVERDUE; void with non-reversed allocations; reversing a payment twice) → 409 CONFLICT. (FR-20, FR-21, FR-31, D-11)",
+      "Duplicate code (FeeItem.code), duplicate plan (term or annual + grade) and other P2002 conflicts → 409 CONFLICT via withHandler's Prisma mapping. (FR-6, FR-7)",
+      "Manual reminder within 24 h of the last MANUAL reminder → 429 RATE_LIMITED, with details { retryAfter: ISO instant }. (FR-38, D-8)",
+      "Non-bursar write → 403 FORBIDDEN. Teacher or student on any fee route → 403 FORBIDDEN. Out-of-scope id → 404 NOT_FOUND. (FR-41, FR-45, NFR-4)"
+    ]
   },
 
   "components": {
-    "RiskLevel": { "enum": ["MEDIUM", "HIGH"], "note": "null means none. (FR-26)" },
-    "RiskReason": {
-      "signal": "'ATTENDANCE' | 'GRADES' | 'MISSING'",
-      "level": "RiskLevel",
-      "value": "number",
-      "label": "string, e.g. 'Attendance 78 %', '2 courses < 60 %', '6 missing'"
-    },
-    "RiskSignals": {
-      "attendancePct": "number | null",
-      "coursesBelow60": "number",
-      "lowestCoursePct": "number | null",
-      "missingCount": "number"
-    },
-    "Trend": { "enum": ["up", "down", "flat"], "note": "up = level rose since previousLevel. (FR-28, FR-29)" },
-    "Cached<T>": { "data": "T", "computedAt": "string (ISO)" },
-    "ScheduleItem": {
-      "slotId": "string",
-      "periodName": "string",
-      "startTime": "HH:mm",
-      "endTime": "HH:mm",
-      "courseId": "string",
-      "courseName": "string",
-      "sectionName": "string | null",
-      "roomName": "string | null",
-      "badge": "'NOW' | 'NEXT' | null"
-    },
-    "ChartSeries": {
-      "summary": "string — aria-label text, e.g. 'Attendance trend: 94.2 % average, lowest 88.1 % on 3 Oct' (NFR-2)",
-      "xAxis": "(string | number)[]",
-      "series": "{ id: string, label: string, data: (number | null)[], stack?: string }[]",
-      "referenceLine": "number | undefined"
-    },
-    "AtRiskRow": {
-      "studentId": "string",
-      "studentName": "string",
-      "sectionId": "string | null",
-      "sectionName": "string | null",
-      "gradeLevel": "string | null",
-      "level": "RiskLevel",
-      "reasons": "RiskReason[]",
-      "trend": "Trend",
-      "computedAt": "string (ISO)"
-    },
-    "AT_RISK_COLUMNS": ["studentName", "sectionName", "gradeLevel", "level", "reasons (labels joined with '; ')", "trend", "computedAt"],
-    "ReportKey": { "enum": ["enrollment", "attendance", "performance", "completion", "engagement", "workload"], "note": "REPORT_KEYS from src/server/reports/index.ts. (FR-44)" },
-    "ReportResult": {
-      "key": "ReportKey",
-      "title": "string",
-      "filters": "object — the parsed filters echoed back",
-      "columns": "{ key: string, header: string }[]",
-      "rows": "object[] — same rows the CSV contains (FR-35 AC 7)",
-      "charts": "ChartSeries[]",
-      "summary": "object — report-specific totals",
-      "notes": "string[] — e.g. 'Announcement read rate is not available yet' for engagement (FR-38)"
-    }
+    "Money": "string matching ^-?\\d{1,8}\\.\\d{2}$",
+    "InvoiceStatus": "'DRAFT' | 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'VOID'",
+    "PaymentMethod": "'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'CARD_TERMINAL' | 'OTHER'",
+    "DiscountKind": "'PERCENT' | 'FIXED'",
+    "AutoRule": "'SIBLING_2ND' | 'SIBLING_3RD_PLUS' | null",
+    "FeeItem": { "id": "string", "name": "string", "code": "string", "description": "string | null", "defaultAmount": "Money", "isOptional": "boolean", "archivedAt": "string | null" },
+    "FeePlan": { "id": "string", "name": "string", "academicYearId": "string", "termId": "string | null (null = annual)", "termName": "string | null", "gradeLevelId": "string", "gradeLevelName": "string", "dueDays": "number", "lines": "{ id, feeItemId, feeItemName, amount: Money }[]", "total": "Money", "archivedAt": "string | null" },
+    "Discount": { "id": "string", "name": "string", "kind": "DiscountKind", "value": "Money (PERCENT: 0–100)", "autoRule": "AutoRule", "archivedAt": "string | null" },
+    "InvoiceLine": { "id": "string", "feeItemId": "string | null", "discountId": "string | null", "description": "string", "amount": "Money (negative for discount/adjustment)", "isOptional": "boolean", "isDiscount": "boolean", "isAdjustment": "boolean", "reason": "string | null", "sortOrder": "number" },
+    "InvoiceRow": { "id": "string", "number": "string | null (null while DRAFT)", "studentId": "string", "studentName": "string", "gradeLevelName": "string | null", "sectionName": "string | null", "termId": "string | null", "termName": "string | null", "status": "InvoiceStatus", "issueDate": "yyyy-MM-dd | null", "dueDate": "yyyy-MM-dd | null", "total": "Money", "amountPaid": "Money", "balance": "Money (total − amountPaid)", "isPlanInvoice": "boolean" },
+    "InvoiceDetail": "InvoiceRow & { academicYearId, feePlanId: string | null, subtotal: Money, discountTotal: Money, notes: string | null, voidedAt: string | null, voidReason: string | null, lines: InvoiceLine[], allocations: { paymentId, receiptNumber, amount: Money, receivedAt, method: PaymentMethod, reversed: boolean }[], timeline: { action, at, actorName, before, after }[] (AuditLog entityType='Invoice'), reminders: { kind, sentAt }[], parents: { id, name, isPrimary }[], currency: string, invoiceFooter: string | null }",
+    "PaymentRow": { "id": "string", "receiptNumber": "string", "amount": "Money", "method": "PaymentMethod", "reference": "string | null", "receivedAt": "ISO", "payerName": "string", "payerParentId": "string | null", "recordedByName": "string", "reversed": "boolean", "reversedAt": "string | null", "studentNames": "string[]" },
+    "PaymentDetail": "PaymentRow & { notes: string | null, reversalReason: string | null, reversedByName: string | null, allocations: { invoiceId, invoiceNumber, studentName, amount: Money }[], amountInWords: string, currency: string }",
+    "PreviewRow": { "studentId": "string", "studentName": "string", "gradeLevelName": "string", "sectionName": "string | null", "feePlanId": "string | null", "lines": "Omit<InvoiceLine,'id'>[]", "subtotal": "Money", "discountTotal": "Money", "total": "Money", "siblingRank": "number | null", "skipped": "null | 'ALREADY_INVOICED' | 'NO_PLAN'" }
   },
 
   "endpoints": [
     {
-      "method": "GET",
-      "path": "/api/dashboard/teacher",
-      "description": "TEACHER only. Returns all teacher widget data in one payload; the page itself renders widgets from the same service functions, so this route is for API consumers and tests. Scoped to the caller's courses and accessible students. Announcements are an empty array with available=false (PRD-12 dependency gap).",
+      "method": "GET", "path": "/api/fees/items",
+      "description": "ADMIN read. Lists fee items. Archived items are hidden unless ?includeArchived=true.",
+      "requestSchema": { "query": { "includeArchived": "boolean?", "optional": "boolean? (filter by isOptional)" } },
+      "responseSchema": { "data": { "items": "FeeItem[]", "currency": "string" } },
+      "requirementIds": ["FR-6", "FR-45"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/items",
+      "description": "Bursar. Creates a fee item. A duplicate code returns 409.",
+      "requestSchema": { "body": { "name": "string(1..100)", "code": "string(1..30, ^[A-Z0-9_-]+$, uppercased)", "description": "string(≤500)?", "defaultAmount": "Money > 0", "isOptional": "boolean (default false)" } },
+      "responseSchema": { "status": 201, "data": "FeeItem" },
+      "requirementIds": ["FR-6", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "PATCH", "path": "/api/fees/items/:id",
+      "description": "Bursar. Partial update of a fee item. Existing plan lines and invoices are not changed.",
+      "requestSchema": { "body": "Partial<POST /api/fees/items body>" },
+      "responseSchema": { "data": "FeeItem" },
+      "requirementIds": ["FR-6", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/items/:id/archive",
+      "description": "Bursar. Sets archivedAt. Archived items cannot be added to new plans or manual invoices but stay on existing ones. Idempotent.",
       "requestSchema": {},
-      "responseSchema": {
-        "data": {
-          "greeting": { "text": "string", "firstName": "string", "date": "yyyy-MM-dd", "termName": "string | null" },
-          "todaysClasses": "(ScheduleItem & { attendanceTaken: boolean, takeAttendanceHref: string, courseHref: string })[]",
-          "toGrade": "Cached<{ count: number, items: { kind: 'SUBMISSION' | 'QUIZ_ATTEMPT', id: string, title: string, studentName: string, courseName: string, submittedAt: string, href: string }[] }>",
-          "upcomingDeadlines": "Cached<{ kind: 'ASSIGNMENT' | 'QUIZ', id: string, title: string, courseName: string, dueAt: string, submitted: number, expected: number, submissionRate: number }[]>",
-          "atRisk": "Cached<AtRiskRow[]> (top 5)",
-          "messages": { "unreadCount": "number", "announcementsAvailable": "boolean", "announcements": "[]" }
-        }
-      },
-      "requirementIds": ["FR-41", "FR-3", "FR-4", "FR-5", "FR-6", "FR-7", "FR-8", "FR-23", "NFR-3"]
+      "responseSchema": { "data": "FeeItem" },
+      "requirementIds": ["FR-6", "FR-45", "NFR-2"]
     },
     {
-      "method": "GET",
-      "path": "/api/dashboard/student",
-      "description": "STUDENT only. Returns the caller's own widget data. Nothing is cached. dueSoon lists overdue (missing) items first with overdue=true.",
+      "method": "GET", "path": "/api/fees/plans",
+      "description": "ADMIN read. Lists fee plans with lines and computed total.",
+      "requestSchema": { "query": { "academicYearId": "string?", "termId": "string | 'annual'?", "gradeLevelId": "string?", "includeArchived": "boolean?" } },
+      "responseSchema": { "data": { "plans": "FeePlan[]", "currency": "string" } },
+      "requirementIds": ["FR-7", "FR-45"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/plans",
+      "description": "Bursar. Creates a plan. termId null means annual. A second plan for the same term+grade, or for the same annual year+grade (partial index, D-3), returns 409.",
+      "requestSchema": { "body": { "name": "string(1..100)", "academicYearId": "string", "termId": "string | null", "gradeLevelId": "string", "dueDays": "int 0..365 (default 30)", "lines": "{ feeItemId: string, amount: Money > 0 }[] (1..50, unique feeItemId, non-archived items)" } },
+      "responseSchema": { "status": 201, "data": "FeePlan" },
+      "requirementIds": ["FR-7", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "PUT", "path": "/api/fees/plans/:id",
+      "description": "Bursar. Replaces the whole plan, including all lines, in one transaction. Invoices already generated are not changed.",
+      "requestSchema": { "body": "same as POST /api/fees/plans body" },
+      "responseSchema": { "data": "FeePlan" },
+      "requirementIds": ["FR-7", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/discounts",
+      "description": "ADMIN read. Lists discounts.",
+      "requestSchema": { "query": { "includeArchived": "boolean?", "manualOnly": "boolean? (autoRule is null)" } },
+      "responseSchema": { "data": { "discounts": "Discount[]", "currency": "string" } },
+      "requirementIds": ["FR-8", "FR-45"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/discounts",
+      "description": "Bursar. Creates a discount. PERCENT value must be in 0–100; FIXED value must be > 0.",
+      "requestSchema": { "body": { "name": "string(1..100)", "kind": "DiscountKind", "value": "Money", "autoRule": "AutoRule (default null)" } },
+      "responseSchema": { "status": 201, "data": "Discount" },
+      "requirementIds": ["FR-8", "FR-11", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "PATCH", "path": "/api/fees/discounts/:id",
+      "description": "Bursar. Partial update with the same validation as POST. Existing invoice lines are not changed.",
+      "requestSchema": { "body": "Partial<POST /api/fees/discounts body>" },
+      "responseSchema": { "data": "Discount" },
+      "requirementIds": ["FR-8", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/discounts/:id/archive",
+      "description": "Bursar. Sets archivedAt. Archived discounts are ignored by preview and generation. Idempotent.",
       "requestSchema": {},
-      "responseSchema": {
-        "data": {
-          "greeting": { "text": "string", "firstName": "string", "date": "yyyy-MM-dd", "termName": "string | null" },
-          "today": { "isSchoolDay": "boolean", "holidayName": "string | null", "items": "ScheduleItem[]" },
-          "dueSoon": "{ kind: 'ASSIGNMENT' | 'QUIZ', id: string, title: string, courseName: string, dueAt: string, overdue: boolean, href: string }[]",
-          "recentGrades": "{ gradeItemId: string, title: string, courseName: string, percent: number | null, gradedAt: string }[] (last 5)",
-          "courses": "{ courseId: string, courseName: string, percent: number | null, letter: string | null, progress: { completed: number, total: number }, nextLessonHref: string | null }[]",
-          "announcementsAvailable": "boolean",
-          "announcements": "[]",
-          "termAttendance": { "rate": "number | null", "present": "number", "total": "number" }
-        }
-      },
-      "requirementIds": ["FR-41", "FR-3", "FR-10", "FR-11", "FR-12", "FR-13", "FR-14", "FR-15"]
+      "responseSchema": { "data": "Discount" },
+      "requirementIds": ["FR-8", "FR-45", "NFR-2"]
     },
     {
-      "method": "GET",
-      "path": "/api/dashboard/admin",
-      "description": "ADMIN only. Returns admin widget data. kpis.openSafeguardingReports is present only when isSafeguardingLead(user) and is never cached; otherwise the key is omitted. quickActions is not returned (static links in the UI).",
+      "method": "GET", "path": "/api/fees/students/:id/optional-fees",
+      "description": "ADMIN read. Optional fees assigned to a student for an academic year (defaults to the current year).",
+      "requestSchema": { "query": { "academicYearId": "string?" } },
+      "responseSchema": { "data": { "academicYearId": "string", "fees": "{ feeItemId, feeItemName, amount: Money }[]", "currency": "string" } },
+      "requirementIds": ["FR-9", "FR-45", "NFR-4"]
+    },
+    {
+      "method": "PUT", "path": "/api/fees/students/:id/optional-fees",
+      "description": "Bursar. Replaces the student's optional fees for the year. Every feeItemId must be an optional, non-archived item.",
+      "requestSchema": { "body": { "academicYearId": "string", "fees": "{ feeItemId: string, amount: Money > 0 }[] (unique feeItemId)" } },
+      "responseSchema": { "data": "same as GET" },
+      "requirementIds": ["FR-9", "FR-45", "NFR-2", "NFR-4"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/optional-fees/bulk",
+      "description": "Bursar. Assigns (upserts) one optional fee to every active student in a section for the year. Existing assignments of the same item are overwritten with the new amount.",
+      "requestSchema": { "body": { "sectionId": "string", "academicYearId": "string", "feeItemId": "string (optional item)", "amount": "Money > 0" } },
+      "responseSchema": { "data": { "assigned": "number", "updated": "number" } },
+      "requirementIds": ["FR-9", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/students/:id/discounts",
+      "description": "ADMIN read. Manual discounts assigned to a student for an academic year (defaults to the current year).",
+      "requestSchema": { "query": { "academicYearId": "string?" } },
+      "responseSchema": { "data": { "academicYearId": "string", "discounts": "{ discountId, name, kind, value: Money, note: string | null }[]", "currency": "string" } },
+      "requirementIds": ["FR-10", "FR-45", "NFR-4"]
+    },
+    {
+      "method": "PUT", "path": "/api/fees/students/:id/discounts",
+      "description": "Bursar. Replaces the student's manual discounts for the year. Discounts with an autoRule are rejected with 400.",
+      "requestSchema": { "body": { "academicYearId": "string", "discounts": "{ discountId: string, note?: string(≤500) }[] (unique discountId)" } },
+      "responseSchema": { "data": "same as GET" },
+      "requirementIds": ["FR-10", "FR-45", "NFR-2", "NFR-4"]
+    },
+
+    {
+      "method": "POST", "path": "/api/fees/invoices/preview",
+      "description": "Bursar. Read-only dry run of generation: one row per non-archived student in the chosen grades, with totals from computeInvoiceTotals. Skipped rows are marked ALREADY_INVOICED (D-7) or NO_PLAN. Nothing is written.",
+      "requestSchema": { "body": { "academicYearId": "string", "termId": "string | null (null = annual)", "gradeLevelIds": "string[] (1..20)" } },
+      "responseSchema": { "data": { "rows": "PreviewRow[]", "summary": { "toCreate": "number", "skipped": "number", "total": "Money" }, "currency": "string" } },
+      "requirementIds": ["FR-11", "FR-12", "FR-13", "FR-15", "FR-45", "NFR-5"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/invoices/generate",
+      "description": "Bursar. Rebuilds the drafts on the server (client totals are never trusted) and writes them in 50-student chunk transactions. When issue=true it also issues each invoice in the same transaction (number, issueDate=today, dueDate=today+plan.dueDays) and notifies parents with fees.invoice_issued after commit. Idempotent: students already invoiced, including through a concurrent run (P2002 on the partial index), come back in skipped.",
+      "requestSchema": { "body": { "academicYearId": "string", "termId": "string | null", "gradeLevelIds": "string[] (1..20)", "issue": "boolean (default false)" } },
+      "responseSchema": { "status": 201, "data": { "created": "number", "issued": "number", "skipped": "{ studentId, studentName, reason: 'ALREADY_INVOICED' | 'NO_PLAN' }[]", "invoiceIds": "string[]" } },
+      "requirementIds": ["FR-13", "FR-14", "FR-15", "FR-16", "FR-36", "FR-45", "NFR-2", "NFR-3", "NFR-5"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/invoices",
+      "description": "Fee reader. Paginated invoice list. ADMIN sees all; PARENT sees only invoices of linked children, excluding DRAFT. meta.totals covers the whole filtered set, not just the page.",
+      "requestSchema": { "query": { "status": "InvoiceStatus?", "termId": "string?", "academicYearId": "string?", "gradeLevelId": "string?", "sectionId": "string?", "studentId": "string?", "overdue": "boolean?", "q": "string(≤100)? (student name or invoice number, case-insensitive)", "page": "int?", "pageSize": "int? (≤100)", "sort": "'dueDate' | '-dueDate' | 'issueDate' | '-issueDate' | 'number' | '-number' | 'total' | '-total' | 'studentName' | '-studentName' (default '-issueDate')" } },
+      "responseSchema": { "data": "InvoiceRow[]", "meta": { "page": "number", "pageSize": "number", "total": "number", "totals": { "billed": "Money", "paid": "Money", "outstanding": "Money" }, "currency": "string" } },
+      "requirementIds": ["FR-17", "FR-18", "FR-25", "FR-39", "FR-45", "NFR-4", "NFR-7"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/invoices",
+      "description": "Bursar. Creates a one-off manual invoice (feePlanId null) with free-form lines. It never counts toward the generation skip rule. With issue=true it is issued in the same transaction.",
+      "requestSchema": { "body": { "studentId": "string", "academicYearId": "string", "termId": "string | null", "lines": "{ description: string(1..200), amount: Money > 0, feeItemId?: string }[] (1..50)", "dueDays": "int 0..365 (default 30)", "notes": "string(≤1000)?", "issue": "boolean (default false)" } },
+      "responseSchema": { "status": 201, "data": "InvoiceDetail" },
+      "requirementIds": ["FR-14", "FR-16", "FR-23", "FR-36", "FR-45", "NFR-2", "NFR-3"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/invoices/:id",
+      "description": "Fee reader. Full invoice detail: lines, allocations with receipt numbers (receipt links for FR-22), balance, AuditLog timeline and reminders. A PARENT must have the student linked and cannot see DRAFTs (404).",
       "requestSchema": {},
-      "responseSchema": {
-        "data": {
-          "greeting": { "text": "string", "firstName": "string", "date": "yyyy-MM-dd", "termName": "string | null" },
-          "kpis": "Cached<{ activeStudents: number, activeTeachers: number, attendanceRateToday: number | null, attendanceRateDelta: number | null, registersMissingToday: number, pendingAbsenceNotes: number }> & { openSafeguardingReports?: number }",
-          "attendanceTrend": "Cached<ChartSeries> (last 30 school days, referenceLine = attendanceAlertThreshold)",
-          "enrollmentByGrade": "Cached<ChartSeries> (stacked by gender)",
-          "gradeDistribution": "Cached<ChartSeries & { average: number | null, median: number | null }> (10 % buckets)",
-          "riskSummary": "Cached<{ byLevel: { HIGH: number, MEDIUM: number }, byReason: { ATTENDANCE: number, GRADES: number, MISSING: number } }>",
-          "upcomingEvents": "{ eventId: string, title: string, startsAt: string, endsAt: string | null, allDay: boolean }[] (next 5)",
-          "recentActivity": "{ id: string, action: string, actorName: string | null, entityType: string | null, entityId: string | null, createdAt: string }[] (last 10)"
-        }
-      },
-      "requirementIds": ["FR-41", "FR-3", "FR-16", "FR-17", "FR-18", "FR-19", "FR-20", "FR-21", "FR-22", "FR-23", "NFR-2"]
+      "responseSchema": { "data": "InvoiceDetail" },
+      "requirementIds": ["FR-19", "FR-22", "FR-25", "FR-39", "FR-45", "NFR-4"]
     },
     {
-      "method": "POST",
-      "path": "/api/dashboard/refresh",
-      "description": "ADMIN only. Forces recomputeRiskSnapshots({ force: true }), then revalidateTag('dashboard:admin'), ('dashboard:teacher') and ('insights:at-risk'), then audit('dashboard.refresh'). No body. The client shows a toast and calls router.refresh(). skipped='no-term' when there is no current term (snapshots unchanged, caches still revalidated).",
+      "method": "PATCH", "path": "/api/fees/invoices/:id",
+      "description": "Bursar, DRAFT only (otherwise 409). Replaces the draft's lines and recomputes subtotal, discountTotal and total. Discount lines are recomputed by the server from the student's discounts, not taken from the client.",
+      "requestSchema": { "body": { "lines": "{ description: string(1..200), amount: Money > 0, feeItemId?: string, isOptional?: boolean }[] (1..50)?", "dueDays": "int 0..365?", "notes": "string(≤1000) | null?" } },
+      "responseSchema": { "data": "InvoiceDetail" },
+      "requirementIds": ["FR-15", "FR-20", "FR-45", "NFR-2"]
+    },
+    {
+      "method": "DELETE", "path": "/api/fees/invoices/:id",
+      "description": "Bursar, DRAFT only (otherwise 409). Hard-deletes the draft and its lines. Issued invoices are voided, never deleted.",
       "requestSchema": {},
-      "responseSchema": {
-        "data": {
-          "refreshedAt": "string (ISO)",
-          "studentsComputed": "number",
-          "skipped": "'no-term' | null"
-        }
-      },
-      "requirementIds": ["FR-41", "FR-24", "FR-27", "NFR-12"]
+      "responseSchema": { "data": { "id": "string", "deleted": true } },
+      "requirementIds": ["FR-20", "FR-45", "NFR-2"]
     },
     {
-      "method": "GET",
-      "path": "/api/insights/at-risk",
-      "description": "ADMIN (all students) and TEACHER (getAccessibleStudentIds). Lists current-term StudentRiskSnapshot rows with level not null. Filters are intersected with scope and never widen it. Sort: HIGH before MEDIUM, then reasons count desc, then name. ?format=csv returns every filtered row as CSV with AT_RISK_COLUMNS (filename at-risk-<date>.csv).",
-      "requestSchema": {
-        "query": {
-          "level": "'HIGH' | 'MEDIUM' (optional)",
-          "reason": "'ATTENDANCE' | 'GRADES' | 'MISSING' (optional)",
-          "gradeLevel": "string (optional, GradeLevel id)",
-          "sectionId": "string (optional)",
-          "page": "number (default 1)",
-          "pageSize": "number (default 20, max 100)",
-          "format": "'json' | 'csv' (default json)"
-        }
-      },
-      "responseSchema": {
-        "data": "AtRiskRow[]",
-        "meta": { "page": "number", "pageSize": "number", "total": "number", "computedAt": "string (ISO) | null" }
-      },
-      "requirementIds": ["FR-42", "FR-29", "FR-30", "FR-28", "NFR-3", "NFR-6"]
+      "method": "POST", "path": "/api/fees/invoices/:id/issue",
+      "description": "Bursar, DRAFT only (otherwise 409). Assigns INV-YYYY-NNNNNN under the DocumentSequence row lock, sets issueDate=today and dueDate=today+dueDays, recomputes status (a 0-total invoice becomes PAID) and notifies parents with fees.invoice_issued after commit.",
+      "requestSchema": {},
+      "responseSchema": { "data": "InvoiceDetail" },
+      "requirementIds": ["FR-14", "FR-16", "FR-20", "FR-24", "FR-36", "FR-45", "NFR-2", "NFR-3", "NFR-8"]
     },
     {
-      "method": "GET",
-      "path": "/api/students/:id/insights",
-      "description": "ADMIN, or a TEACHER for whom assertCanViewStudent passes. Returns the current-term snapshot (or null when not yet computed) with signals, level, reasons and the capped history (newest first, max 10).",
-      "requestSchema": {
-        "params": { "id": "string (cuid)" }
-      },
-      "responseSchema": {
-        "data": {
-          "studentId": "string",
-          "termId": "string | null",
-          "level": "RiskLevel | null",
-          "previousLevel": "RiskLevel | null",
-          "trend": "Trend",
-          "reasons": "RiskReason[]",
-          "signals": "RiskSignals | null",
-          "history": "{ level: RiskLevel | null, reasons: RiskReason[], computedAt: string }[]",
-          "computedAt": "string (ISO) | null"
-        }
-      },
-      "requirementIds": ["FR-43", "FR-28", "FR-31", "NFR-3"]
+      "method": "POST", "path": "/api/fees/invoices/:id/void",
+      "description": "Bursar. Allowed for ISSUED, PARTIALLY_PAID or OVERDUE with no non-reversed allocations (D-11); otherwise 409. Sets status VOID, voidedAt and voidReason.",
+      "requestSchema": { "body": { "reason": "string(3..500)" } },
+      "responseSchema": { "data": "InvoiceDetail" },
+      "requirementIds": ["FR-21", "FR-45", "NFR-2"]
     },
     {
-      "method": "GET",
-      "path": "/api/reports/:reportKey",
-      "description": "ADMIN only. Looks up REPORTS[reportKey]; unknown key → 404 NOT_FOUND. Query is parsed with REPORTS[key].filterSchema. Returns a ReportResult. ?format=csv returns toCsv(columns, rows) with filename <reportKey>-<date>.csv; the CSV rows equal the table rows. Per-report filters and rows are listed in reportFilters below.",
-      "requestSchema": {
-        "params": { "reportKey": "ReportKey" },
-        "query": {
-          "academicYearId": "string (optional, default current)",
-          "termId": "string (optional, default current)",
-          "format": "'json' | 'csv' (default json)",
-          "...": "report-specific filters, see reportFilters"
-        }
-      },
-      "responseSchema": { "data": "ReportResult" },
-      "requirementIds": ["FR-44", "FR-33", "FR-34", "FR-35", "FR-36", "FR-37", "FR-38", "FR-39", "NFR-1", "NFR-2"]
+      "method": "POST", "path": "/api/fees/invoices/:id/adjust",
+      "description": "Bursar. Allowed for ISSUED, PARTIALLY_PAID or OVERDUE (otherwise 409). Adds a negative isAdjustment line with a reason, recomputes total and status, and returns 400 if the new total would be < amountPaid or < 0 (D-10).",
+      "requestSchema": { "body": { "amount": "Money > 0 (stored as negative)", "reason": "string(3..500)", "description": "string(1..200)? (default 'Adjustment')" } },
+      "responseSchema": { "data": "InvoiceDetail" },
+      "requirementIds": ["FR-21", "FR-24", "FR-45", "NFR-1", "NFR-2", "NFR-11"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/invoices/:id/remind",
+      "description": "Bursar. Allowed for ISSUED, PARTIALLY_PAID or OVERDUE (otherwise 409). Inserts a MANUAL InvoiceReminder and notifies every linked parent with fees.overdue_reminder. Returns 429 if the last MANUAL reminder was less than 24 h ago (D-8).",
+      "requestSchema": {},
+      "responseSchema": { "data": { "invoiceId": "string", "sentAt": "ISO", "recipients": "number" } },
+      "requirementIds": ["FR-36", "FR-38", "FR-45", "NFR-2"]
+    },
+
+    {
+      "method": "GET", "path": "/api/fees/families/:parentId/open-invoices",
+      "description": "ADMIN read (the record-payment page is bursar-only; reading is allowed for any admin). Returns open invoices (ISSUED, PARTIALLY_PAID, OVERDUE) of every child linked to the parent, oldest due first, with balances and a suggested oldest-first allocation for ?amount. :parentId must be a PARENT user (404 otherwise). When a bursar picks a student, the UI uses the existing GET /api/students/:id/parents to find the primary parent and calls this route with that parent's id. No new lookup endpoint is added.",
+      "requestSchema": { "query": { "amount": "Money > 0? (when present, suggestedAllocations is filled)" } },
+      "responseSchema": { "data": { "parent": { "id": "string", "name": "string" }, "children": "{ id, name }[]", "invoices": "{ id, number, studentId, studentName, dueDate, status, total: Money, amountPaid: Money, balance: Money }[]", "outstanding": "Money", "suggestedAllocations": "{ invoiceId, amount: Money }[]", "overpayment": "Money (amount − outstanding when > 0, else '0.00')", "currency": "string" } },
+      "requirementIds": ["FR-26", "FR-28", "FR-29", "FR-45", "NFR-4"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/payments",
+      "description": "Fee reader. Paginated payments. ADMIN sees all; PARENT sees only payments with at least one allocation to a linked child's invoice. Reversed payments are included and flagged.",
+      "requestSchema": { "query": { "from": "yyyy-MM-dd?", "to": "yyyy-MM-dd? (≥ from; school-tz days on receivedAt)", "method": "PaymentMethod?", "reversed": "boolean?", "parentId": "string?", "studentId": "string?", "q": "string(≤100)? (receipt number, payer name, reference)", "page": "int?", "pageSize": "int? (≤100)", "sort": "'receivedAt' | '-receivedAt' | 'amount' | '-amount' | 'receiptNumber' | '-receiptNumber' (default '-receivedAt')" } },
+      "responseSchema": { "data": "PaymentRow[]", "meta": { "page": "number", "pageSize": "number", "total": "number", "currency": "string" } },
+      "requirementIds": ["FR-32", "FR-39", "FR-45", "NFR-4", "NFR-7"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/payments",
+      "description": "Bursar. One transaction: lock the allocated invoices sorted by id, reload balances, refuse an overpayment against the family's outstanding balance (FR-29), validate the allocations (sum = amount, each 0 < a ≤ balance, every invoice open and belonging to a child of payerParentId), assign RCT-YYYY-NNNNNN, insert the payment and allocations, and recompute each invoice's amountPaid and status. After commit: audit, then notify parents with fees.payment_received linking to /fees/receipts/:id/print. When allocations are omitted the server applies autoAllocate.",
+      "requestSchema": { "body": { "payerParentId": "string", "amount": "Money > 0", "method": "PaymentMethod", "reference": "string(≤100)? (UI warns: never enter card numbers)", "receivedAt": "ISO instant (≤ now + 5 min)", "payerName": "string(1..200) (UI defaults to the primary parent's name)", "notes": "string(≤1000)?", "allocations": "{ invoiceId: string, amount: Money > 0 }[]? (unique invoiceId)" } },
+      "responseSchema": { "status": 201, "data": { "payment": "PaymentDetail", "receiptUrl": "/fees/receipts/<id>/print" } },
+      "requirementIds": ["FR-16", "FR-24", "FR-27", "FR-28", "FR-29", "FR-30", "FR-36", "FR-45", "NFR-1", "NFR-2", "NFR-3", "NFR-11"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/payments/:id",
+      "description": "Fee reader. Payment detail with allocations and amount in words. A PARENT must have at least one allocated invoice belonging to a linked child (404 otherwise).",
+      "requestSchema": {},
+      "responseSchema": { "data": "PaymentDetail" },
+      "requirementIds": ["FR-32", "FR-34", "FR-45", "NFR-4"]
+    },
+    {
+      "method": "POST", "path": "/api/fees/payments/:id/reverse",
+      "description": "Bursar. Locks the payment row (FOR UPDATE) and returns 409 if it is already reversed. Otherwise locks the allocated invoices, sets reversedAt, reversedById and reversalReason, and recomputes every affected invoice. Allocation rows are kept; the payment is never deleted.",
+      "requestSchema": { "body": { "reason": "string(3..500)" } },
+      "responseSchema": { "data": "PaymentDetail" },
+      "requirementIds": ["FR-24", "FR-31", "FR-45", "NFR-1", "NFR-2"]
+    },
+
+    {
+      "method": "GET", "path": "/api/fees/dashboard",
+      "description": "ADMIN read. KPI values for a term (defaults to the current term) and the weekly collection trend for the last 12 ISO weeks (school tz).",
+      "requestSchema": { "query": { "termId": "string?" } },
+      "responseSchema": { "data": { "termId": "string | null", "termName": "string | null", "kpis": { "billed": "Money", "collected": "Money", "outstanding": "Money", "overdue": "Money", "collectionRatePct": "number (0–100, 1 dp; 0 when billed = 0)" }, "trend": "{ weekStart: yyyy-MM-dd, collected: Money }[] (12 points, zero-filled)", "currency": "string" } },
+      "requirementIds": ["FR-25", "FR-42", "FR-45"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/aging",
+      "description": "ADMIN read. Aging buckets over open invoices' balances (days past dueDate in school tz) and the top 10 overdue families, grouped by primary parent and ordered by overdue balance descending.",
+      "requestSchema": {},
+      "responseSchema": { "data": { "buckets": "{ bucket: 'current' | '1-30' | '31-60' | '61-90' | '90+', count: number, amount: Money }[] (always 5, in order)", "topOverdueFamilies": "{ parentId, parentName, children: string[], invoiceCount: number, overdue: Money, oldestDueDate: yyyy-MM-dd }[] (≤ 10)", "currency": "string" } },
+      "requirementIds": ["FR-25", "FR-42", "FR-45"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/export/invoices",
+      "description": "ADMIN read. CSV of every invoice matching the same filters as GET /api/fees/invoices (shared invoiceWhere). Columns: Number, Student, Grade, Section, Term, Status, Issue date, Due date, Total, Paid, Balance, Currency. Filename invoices-<date>.csv.",
+      "requestSchema": { "query": "same filters as GET /api/fees/invoices, without page/pageSize" },
+      "responseSchema": { "contentType": "text/csv", "body": "toCsv rows" },
+      "requirementIds": ["FR-18", "FR-44", "FR-45", "NFR-11"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/export/payments",
+      "description": "ADMIN read. CSV of payments. Columns: Receipt, Received at (school tz), Payer, Method, Reference, Amount, Reversed, Reversed at, Reversal reason, Invoices, Currency. Filename payments-<date>.csv.",
+      "requestSchema": { "query": { "from": "yyyy-MM-dd?", "to": "yyyy-MM-dd?", "method": "PaymentMethod?", "reversed": "boolean?" } },
+      "responseSchema": { "contentType": "text/csv", "body": "toCsv rows" },
+      "requirementIds": ["FR-44", "FR-45", "NFR-11"]
+    },
+    {
+      "method": "GET", "path": "/api/fees/export/aging",
+      "description": "ADMIN read. CSV of open invoices with their aging bucket. Columns: Number, Student, Primary parent, Due date, Days overdue, Bucket, Balance, Currency. Filename aging-<date>.csv.",
+      "requestSchema": {},
+      "responseSchema": { "contentType": "text/csv", "body": "toCsv rows" },
+      "requirementIds": ["FR-42", "FR-44", "FR-45"]
+    },
+
+    {
+      "method": "GET", "path": "/api/me/fees",
+      "description": "PARENT only (others get 403). Everything the /fees page needs, scoped to getAccessibleStudentIds. DRAFT invoices are excluded; VOID invoices are included so the UI can show them greyed out.",
+      "requestSchema": {},
+      "responseSchema": { "data": { "summary": { "outstanding": "Money", "nextDueDate": "yyyy-MM-dd | null", "overdue": "Money" }, "children": "{ id, name, outstanding: Money }[]", "invoices": "InvoiceRow[] (newest first)", "payments": "(PaymentRow & { receiptUrl: string })[] (newest first)", "invoiceFooter": "string | null", "currency": "string" } },
+      "requirementIds": ["FR-25", "FR-32", "FR-35", "FR-39", "FR-40", "FR-41", "NFR-4"]
+    },
+
+    {
+      "method": "PATCH", "path": "/api/users/:id",
+      "description": "EXISTING endpoint, extended. updateUserSchema gains isBursar: boolean?, mirroring isSafeguardingLead: only an ADMIN caller may set it, only on an ADMIN target (otherwise 400), and the change is audited by the existing updateUser path. No new route.",
+      "requestSchema": { "body": { "isBursar": "boolean? (new field; all other fields unchanged)" } },
+      "responseSchema": { "data": "existing user payload + isBursar: boolean" },
+      "requirementIds": ["FR-5", "FR-45", "NFR-9"]
     }
   ],
 
-  "reportFilters": {
-    "enrollment": {
-      "filters": { "gradeLevel": "string?", "sectionId": "string?", "from": "yyyy-MM-dd?", "to": "yyyy-MM-dd?" },
-      "rows": "{ gradeLevel, section, gender, activeStudents }",
-      "charts": "students by grade × gender (stacked); new enrollments and archives by month",
-      "requirementIds": ["FR-34"]
-    },
-    "attendance": {
-      "filters": { "from": "yyyy-MM-dd", "to": "yyyy-MM-dd", "groupBy": "'gradeLevel' | 'section' | 'course' (default gradeLevel)", "gradeLevel": "string?", "sectionId": "string?" },
-      "rows": "{ group, present, absent, late, excused, total, rate }",
-      "charts": "daily trend; lowest 20 students returned in summary.lowestStudents",
-      "requirementIds": ["FR-35"]
-    },
-    "performance": {
-      "filters": { "termId": "string?", "groupBy": "'course' | 'subject' (default course)", "gradeLevel": "string?", "subjectId": "string?" },
-      "rows": "{ group, students, averagePct, A, B, C, D, F }",
-      "charts": "average by group; section comparison for same grade × subject (summary.sectionComparison)",
-      "requirementIds": ["FR-36"]
-    },
-    "completion": {
-      "filters": { "from": "yyyy-MM-dd", "to": "yyyy-MM-dd", "groupBy": "'course' | 'teacher' (default course)" },
-      "rows": "{ group, expected, onTime, late, missing, onTimeRate, lateRate, missingRate }",
-      "charts": "stacked on-time / late / missing by group",
-      "requirementIds": ["FR-37"]
-    },
-    "engagement": {
-      "filters": { "termId": "string?" },
-      "rows": "{ course, lessons, completedLessonProgress, completionRate }",
-      "charts": "lesson completion by course",
-      "summary": "{ parentsSignedIn7d, parentsSignedIn30d, totalParents }; notes contains the announcement read-rate omission",
-      "requirementIds": ["FR-38"]
-    },
-    "workload": {
-      "filters": { "termId": "string?" },
-      "rows": "{ teacherName, courses, studentsTaught, weeklyPeriods, gradingBacklog }",
-      "charts": "weekly periods and grading backlog per teacher",
-      "requirementIds": ["FR-39"]
-    }
+  "pages": {
+    "note": "Server-rendered pages call the same service functions directly and run the same guards (requirePageRole + assertCanSee*). They are listed so dev-planning can trace them; they are not HTTP APIs. (NFR-4)",
+    "routes": [
+      { "path": "/fees/invoices/[id]/print", "roles": "ADMIN, PARENT (assertCanSeeInvoice; DRAFT → 404 for PARENT)", "requirementIds": ["FR-33", "NFR-12"] },
+      { "path": "/fees/receipts/[paymentId]/print", "roles": "ADMIN, PARENT (assertCanSeePayment)", "requirementIds": ["FR-34", "NFR-12"] }
+    ]
   },
 
   "nonHttpContracts": [
     {
-      "name": "recomputeRiskSnapshots",
-      "location": "src/server/dashboards/risk.ts",
-      "signature": "(opts?: { force?: boolean }) => Promise<{ skipped: 'no-term' | 'fresh' | null, studentsComputed: number }>",
-      "callers": "POST /api/dashboard/refresh (force), src/app/api/internal/email/dispatch/route.ts (hourly gate, isolated try/catch), prisma/seed.ts (force)",
-      "requirementIds": ["FR-25", "FR-26", "FR-27", "FR-28", "FR-32", "FR-46", "NFR-12"]
+      "name": "maintenance hooks",
+      "location": "src/server/fees/maintenance.ts, called from src/app/api/internal/email/dispatch/route.ts (existing secret-protected route, no new endpoint)",
+      "signature": "markOverdue(today: string): Promise<{ updated: number }>; sendInvoiceReminders(now: Date): Promise<{ sent: number, skipped: number }>",
+      "behaviour": "markOverdue does one updateMany, setting ISSUED/PARTIALLY_PAID with dueDate < today to OVERDUE. sendInvoiceReminders, for each open invoice with a reminderSlot, inserts an InvoiceReminder (a P2002 means it was already sent, so skip) and then notifies every linked parent. Delivery is at most once. The dispatch route response gains a fees: { overdue, remindersSent } key.",
+      "requirementIds": ["FR-3", "FR-25", "FR-37", "NFR-8"]
     },
     {
-      "name": "notification type insights.student_high_risk",
+      "name": "notification types",
       "location": "src/server/notifications/types.ts",
-      "payload": "{ studentId: string, studentName: string, reasons: string[] (labels), href: '/students/<id>/insights' }",
-      "defaults": "category ACADEMIC, recipient TEACHER (homeroom), email true; at most once per student per 14 days via highNotifiedAt claim",
-      "requirementIds": ["FR-32"]
+      "contract": {
+        "fees.invoice_issued": { "category": "FINANCE", "roles": ["PARENT"], "emailDefault": true, "link": "/fees?invoice=<invoiceId>", "params": "{ invoiceNumber, studentName, total, dueDate, currency }" },
+        "fees.payment_received": { "category": "FINANCE", "roles": ["PARENT"], "emailDefault": true, "link": "/fees/receipts/<paymentId>/print", "params": "{ receiptNumber, amount, currency }" },
+        "fees.overdue_reminder": { "category": "FINANCE", "roles": ["PARENT"], "emailDefault": true, "link": "/fees?invoice=<invoiceId>", "params": "{ invoiceNumber, studentName, balance, dueDate, kind: InvoiceReminderKind, currency }" }
+      },
+      "requirementIds": ["FR-14", "FR-30", "FR-36", "FR-37", "FR-38"]
     },
     {
-      "name": "risk-rules (pure)",
-      "location": "src/server/dashboards/risk-rules.ts",
-      "signature": "attendanceSignal(pct: number | null, threshold: number): RiskReason | null; gradesSignal(coursePcts: (number | null)[]): RiskReason | null; missingSignal(count: number): RiskReason | null; overallLevel(signals: (RiskReason | null)[]): RiskLevel | null",
-      "requirementIds": ["FR-25", "FR-26", "NFR-9", "NFR-11"]
+      "name": "KPI and overview extensions",
+      "location": "src/server/dashboards/admin.ts#getKpis and src/server/parent/overview-service.ts",
+      "contract": "getKpis payload gains outstandingFees: { amount: Money, currency } from reports.outstandingTotal(). The per-child overview gains fees: { outstanding: Money, currency, href: '/fees' } | null (null when the balance is 0). GET /api/dashboard/admin therefore gains the same key, an additive change.",
+      "requirementIds": ["FR-40", "FR-43", "NFR-9"]
     },
     {
-      "name": "missingWork",
-      "location": "src/server/dashboards/missing-work.ts",
-      "signature": "({ studentIds, from, to, now }) => Promise<Map<string, { assignmentId: string, dueAt: Date, courseId: string }[]>>",
-      "requirementIds": ["FR-11", "FR-25", "FR-37"]
+      "name": "pure fee math",
+      "location": "src/server/fees/fee-math.ts and src/lib/money.ts",
+      "contract": "computeInvoiceTotals, siblingRank, siblingRuleFor, autoAllocate, validateAllocations, deriveStatus, reminderSlot, agingBucket, formatMoney, amountInWords, as specified in system-design §2.2–2.3. Used by routes, the client AllocationEditor, the seed and the tests.",
+      "requirementIds": ["FR-11", "FR-15", "FR-24", "FR-28", "FR-34", "FR-35", "FR-37", "FR-42", "FR-49"]
     }
   ],
 

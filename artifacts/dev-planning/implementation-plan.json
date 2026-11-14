@@ -1,395 +1,269 @@
 {
-  "ticketId": "SH-16",
+  "ticketId": "SH-17",
   "version": "1.0",
-  "timestamp": "2026-11-10T15:00:00Z",
+  "timestamp": "2026-11-10T16:30:00Z",
   "phase": "dev-planning",
   "tasks": [
     {
       "id": "TASK-1",
-      "description": "Prisma: add enum RiskLevel {MEDIUM HIGH} and model StudentRiskSnapshot (studentId, termId, level?, previousLevel?, reasons Json, signals Json, history Json @default(\"[]\"), highNotifiedAt?, computedAt, createdAt/updatedAt; @@unique([studentId, termId]), @@index([termId, level]), @@index([termId, computedAt])) with back-relations on User and Term. Migration add_student_risk_snapshot. Run prisma generate. Do not add the AuditLog index (ADR-7, only if EXPLAIN shows it is needed).",
+      "description": "Prisma: 4 fee enums, 12 fee models (incl. InvoiceReminder), SchoolSettings.currency/invoiceFooter, User.isBursar; migration with 3 partial unique indexes + CHECK(amount > 0) on Payment/PaymentAllocation (D-1..D-3, D-6, D-7, ADR-5)",
       "files": [
         "prisma/schema.prisma",
-        "prisma/migrations/20261115000000_add_student_risk_snapshot/migration.sql"
+        "prisma/migrations/20261116000000_add_fees/migration.sql"
       ],
       "dependencies": [],
-      "estimateHours": 1.5,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-27",
-        "FR-28",
-        "NFR-6"
+        "FR-1",
+        "FR-2",
+        "FR-3",
+        "FR-4",
+        "FR-5",
+        "NFR-1",
+        "NFR-2",
+        "NFR-3",
+        "NFR-8"
       ]
     },
     {
       "id": "TASK-2",
-      "description": "Pure risk rules with no Prisma import: attendanceSignal(pct, threshold) (< threshold → MEDIUM, < 80 → HIGH, null pct → null), gradesSignal(coursePcts) (any < 60 → MEDIUM; ≥2 < 60 or any < 50 → HIGH; null percents ignored), missingSignal(count) (3–4 → MEDIUM, ≥5 → HIGH), overallLevel(signals) (any HIGH or ≥2 MEDIUM → HIGH, exactly one MEDIUM → MEDIUM, else null), formatReason → labels 'Attendance 78 %', '2 courses < 60 %', '6 missing'. Vitest table tests for every boundary: 90/89.9, 80/79.9, 60/59.9, 50/49.9, missing 2/3/4/5, MEDIUM+MEDIUM → HIGH, threshold override.",
+      "description": "src/lib/money.ts: re-export Decimal/dec/fixed2 from grading-math, sumMoney, formatMoney (cached Intl.NumberFormat), amountInWords (ADR-2, ADR-8, ADR-10)",
       "files": [
-        "src/server/dashboards/risk-rules.ts",
-        "tests/unit/dashboards/risk-rules.test.ts"
+        "src/lib/money.ts"
       ],
       "dependencies": [],
       "estimateHours": 2,
       "requirementIds": [
-        "FR-25",
-        "FR-26",
-        "NFR-9",
+        "FR-34",
+        "FR-35",
+        "NFR-1",
         "NFR-11"
       ]
     },
     {
       "id": "TASK-3",
-      "description": "Date helpers in src/lib/dates.ts next to the existing ones: greetingFor(now, tz) → 'Good morning' / 'Good afternoon' / 'Good evening' by school-timezone hour, and schoolDaysBack(n, tz) → the last n dates that have at least one AttendanceSession (yyyy-MM-dd). Extend the existing dates unit test with the hour boundaries for greetingFor.",
+      "description": "Zod schemas for every fee body/query: money (2 dp string, <= 99,999,999.99), list filters (pageSize <= 100, sort whitelist), setup/invoice/payment/reverse/void/adjust bodies (shared with RHF forms)",
       "files": [
-        "src/lib/dates.ts",
-        "tests/unit/dates.test.ts"
+        "src/lib/validators/fees.ts"
       ],
-      "dependencies": [],
-      "estimateHours": 1.5,
+      "dependencies": [
+        "TASK-2"
+      ],
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-3",
-        "FR-17",
+        "FR-6",
+        "FR-7",
+        "FR-8",
+        "FR-9",
+        "FR-10",
+        "FR-18",
+        "FR-21",
+        "FR-23",
+        "FR-27",
+        "FR-31",
         "NFR-7"
       ]
     },
     {
       "id": "TASK-4",
-      "description": "Extract the shared missing-work predicate: missingWork({ studentIds, from, to, now }) → Map<studentId, {assignmentId, dueAt, courseId}[]>. An assignment counts when it is published (visibleWhere(now)), dueAt ∈ [from, min(to, now)), submissionType ≠ NO_SUBMISSION, the student is actively enrolled, and there is no Submission and no GradeExemption. Use one window query, then subtract in memory. Refactor assignments/reminders.ts to call it with its own 8-day window without changing its behaviour. The integration test covers the window edges, exemptions and NO_SUBMISSION.",
+      "description": "Pure fee-math.ts: computeInvoiceTotals, siblingRank, siblingRuleFor, autoAllocate, validateAllocations, deriveStatus, reminderSlot, agingBucket (system-design \u00a72.2)",
       "files": [
-        "src/server/dashboards/missing-work.ts",
-        "src/server/assignments/reminders.ts",
-        "tests/integration/dashboards/missing-work.test.ts"
+        "src/server/fees/fee-math.ts"
       ],
-      "dependencies": [],
-      "estimateHours": 2.5,
+      "dependencies": [
+        "TASK-2"
+      ],
+      "estimateHours": 3,
       "requirementIds": [
         "FR-11",
-        "FR-25",
+        "FR-15",
+        "FR-24",
+        "FR-28",
+        "FR-29",
         "FR-37",
+        "FR-42",
+        "NFR-1",
         "NFR-8"
       ]
     },
     {
       "id": "TASK-5",
-      "description": "Batch grade loader loadTermPercents(termId, studentIds?) → Map<studentId, {courseId, percent, letter}[]>. Use about 5 queries (courses and scales, grade items, grades, categories, overrides), group in memory, and call the existing pure computeStudentTerm for each (student, course). Never query per student. The integration test asserts parity with getStudentGrades for seeded students.",
+      "description": "Unit tests for fee-math (AC1 2235.00 / AC2 -107.50 fixtures, clamp, half-up, sibling rank/rule, oldest-first allocation, status transitions, reminder slots, aging; tz America/New_York) and money (amountInWords, formatMoney)",
       "files": [
-        "src/server/gradebook/batch-grades.ts",
-        "tests/integration/gradebook/batch-grades.test.ts"
-      ],
-      "dependencies": [],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-13",
-        "FR-19",
-        "FR-25",
-        "FR-36",
-        "NFR-1",
-        "NFR-8"
-      ]
-    },
-    {
-      "id": "TASK-6",
-      "description": "Zod validators that mirror api-contracts.json. dashboards.ts holds the at-risk query (level, reason, gradeLevel, sectionId, page, pageSize clamped to 100, format=csv) and the student insights params. reports.ts holds REPORT_KEYS as a z.enum of the six keys, the shared academicYearId/termId selector, and the per-report filter schemas from api-contracts.reportFilters (date ranges where from ≤ to, plus format=csv).",
-      "files": [
-        "src/lib/validators/dashboards.ts",
-        "src/lib/validators/reports.ts"
-      ],
-      "dependencies": [],
-      "estimateHours": 1.5,
-      "requirementIds": [
-        "FR-30",
-        "FR-33",
-        "FR-42",
-        "FR-44",
-        "NFR-6"
-      ]
-    },
-    {
-      "id": "TASK-7",
-      "description": "Register the notification type 'insights.student_high_risk' in NOTIFICATION_TYPES (category ACADEMIC, recipient TEACHER, email default true) so notify() and preferences accept it.",
-      "files": [
-        "src/server/notifications/types.ts"
-      ],
-      "dependencies": [],
-      "estimateHours": 0.5,
-      "requirementIds": [
-        "FR-32"
-      ]
-    },
-    {
-      "id": "TASK-8",
-      "description": "Cache layer and announcements stub. insights.ts exports the tag constants (dashboard:admin, dashboard:teacher, insights:at-risk) and a cached(fn, keyParts, {revalidate, tags}) helper over unstable_cache that returns { data, computedAt: ISO } with no Date or Decimal values. It also exports getRiskSummary(user) (counts by level and by reason, cached 3600 s with key ['risk','admin'] or ['risk','teacher',userId]) and getTopAtRisk(user, n), both reading StudentRiskSnapshot intersected with getAccessibleStudentIds. announcements.ts exports ANNOUNCEMENTS_AVAILABLE = false and latestAnnouncements() → [].",
-      "files": [
-        "src/server/dashboards/insights.ts",
-        "src/server/dashboards/announcements.ts"
-      ],
-      "dependencies": [
-        "TASK-1"
-      ],
-      "estimateHours": 2.5,
-      "requirementIds": [
-        "FR-7",
-        "FR-8",
-        "FR-14",
-        "FR-20",
-        "FR-23",
-        "FR-24",
-        "FR-38",
-        "NFR-3",
-        "NFR-12"
-      ]
-    },
-    {
-      "id": "TASK-9",
-      "description": "Risk engine in risk.ts. loadRiskInputs(term, studentIds) is batched: AttendanceRecord groupBy → attendanceRate, loadTermPercents, and missingWork over the last 30 days. recomputeRiskSnapshots({ force }) skips with 'no-term', or with 'fresh' when max(computedAt) is under 60 minutes old and force is false. It upserts in chunked $transactions of about 100 rows. When the level changes it sets previousLevel and prepends to history, capped at 10. When a student moves to HIGH it claims highNotifiedAt atomically with updateMany (14-day window) and calls notify(homeroomTeacher, 'insights.student_high_risk'); with no homeroom teacher it logs logger.warn. It then calls revalidateTag('insights:at-risk') and returns { studentsComputed, skipped }. listAtRisk(user, filters, page) intersects the scope with the filters, sorts HIGH first, then by reason count, then by name, computes the trend from previousLevel, and returns all rows when CSV is requested. getStudentInsights(user, studentId) uses assertCanViewStudent and returns signals, level and history. Export AT_RISK_COLUMNS for the CSV.",
-      "files": [
-        "src/server/dashboards/risk.ts"
-      ],
-      "dependencies": [
-        "TASK-1",
-        "TASK-2",
-        "TASK-4",
-        "TASK-5",
-        "TASK-7",
-        "TASK-8"
-      ],
-      "estimateHours": 4,
-      "requirementIds": [
-        "FR-25",
-        "FR-26",
-        "FR-27",
-        "FR-28",
-        "FR-29",
-        "FR-30",
-        "FR-32",
-        "FR-42",
-        "FR-43",
-        "NFR-1",
-        "NFR-3"
-      ]
-    },
-    {
-      "id": "TASK-10",
-      "description": "Integration tests for the risk engine. The hourly gate skips when the data is fresh and force bypasses it. History is appended only when the level changes and is capped at 10. The 14-day HIGH notification claim fires once. A teacher filtering by an out-of-scope section gets 0 rows (empty 200). Sort order and trend arrows are correct.",
-      "files": [
-        "tests/integration/dashboards/risk.test.ts"
-      ],
-      "dependencies": [
-        "TASK-9"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-27",
-        "FR-28",
-        "FR-32",
-        "FR-42",
-        "NFR-3",
-        "NFR-9"
-      ]
-    },
-    {
-      "id": "TASK-11",
-      "description": "Teacher dashboard service. getTodaysClasses(user) wraps attendance-service getToday and nowAndNext, includes taken/not-taken status, and is live (not cached). getToGrade(user) returns the count and the 5 oldest ungraded submissions and manual-grading quiz attempts. getUpcomingDeadlines(user) covers assignments and quizzes due in the next 7 school-tz days, with submission rate = submissions / active enrolments from one grouped query. getTeacherMessages(user) returns messaging unreadCount plus latestAnnouncements. getToGrade and getUpcomingDeadlines are cached through insights.cached with userId in the key and the dashboard:teacher tag.",
-      "files": [
-        "src/server/dashboards/teacher.ts"
-      ],
-      "dependencies": [
-        "TASK-3",
-        "TASK-8"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-4",
-        "FR-5",
-        "FR-6",
-        "FR-8",
-        "FR-23",
-        "NFR-3",
-        "NFR-7"
-      ]
-    },
-    {
-      "id": "TASK-12",
-      "description": "Student dashboard service, uncached. getStudentToday → parent/overview-service getToday(user, user.id) and is holiday-aware. getDueSoon covers assignments and open quizzes due in the next 7 days plus missingWork from term start to now; overdue items come first with overdue: true. getRecentGrades → overview-service, last 5. getMyCourses uses getStudentGrades for percent and letter, the LessonProgress ratio, and the first incomplete visible lesson. getTermAttendance uses countStatuses + attendanceRate over the term range.",
-      "files": [
-        "src/server/dashboards/student.ts"
+        "tests/unit/fees/fee-math.test.ts",
+        "tests/unit/fees/money.test.ts"
       ],
       "dependencies": [
         "TASK-4"
       ],
       "estimateHours": 3,
       "requirementIds": [
-        "FR-10",
-        "FR-11",
-        "FR-12",
-        "FR-13",
-        "FR-15",
-        "NFR-7",
+        "FR-49",
+        "NFR-10"
+      ]
+    },
+    {
+      "id": "TASK-6",
+      "description": "ledger.ts: nextDocumentNumber (DocumentSequence INSERT ON CONFLICT + SELECT FOR UPDATE), lockInvoices (sorted FOR UPDATE), recomputeInvoice (sole amountPaid/status writer), issueInvoice (ADR-3, ADR-4)",
+      "files": [
+        "src/server/fees/ledger.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-4"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-14",
+        "FR-16",
+        "FR-24",
+        "NFR-1",
+        "NFR-3",
         "NFR-8"
       ]
     },
     {
-      "id": "TASK-13",
-      "description": "Admin dashboard service. getKpis() is cached and covers active students, active teachers, today's rate with the delta vs the same weekday 7 days earlier (attendance-service getOverview), missing registers today and pending absence notes. getSafeguardingCount(user) is never cached and only called when isSafeguardingLead. getAttendanceTrend() uses schoolDaysBack(30) and returns the threshold. getEnrollmentByGrade() groups by grade level × gender. getGradeDistribution(termId) builds 10 % buckets from loadTermPercents, plus the average and median. getUpcomingEvents() returns the next 5 school-wide CalendarEvents, with recurrences expanded through calendar/recurrence.expandOccurrences. getRecentActivity() returns the latest 10 AuditLog rows whose action starts with user., report_card. or settings., joined to the actor. The cached ones use the dashboard:admin tag with revalidate 900.",
+      "id": "TASK-7",
+      "description": "access.ts: requireFeeReader, requireBursar (DB read of isBursar), isBursar(user) for pages, parentStudentIds, assertCanSeeInvoice/Payment/Student (404 on out-of-scope), assertParent",
       "files": [
-        "src/server/dashboards/admin.ts"
+        "src/server/fees/access.ts"
       ],
       "dependencies": [
-        "TASK-3",
-        "TASK-5",
-        "TASK-8"
+        "TASK-1"
       ],
-      "estimateHours": 3.5,
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-16",
-        "FR-17",
-        "FR-18",
-        "FR-19",
-        "FR-21",
-        "FR-22",
-        "FR-23",
-        "NFR-1",
-        "NFR-3",
-        "NFR-7"
+        "FR-41",
+        "FR-45",
+        "NFR-4"
       ]
     },
     {
-      "id": "TASK-14",
-      "description": "Hook the hourly risk recompute into the internal dispatch cron as an isolated try { await recomputeRiskSnapshots() } catch → logger.error block. The gate lives in the database inside recomputeRiskSnapshots. Extend the email-dispatch integration test so that a fresh snapshot is skipped and a failure does not break the other passes.",
+      "id": "TASK-8",
+      "description": "Register fees.invoice_issued, fees.payment_received, fees.overdue_reminder (FINANCE, PARENT, email default on)",
       "files": [
-        "src/app/api/internal/email/dispatch/route.ts",
-        "tests/integration/email-dispatch.test.ts"
+        "src/server/notifications/types.ts"
+      ],
+      "dependencies": [],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-36"
+      ]
+    },
+    {
+      "id": "TASK-9",
+      "description": "User.isBursar via existing users validator/service (ADMIN-only, audited like isSafeguardingLead); PATCH /api/users/:id passes it through",
+      "files": [
+        "src/lib/validators/users.ts",
+        "src/server/services/users.ts"
       ],
       "dependencies": [
-        "TASK-9"
+        "TASK-1"
       ],
       "estimateHours": 1,
       "requirementIds": [
-        "FR-27",
-        "NFR-12"
+        "FR-5",
+        "FR-45",
+        "NFR-9"
       ]
     },
     {
-      "id": "TASK-15",
-      "description": "Shared UI. Widget.tsx is a server wrapper: an MUI Card with a title, an optional 'Updated N min ago' caption from computedAt, WidgetErrorBoundary and Suspense with a LoadingSkeleton fallback. WidgetErrorBoundary.tsx is a client class component using getDerivedStateFromError; it shows an Alert 'This widget could not load' and a 'Retry' Button that resets state and calls router.refresh(). ChartA11y.tsx is a client component that wraps an x-charts chart with aria-label={summary} and a visuallyHidden MUI Table of the same rows. Before using any MUI component, look it up through mui-mcp (useMuiDocs + fetchDocs, 9.5.0); if MCP is unavailable, report a blocker. Add a unit test that the error boundary renders the fallback and that Retry resets it.",
+      "id": "TASK-10",
+      "description": "Create fees-service.ts with setup functions: fee items CRUD/archive, plans list/create/replace (PUT replaces lines in one tx, annual uniqueness), discounts CRUD/archive, setStudentOptionalFees, bulkAssignOptionalFee(sectionId), setStudentDiscounts (manual only); audit after commit",
       "files": [
-        "src/components/Widget/Widget.tsx",
-        "src/components/Widget/WidgetErrorBoundary.tsx",
-        "src/components/charts/ChartA11y.tsx",
-        "tests/unit/WidgetErrorBoundary.test.tsx"
-      ],
-      "dependencies": [],
-      "estimateHours": 2.5,
-      "requirementIds": [
-        "FR-2",
-        "FR-24",
-        "NFR-2",
-        "NFR-4",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-16",
-      "description": "Dashboard shell. In page.tsx, keep the PARENT → /my-children redirect, switch on role to AdminDashboard, TeacherDashboard or StudentDashboard, and call notFound() for any other role. Render GreetingHeader immediately: greetingFor + first name, the school-tz date and getCurrentTerm().name. RefreshButton is a client component shown to ADMIN only; it POSTs /api/dashboard/refresh, shows a toast through useToast, and calls router.refresh().",
-      "files": [
-        "src/app/(app)/dashboard/page.tsx",
-        "src/app/(app)/dashboard/_components/GreetingHeader.tsx",
-        "src/app/(app)/dashboard/_components/RefreshButton.tsx"
+        "src/server/fees/fees-service.ts"
       ],
       "dependencies": [
+        "TASK-1",
         "TASK-3",
-        "TASK-17",
-        "TASK-18",
-        "TASK-19"
-      ],
-      "estimateHours": 1.5,
-      "requirementIds": [
-        "FR-1",
-        "FR-3",
-        "FR-24",
-        "NFR-7"
-      ]
-    },
-    {
-      "id": "TASK-17",
-      "description": "Teacher dashboard. TeacherDashboard.tsx lays out an MUI Grid of Widgets. The widgets are async server components that call dashboards/teacher and insights. TodaysClassesWidget shows Now/Next Chips, taken/not-taken status, a 'Take attendance' action and a course link. ToGradeWidget shows the count and top 5 with links. UpcomingDeadlinesWidget shows submission rates. AtRiskWidget shows the top 5 with reason chips and a link to /insights/at-risk. TeacherMessagesWidget shows the unread count, and EmptyState 'Announcements not available yet' when ANNOUNCEMENTS_AVAILABLE is false. QuickActionsWidget has links for New assignment, Take attendance and New quiz; 'New announcement' is hidden while ANNOUNCEMENTS_AVAILABLE is false. Use MUI only, looked up through mui-mcp.",
-      "files": [
-        "src/app/(app)/dashboard/_components/TeacherDashboard.tsx",
-        "src/app/(app)/dashboard/_components/widgets/TodaysClassesWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/ToGradeWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/UpcomingDeadlinesWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/AtRiskWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/TeacherMessagesWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/QuickActionsWidget.tsx"
-      ],
-      "dependencies": [
-        "TASK-11",
-        "TASK-15",
-        "TASK-8"
+        "TASK-7"
       ],
       "estimateHours": 4,
       "requirementIds": [
-        "FR-2",
-        "FR-4",
-        "FR-5",
         "FR-6",
         "FR-7",
         "FR-8",
         "FR-9",
-        "NFR-4",
-        "NFR-5"
+        "FR-10",
+        "FR-11",
+        "NFR-2",
+        "NFR-7",
+        "NFR-9"
       ]
     },
     {
-      "id": "TASK-18",
-      "description": "Student dashboard. StudentDashboard.tsx lays out an MUI Grid of Widgets. StudentTodayWidget shows the schedule with Now/Next Chips, or a holiday message. DueSoonWidget lists overdue items first, highlighted with error colour plus an 'Overdue' text label (not colour alone). RecentGradesWidget shows the last 5. MyCoursesWidget shows course Cards with percent and letter, a LinearProgress bar and a next-lesson link. AnnouncementsWidget shows EmptyState while ANNOUNCEMENTS_AVAILABLE is false. TermAttendanceWidget shows an x-charts Gauge inside ChartA11y. Use MUI only, looked up through mui-mcp.",
+      "id": "TASK-11",
+      "description": "Setup API route handlers (thin withHandler + Zod; reads requireFeeReader/ADMIN, writes requireBursar): items, plans, discounts, student optional fees/discounts, optional-fees bulk",
       "files": [
-        "src/app/(app)/dashboard/_components/StudentDashboard.tsx",
-        "src/app/(app)/dashboard/_components/widgets/StudentTodayWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/DueSoonWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/RecentGradesWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/MyCoursesWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/AnnouncementsWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/TermAttendanceWidget.tsx"
+        "src/app/api/fees/items/route.ts",
+        "src/app/api/fees/items/[id]/route.ts",
+        "src/app/api/fees/items/[id]/archive/route.ts",
+        "src/app/api/fees/plans/route.ts",
+        "src/app/api/fees/plans/[id]/route.ts",
+        "src/app/api/fees/discounts/route.ts",
+        "src/app/api/fees/discounts/[id]/route.ts",
+        "src/app/api/fees/discounts/[id]/archive/route.ts",
+        "src/app/api/fees/students/[id]/optional-fees/route.ts",
+        "src/app/api/fees/optional-fees/bulk/route.ts",
+        "src/app/api/fees/students/[id]/discounts/route.ts"
       ],
       "dependencies": [
-        "TASK-12",
-        "TASK-15",
+        "TASK-10"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-6",
+        "FR-7",
+        "FR-8",
+        "FR-9",
+        "FR-10",
+        "FR-45",
+        "NFR-4",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-12",
+      "description": "maintenance.ts: markOverdue(today) single updateMany; sendInvoiceReminders(now) with InvoiceReminder P2002 idempotency + notify; hook both into the existing internal dispatch route (response gains fees key)",
+      "files": [
+        "src/server/fees/maintenance.ts",
+        "src/app/api/internal/email/dispatch/route.ts"
+      ],
+      "dependencies": [
+        "TASK-1",
+        "TASK-4",
         "TASK-8"
       ],
-      "estimateHours": 4,
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-2",
-        "FR-10",
+        "FR-3",
+        "FR-25",
+        "FR-37",
+        "NFR-8",
+        "NFR-9"
+      ]
+    },
+    {
+      "id": "TASK-13",
+      "description": "Invoice services in fees-service.ts: buildInvoiceDrafts (batched loads, sibling ranks, skip rule, D-12), previewInvoices, generateInvoices (50-student chunk tx, optional issue, P2002 => skipped), listInvoices + totals, getInvoice (lines, allocations, audit timeline), createManualInvoice, updateDraft/deleteDraft/issue, adjustInvoice (D-10), voidInvoice (D-11), remindInvoice (24h throttle => 429); reports.ts invoiceWhere shared by list/totals/CSV; markOverdue on every read; notify invoice_issued after commit",
+      "files": [
+        "src/server/fees/fees-service.ts",
+        "src/server/fees/reports.ts"
+      ],
+      "dependencies": [
+        "TASK-6",
+        "TASK-7",
+        "TASK-8",
+        "TASK-10",
+        "TASK-12"
+      ],
+      "estimateHours": 6,
+      "requirementIds": [
         "FR-11",
         "FR-12",
         "FR-13",
         "FR-14",
         "FR-15",
-        "NFR-2",
-        "NFR-4",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-19",
-      "description": "Admin dashboard. AdminDashboard.tsx lays out an MUI Grid with a RefreshButton slot. KpiRowWidget renders StatCards, including the safeguarding card only for leads (uncached call). AttendanceTrendWidget is a LineChart with a ChartsReferenceLine at the threshold. EnrollmentByGradeWidget is a BarChart stacked by gender. GradeDistributionWidget is a BarChart histogram captioned with the average and median. RiskSummaryWidget shows counts by level and reason and a link to the full list. UpcomingEventsWidget shows the next 5 events. RecentActivityWidget shows the last 10 audit entries. Charts receive serialisable props and are wrapped in ChartA11y with a server-built aria summary. Series use labels or patterns, not colour alone. Use MUI only, looked up through mui-mcp.",
-      "files": [
-        "src/app/(app)/dashboard/_components/AdminDashboard.tsx",
-        "src/app/(app)/dashboard/_components/widgets/KpiRowWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/AttendanceTrendWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/EnrollmentByGradeWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/GradeDistributionWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/RiskSummaryWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/UpcomingEventsWidget.tsx",
-        "src/app/(app)/dashboard/_components/widgets/RecentActivityWidget.tsx"
-      ],
-      "dependencies": [
-        "TASK-13",
-        "TASK-15",
-        "TASK-8"
-      ],
-      "estimateHours": 5,
-      "requirementIds": [
-        "FR-2",
         "FR-16",
         "FR-17",
         "FR-18",
@@ -397,410 +271,520 @@
         "FR-20",
         "FR-21",
         "FR-22",
-        "NFR-2",
-        "NFR-4",
-        "NFR-5"
-      ]
-    },
-    {
-      "id": "TASK-20",
-      "description": "Dashboard API routes, thin: withHandler → requireRole → service → ok. GET /api/dashboard/teacher (TEACHER), /student (STUDENT) and /admin (ADMIN) return the widget payloads from api-contracts. The admin payload omits openSafeguardingReports unless the caller is a safeguarding lead. POST /api/dashboard/refresh (ADMIN) calls recomputeRiskSnapshots({ force: true }), runs revalidateTag on all tags, and audits 'dashboard.refresh'; it returns { refreshedAt, studentsComputed, skipped }. The integration test checks the role guards and that refresh changes computedAt.",
-      "files": [
-        "src/app/api/dashboard/teacher/route.ts",
-        "src/app/api/dashboard/student/route.ts",
-        "src/app/api/dashboard/admin/route.ts",
-        "src/app/api/dashboard/refresh/route.ts",
-        "tests/integration/dashboards/dashboard-api.test.ts"
-      ],
-      "dependencies": [
-        "TASK-9",
-        "TASK-11",
-        "TASK-12",
-        "TASK-13"
-      ],
-      "estimateHours": 2.5,
-      "requirementIds": [
         "FR-23",
         "FR-24",
-        "FR-41",
+        "FR-25",
+        "FR-38",
+        "NFR-2",
         "NFR-3",
-        "NFR-6"
-      ]
-    },
-    {
-      "id": "TASK-21",
-      "description": "At-risk list. GET /api/insights/at-risk (ADMIN, TEACHER) parses the dashboards validator, calls listAtRisk, and returns paginated() JSON, or toCsv(AT_RISK_COLUMNS, allRows) as an attachment when format=csv. The /insights/at-risk server page uses requireRole(['ADMIN','TEACHER']), reads filters from searchParams, and renders PageHeader and the shared DataTable: a level Chip with text, reason Chips, a trend icon with aria-label, an 'Open student' link to /students/[id]/insights, a 'Message parents' link into the existing PRD-13 new-conversation flow, and a CSV button that carries the current filters. AtRiskFilters is a client component with MUI Selects for level, reason, grade level and section that update the URL.",
-      "files": [
-        "src/app/api/insights/at-risk/route.ts",
-        "src/app/(app)/insights/at-risk/page.tsx",
-        "src/app/(app)/insights/at-risk/_components/AtRiskFilters.tsx"
-      ],
-      "dependencies": [
-        "TASK-6",
-        "TASK-9"
-      ],
-      "estimateHours": 3,
-      "requirementIds": [
-        "FR-29",
-        "FR-30",
-        "FR-42",
-        "NFR-3",
-        "NFR-4",
-        "NFR-6"
-      ]
-    },
-    {
-      "id": "TASK-22",
-      "description": "Student Insights tab. GET /api/students/[id]/insights (ADMIN, or the student's TEACHER) calls getStudentInsights, which returns 403 via assertCanViewStudent and 404 for an unknown student. The /students/[id]/insights server page shows the signal values (attendance %, courses below 60 %, missing count), a level Chip and a history List from snapshot.history. Append { key: 'insights', label: 'Insights', href, roles: ['ADMIN','TEACHER'] } to studentTabs.",
-      "files": [
-        "src/app/api/students/[id]/insights/route.ts",
-        "src/app/(app)/students/[id]/insights/page.tsx",
-        "src/config/student-tabs.ts"
-      ],
-      "dependencies": [
-        "TASK-6",
-        "TASK-9"
-      ],
-      "estimateHours": 2,
-      "requirementIds": [
-        "FR-28",
-        "FR-31",
-        "FR-43",
-        "NFR-3"
-      ]
-    },
-    {
-      "id": "TASK-23",
-      "description": "Reports, part 1. Each module exports { title, columns, run(filters) → { chart, rows, summary } }. enrollment.ts covers active students by grade level × section × gender, and new enrollments and archives by month using $queryRaw with date_trunc in the school timezone. attendance.ts calls attendance-service getReport and rolls the rows up by grade level, section or course, with a daily trend and the 20 lowest students. performance.ts uses loadTermPercents and letterFor to give the average and letter distribution by course and by subject, plus a section comparison for the same grade × subject. Use tagged $queryRaw only.",
-      "files": [
-        "src/server/reports/enrollment.ts",
-        "src/server/reports/attendance.ts",
-        "src/server/reports/performance.ts"
-      ],
-      "dependencies": [
-        "TASK-5",
-        "TASK-6"
-      ],
-      "estimateHours": 5,
-      "requirementIds": [
-        "FR-34",
-        "FR-35",
-        "FR-36",
-        "NFR-1",
-        "NFR-7",
+        "NFR-5",
         "NFR-8"
       ]
     },
     {
-      "id": "TASK-24",
-      "description": "Reports, part 2, with the same module shape. completion.ts gives on-time, late (submittedAt vs dueAt) and missing (missingWork) rates by course and by teacher for a date range. engagement.ts gives lesson completion by course from LessonProgress and distinct parents signed in over the last 7 and 30 days from AuditLog 'auth.login.success', with User.lastLoginAt as a fallback; the announcement read rate is omitted with a 'not available' note. workload.ts gives, per teacher, courses, distinct students, weekly TimetableSlot count and the grading backlog.",
+      "id": "TASK-14",
+      "description": "Invoice API route handlers: preview, generate, list/create, get/patch/delete, issue, void, adjust, remind",
       "files": [
-        "src/server/reports/completion.ts",
-        "src/server/reports/engagement.ts",
-        "src/server/reports/workload.ts"
+        "src/app/api/fees/invoices/preview/route.ts",
+        "src/app/api/fees/invoices/generate/route.ts",
+        "src/app/api/fees/invoices/route.ts",
+        "src/app/api/fees/invoices/[id]/route.ts",
+        "src/app/api/fees/invoices/[id]/issue/route.ts",
+        "src/app/api/fees/invoices/[id]/void/route.ts",
+        "src/app/api/fees/invoices/[id]/adjust/route.ts",
+        "src/app/api/fees/invoices/[id]/remind/route.ts"
       ],
       "dependencies": [
-        "TASK-4",
-        "TASK-6"
+        "TASK-13"
       ],
-      "estimateHours": 4.5,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-37",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-17",
+        "FR-18",
+        "FR-19",
+        "FR-20",
+        "FR-21",
+        "FR-23",
         "FR-38",
-        "FR-39",
-        "NFR-1",
+        "FR-45",
+        "NFR-4",
         "NFR-7"
       ]
     },
     {
-      "id": "TASK-25",
-      "description": "Report registry. index.ts exports REPORTS, keyed by the six report keys, with title, filterSchema (from validators/reports), columns and run. The page, the API and the CSV all read this one registry. The integration test runs each report on the default seed, asserts known totals, checks that CSV rows equal table rows (FR-35 AC 7), and checks that an unknown key is rejected.",
+      "id": "TASK-15",
+      "description": "Payment services in fees-service.ts: getFamilyOpenInvoices (+ suggested autoAllocate), recordPayment (lock invoices, FR-29 overpayment message, validateAllocations, RCT number, recompute, notify payment_received), reversePayment (FOR UPDATE, second reverse => 409), listPayments/getPayment with parent scope",
       "files": [
-        "src/server/reports/index.ts",
-        "tests/integration/reports/reports.test.ts"
+        "src/server/fees/fees-service.ts"
       ],
       "dependencies": [
-        "TASK-23",
-        "TASK-24"
-      ],
-      "estimateHours": 2.5,
-      "requirementIds": [
-        "FR-33",
-        "FR-35",
-        "FR-44",
-        "NFR-9"
-      ]
-    },
-    {
-      "id": "TASK-26",
-      "description": "Reports centre. GET /api/reports/[reportKey] (ADMIN) returns 404 NOT_FOUND for an unknown key, parses filterSchema, and returns ok() or a CSV attachment. /admin/reports lists the six reports. The /admin/reports/[reportKey] server page calls notFound() for an unknown key and renders the year/term selector and filters from the URL, then a chart (LineChart or BarChart inside ChartA11y), a DataTable and a CSV link. ReportFilters is a client component using x-date-pickers for the date range and Selects for academic year, term and the report-specific filters.",
-      "files": [
-        "src/app/api/reports/[reportKey]/route.ts",
-        "src/app/(app)/admin/reports/page.tsx",
-        "src/app/(app)/admin/reports/[reportKey]/page.tsx",
-        "src/app/(app)/admin/reports/[reportKey]/_components/ReportFilters.tsx"
-      ],
-      "dependencies": [
-        "TASK-15",
-        "TASK-25"
+        "TASK-13"
       ],
       "estimateHours": 4,
       "requirementIds": [
+        "FR-26",
+        "FR-27",
+        "FR-28",
+        "FR-29",
+        "FR-30",
+        "FR-31",
+        "FR-32",
+        "NFR-1",
+        "NFR-2",
+        "NFR-3",
+        "NFR-4",
+        "NFR-11"
+      ]
+    },
+    {
+      "id": "TASK-16",
+      "description": "Payment API route handlers: family open invoices, payments list/create, payment detail, reverse",
+      "files": [
+        "src/app/api/fees/families/[parentId]/open-invoices/route.ts",
+        "src/app/api/fees/payments/route.ts",
+        "src/app/api/fees/payments/[id]/route.ts",
+        "src/app/api/fees/payments/[id]/reverse/route.ts"
+      ],
+      "dependencies": [
+        "TASK-15"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-26",
+        "FR-27",
+        "FR-30",
+        "FR-31",
+        "FR-32",
+        "FR-45",
+        "NFR-4",
+        "NFR-7"
+      ]
+    },
+    {
+      "id": "TASK-17",
+      "description": "reports.ts: getDashboard (KPIs + 12-week trend), getAging (buckets + top-10 overdue families by primary parent), exportInvoicesCsv/PaymentsCsv/AgingCsv via toCsv (non-negative money columns only), getMyFees(parent), outstandingTotal, outstandingByStudent",
+      "files": [
+        "src/server/fees/reports.ts"
+      ],
+      "dependencies": [
+        "TASK-13",
+        "TASK-15"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-39",
+        "FR-40",
+        "FR-42",
+        "FR-43",
+        "FR-44",
+        "FR-25",
+        "NFR-1",
+        "NFR-8"
+      ]
+    },
+    {
+      "id": "TASK-18",
+      "description": "Report API route handlers: dashboard, aging, CSV exports (invoices/payments/aging, ADMIN-only, text/csv), GET /api/me/fees (PARENT)",
+      "files": [
+        "src/app/api/fees/dashboard/route.ts",
+        "src/app/api/fees/aging/route.ts",
+        "src/app/api/fees/export/invoices/route.ts",
+        "src/app/api/fees/export/payments/route.ts",
+        "src/app/api/fees/export/aging/route.ts",
+        "src/app/api/me/fees/route.ts"
+      ],
+      "dependencies": [
+        "TASK-17"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-39",
+        "FR-41",
+        "FR-42",
+        "FR-44",
+        "FR-45",
+        "NFR-4"
+      ]
+    },
+    {
+      "id": "TASK-19",
+      "description": "Shared fee UI components (MUI only, docs checked via MUI MCP): InvoiceStatusChip, MoneyText (formatMoney), PrintButton (client, window.print), InvoiceLinesEditor (live Decimal totals), AllocationEditor (autoAllocate/validateAllocations from fee-math)",
+      "files": [
+        "src/components/fees/InvoiceStatusChip.tsx",
+        "src/components/fees/MoneyText.tsx",
+        "src/components/fees/PrintButton.tsx",
+        "src/components/fees/InvoiceLinesEditor.tsx",
+        "src/components/fees/AllocationEditor.tsx"
+      ],
+      "dependencies": [
+        "TASK-2",
+        "TASK-4"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-20",
+        "FR-23",
+        "FR-28",
         "FR-33",
         "FR-34",
         "FR-35",
-        "FR-36",
-        "FR-37",
-        "FR-38",
-        "FR-39",
-        "FR-44",
-        "NFR-2",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-20",
+      "description": "Print pages + documents: InvoiceDocument, ReceiptDocument (amount in words, Reversed watermark), /fees/invoices/[id]/print and /fees/receipts/[paymentId]/print (assertCanSee*, DRAFT => 404 for parents, sx @media print + GlobalStyles @page A4)",
+      "files": [
+        "src/components/fees/InvoiceDocument.tsx",
+        "src/components/fees/ReceiptDocument.tsx",
+        "src/app/(app)/fees/invoices/[id]/print/page.tsx",
+        "src/app/(app)/fees/receipts/[paymentId]/print/page.tsx"
+      ],
+      "dependencies": [
+        "TASK-15",
+        "TASK-19"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-22",
+        "FR-33",
+        "FR-34",
+        "FR-35",
         "NFR-4",
+        "NFR-6",
+        "NFR-12"
+      ]
+    },
+    {
+      "id": "TASK-21",
+      "description": "Navigation: ADMIN Fees (/admin/fees with Setup/Invoices/Payments) and PARENT Fees (/fees); none for TEACHER/STUDENT",
+      "files": [
+        "src/config/navigation.ts"
+      ],
+      "dependencies": [],
+      "estimateHours": 1,
+      "requirementIds": [
+        "FR-41",
+        "FR-46"
+      ]
+    },
+    {
+      "id": "TASK-22",
+      "description": "Fee setup page /admin/fees/setup: Tabs for Fee items, Fee plans (InvoiceLinesEditor-style line editor, computed total, dueDays), Discounts, Optional fees (per student + bulk by section), Student discounts; write controls only when isBursar",
+      "files": [
+        "src/app/(app)/admin/fees/setup/page.tsx",
+        "src/app/(app)/admin/fees/setup/_components/SetupTabs.tsx",
+        "src/app/(app)/admin/fees/setup/_components/FeeItemsTab.tsx",
+        "src/app/(app)/admin/fees/setup/_components/FeePlansTab.tsx",
+        "src/app/(app)/admin/fees/setup/_components/DiscountsTab.tsx",
+        "src/app/(app)/admin/fees/setup/_components/OptionalFeesTab.tsx",
+        "src/app/(app)/admin/fees/setup/_components/StudentDiscountsTab.tsx"
+      ],
+      "dependencies": [
+        "TASK-7",
+        "TASK-11",
+        "TASK-19"
+      ],
+      "estimateHours": 6,
+      "requirementIds": [
+        "FR-6",
+        "FR-7",
+        "FR-8",
+        "FR-9",
+        "FR-10",
+        "FR-45",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-23",
+      "description": "Invoices list page /admin/fees/invoices: server-mode DataTable, filter bar (status/term/grade/section/overdue/q), totals summary bar, CSV export button, New manual invoice dialog (bursar)",
+      "files": [
+        "src/app/(app)/admin/fees/invoices/page.tsx",
+        "src/app/(app)/admin/fees/invoices/_components/InvoicesTable.tsx",
+        "src/app/(app)/admin/fees/invoices/_components/ManualInvoiceDialog.tsx"
+      ],
+      "dependencies": [
+        "TASK-7",
+        "TASK-14",
+        "TASK-18",
+        "TASK-19"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-17",
+        "FR-18",
+        "FR-23",
+        "FR-44",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-24",
+      "description": "Generate page /admin/fees/invoices/generate (bursar): term/annual + grade multi-select, preview grid with skipped rows, Create drafts / Create and issue",
+      "files": [
+        "src/app/(app)/admin/fees/invoices/generate/page.tsx",
+        "src/app/(app)/admin/fees/invoices/generate/_components/GenerateInvoices.tsx"
+      ],
+      "dependencies": [
+        "TASK-7",
+        "TASK-14",
+        "TASK-19"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-12",
+        "FR-13",
+        "FR-14",
         "NFR-5",
         "NFR-6"
       ]
     },
     {
-      "id": "TASK-27",
-      "description": "Navigation. Keep 'Dashboard' first for every role. Add 'Reports' (/admin/reports, ADMIN) and 'At-risk students' (/insights/at-risk, ADMIN and TEACHER).",
+      "id": "TASK-25",
+      "description": "Invoice detail page /admin/fees/invoices/[id]: header, lines, allocations, balance, audit timeline; status-dependent actions (edit/issue/delete draft; record payment/adjust/void/remind; receipt links) with ConfirmDialog + reason fields",
       "files": [
-        "src/config/navigation.ts"
+        "src/app/(app)/admin/fees/invoices/[id]/page.tsx",
+        "src/app/(app)/admin/fees/invoices/[id]/_components/InvoiceActions.tsx"
       ],
       "dependencies": [
-        "TASK-21",
-        "TASK-26"
+        "TASK-7",
+        "TASK-14",
+        "TASK-19"
       ],
-      "estimateHours": 0.5,
+      "estimateHours": 4,
       "requirementIds": [
-        "FR-40"
+        "FR-19",
+        "FR-20",
+        "FR-21",
+        "FR-22",
+        "FR-38",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-26",
+      "description": "Payment pages: /admin/fees/payments (DataTable, reversed chip, CSV with DatePicker range + method), /admin/fees/payments/new (parent/student Autocomplete, AllocationEditor, DateTimePicker form, navigate to receipt on save), /admin/fees/payments/[id] (detail + Reverse with reason)",
+      "files": [
+        "src/app/(app)/admin/fees/payments/page.tsx",
+        "src/app/(app)/admin/fees/payments/_components/PaymentsTable.tsx",
+        "src/app/(app)/admin/fees/payments/new/page.tsx",
+        "src/app/(app)/admin/fees/payments/new/_components/RecordPaymentForm.tsx",
+        "src/app/(app)/admin/fees/payments/[id]/page.tsx",
+        "src/app/(app)/admin/fees/payments/[id]/_components/ReversePaymentButton.tsx"
+      ],
+      "dependencies": [
+        "TASK-7",
+        "TASK-16",
+        "TASK-18",
+        "TASK-19"
+      ],
+      "estimateHours": 5,
+      "requirementIds": [
+        "FR-26",
+        "FR-27",
+        "FR-28",
+        "FR-29",
+        "FR-30",
+        "FR-31",
+        "FR-32",
+        "FR-44",
+        "NFR-6"
+      ]
+    },
+    {
+      "id": "TASK-27",
+      "description": "Fees dashboard /admin/fees: StatCard KPIs, LineChart weekly trend, BarChart aging, top-10 overdue families, aging CSV button",
+      "files": [
+        "src/app/(app)/admin/fees/page.tsx",
+        "src/app/(app)/admin/fees/_components/FeesDashboard.tsx"
+      ],
+      "dependencies": [
+        "TASK-18",
+        "TASK-19"
+      ],
+      "estimateHours": 3,
+      "requirementIds": [
+        "FR-42",
+        "FR-44",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-28",
-      "description": "Default seed. Plant at least 3 students for each of High, Medium and none by seeding attendance, grades and missing work that cross the FR-25 thresholds. Give the High students a homeroom teacher. At the end, call recomputeRiskSnapshots({ force: true }). The seed stays small.",
+      "description": "Parent fees page /fees: summary card (outstanding, next due, overdue in error colour), invoices across children (?invoice= focus), payment history with receipt links, invoice footer",
       "files": [
-        "prisma/seed.ts"
+        "src/app/(app)/fees/page.tsx",
+        "src/app/(app)/fees/_components/ParentFeesView.tsx"
       ],
       "dependencies": [
-        "TASK-9"
+        "TASK-17",
+        "TASK-19"
       ],
-      "estimateHours": 2,
+      "estimateHours": 3,
       "requirementIds": [
-        "FR-46",
-        "NFR-9"
+        "FR-39",
+        "FR-41",
+        "FR-35",
+        "NFR-4",
+        "NFR-6"
       ]
     },
     {
       "id": "TASK-29",
-      "description": "Large seed. prisma/seed-large.ts uses an inline mulberry32 PRNG with a fixed seed and fixed name lists. It creates 600 students across Grades 6–8 (8 sections), 40 teachers, full timetables, 60 school days of attendance, assignments, submissions and grades, using createMany in batches of 1,000, then calls recomputeRiskSnapshots({ force: true }). Add \"seed:large\": \"tsx prisma/seed-large.ts\" to package.json. No new dependencies.",
+      "description": "Brownfield KPI/overview: getKpis gains outstandingFees + 'Outstanding fees' StatCard in KpiRowWidget; parent overview gains fees card (balance > 0, links to /fees) in OverviewCards",
       "files": [
-        "prisma/seed-large.ts",
-        "package.json"
+        "src/server/dashboards/admin.ts",
+        "src/app/(app)/dashboard/_components/widgets/KpiRowWidget.tsx",
+        "src/server/parent/overview-service.ts",
+        "src/app/(app)/my-children/[studentId]/OverviewCards.tsx"
       ],
       "dependencies": [
-        "TASK-9"
+        "TASK-17",
+        "TASK-19"
       ],
-      "estimateHours": 4,
+      "estimateHours": 2,
       "requirementIds": [
-        "FR-45",
-        "NFR-1"
+        "FR-40",
+        "FR-43",
+        "NFR-9"
       ]
     },
     {
       "id": "TASK-30",
-      "description": "End-to-end tests with Playwright and axe. Extend dashboard.spec.ts with one test per role dashboard (Admin, Teacher, Student) plus the PARENT redirect, each with an axe scan. insights.spec.ts covers /insights/at-risk filters, the CSV download and the student Insights tab. reports.spec.ts covers /admin/reports/attendance with a CSV download and an axe scan.",
+      "description": "Seed: Alice Admin bursar, USD + invoice footer, fee items, Semester 1 plans Grades 6-8, Sibling 5% + Merit 10% (Sam), Grade 7 invoices via generateInvoices (injected past today for 3 OVERDUE), 12 payments via recordPayment across methods, then markOverdue",
       "files": [
-        "tests/e2e/dashboard.spec.ts",
-        "tests/e2e/insights.spec.ts",
-        "tests/e2e/reports.spec.ts"
+        "prisma/seed.ts"
       ],
       "dependencies": [
-        "TASK-16",
-        "TASK-21",
-        "TASK-22",
-        "TASK-26",
-        "TASK-27",
-        "TASK-28"
+        "TASK-1",
+        "TASK-15"
       ],
       "estimateHours": 3,
       "requirementIds": [
-        "FR-1",
-        "FR-29",
-        "FR-30",
-        "FR-31",
-        "FR-35",
-        "NFR-2",
-        "NFR-9",
+        "FR-47",
+        "FR-48"
+      ]
+    },
+    {
+      "id": "TASK-31",
+      "description": "Integration tests (real Postgres): FR-45 permission matrix, N parallel issues/payments => numbers exactly 1..N (separate transactions), reversal recompute + seeded-random pay/reverse amountPaid integrity",
+      "files": [
+        "tests/integration/fees/access.test.ts",
+        "tests/integration/fees/numbering.test.ts",
+        "tests/integration/fees/ledger.test.ts"
+      ],
+      "dependencies": [
+        "TASK-7",
+        "TASK-15"
+      ],
+      "estimateHours": 4,
+      "requirementIds": [
+        "FR-45",
+        "FR-50",
+        "NFR-1",
+        "NFR-3",
+        "NFR-4",
+        "NFR-10"
+      ]
+    },
+    {
+      "id": "TASK-32",
+      "description": "E2E: bursar generates term invoices, records a payment, prints the receipt; parent sees updated balance (reuse tests/e2e/helpers)",
+      "files": [
+        "tests/e2e/fees.spec.ts"
+      ],
+      "dependencies": [
+        "TASK-20",
+        "TASK-21",
+        "TASK-23",
+        "TASK-24",
+        "TASK-26",
+        "TASK-28",
+        "TASK-30"
+      ],
+      "estimateHours": 2,
+      "requirementIds": [
+        "FR-51",
         "NFR-10"
       ]
     }
   ],
   "fileStructure": {
-    "./": [
-      "package.json"
-    ],
     "prisma/": [
       "schema.prisma",
-      "seed.ts",
-      "seed-large.ts"
+      "seed.ts"
     ],
-    "prisma/migrations/20261115000000_add_student_risk_snapshot/": [
+    "prisma/migrations/20261116000000_add_fees/": [
       "migration.sql"
     ],
-    "src/app/(app)/admin/reports/": [
-      "page.tsx"
+    "src/app/(app)/": [
+      "admin/",
+      "dashboard/",
+      "fees/",
+      "my-children/"
     ],
-    "src/app/(app)/admin/reports/[reportKey]/": [
-      "page.tsx"
+    "src/app/api/": [
+      "fees/",
+      "internal/",
+      "me/"
     ],
-    "src/app/(app)/admin/reports/[reportKey]/_components/": [
-      "ReportFilters.tsx"
-    ],
-    "src/app/(app)/dashboard/": [
-      "page.tsx"
-    ],
-    "src/app/(app)/dashboard/_components/": [
-      "GreetingHeader.tsx",
-      "RefreshButton.tsx",
-      "TeacherDashboard.tsx",
-      "StudentDashboard.tsx",
-      "AdminDashboard.tsx"
-    ],
-    "src/app/(app)/dashboard/_components/widgets/": [
-      "TodaysClassesWidget.tsx",
-      "ToGradeWidget.tsx",
-      "UpcomingDeadlinesWidget.tsx",
-      "AtRiskWidget.tsx",
-      "TeacherMessagesWidget.tsx",
-      "QuickActionsWidget.tsx",
-      "StudentTodayWidget.tsx",
-      "DueSoonWidget.tsx",
-      "RecentGradesWidget.tsx",
-      "MyCoursesWidget.tsx",
-      "AnnouncementsWidget.tsx",
-      "TermAttendanceWidget.tsx",
-      "KpiRowWidget.tsx",
-      "AttendanceTrendWidget.tsx",
-      "EnrollmentByGradeWidget.tsx",
-      "GradeDistributionWidget.tsx",
-      "RiskSummaryWidget.tsx",
-      "UpcomingEventsWidget.tsx",
-      "RecentActivityWidget.tsx"
-    ],
-    "src/app/(app)/insights/at-risk/": [
-      "page.tsx"
-    ],
-    "src/app/(app)/insights/at-risk/_components/": [
-      "AtRiskFilters.tsx"
-    ],
-    "src/app/(app)/students/[id]/insights/": [
-      "page.tsx"
-    ],
-    "src/app/api/dashboard/admin/": [
-      "route.ts"
-    ],
-    "src/app/api/dashboard/refresh/": [
-      "route.ts"
-    ],
-    "src/app/api/dashboard/student/": [
-      "route.ts"
-    ],
-    "src/app/api/dashboard/teacher/": [
-      "route.ts"
-    ],
-    "src/app/api/insights/at-risk/": [
-      "route.ts"
-    ],
-    "src/app/api/internal/email/dispatch/": [
-      "route.ts"
-    ],
-    "src/app/api/reports/[reportKey]/": [
-      "route.ts"
-    ],
-    "src/app/api/students/[id]/insights/": [
-      "route.ts"
-    ],
-    "src/components/Widget/": [
-      "Widget.tsx",
-      "WidgetErrorBoundary.tsx"
-    ],
-    "src/components/charts/": [
-      "ChartA11y.tsx"
+    "src/components/fees/": [
+      "AllocationEditor.tsx",
+      "InvoiceDocument.tsx",
+      "InvoiceLinesEditor.tsx",
+      "InvoiceStatusChip.tsx",
+      "MoneyText.tsx",
+      "PrintButton.tsx",
+      "ReceiptDocument.tsx"
     ],
     "src/config/": [
-      "student-tabs.ts",
       "navigation.ts"
     ],
     "src/lib/": [
-      "dates.ts"
+      "money.ts"
     ],
     "src/lib/validators/": [
-      "dashboards.ts",
-      "reports.ts"
-    ],
-    "src/server/assignments/": [
-      "reminders.ts"
+      "fees.ts",
+      "users.ts"
     ],
     "src/server/dashboards/": [
-      "risk-rules.ts",
-      "missing-work.ts",
-      "insights.ts",
-      "announcements.ts",
-      "risk.ts",
-      "teacher.ts",
-      "student.ts",
       "admin.ts"
     ],
-    "src/server/gradebook/": [
-      "batch-grades.ts"
+    "src/server/fees/": [
+      "access.ts",
+      "fee-math.ts",
+      "fees-service.ts",
+      "ledger.ts",
+      "maintenance.ts",
+      "reports.ts"
     ],
     "src/server/notifications/": [
       "types.ts"
     ],
-    "src/server/reports/": [
-      "enrollment.ts",
-      "attendance.ts",
-      "performance.ts",
-      "completion.ts",
-      "engagement.ts",
-      "workload.ts",
-      "index.ts"
+    "src/server/parent/": [
+      "overview-service.ts"
+    ],
+    "src/server/services/": [
+      "users.ts"
     ],
     "tests/e2e/": [
-      "dashboard.spec.ts",
-      "insights.spec.ts",
-      "reports.spec.ts"
+      "fees.spec.ts"
     ],
-    "tests/integration/": [
-      "email-dispatch.test.ts"
+    "tests/integration/fees/": [
+      "access.test.ts",
+      "ledger.test.ts",
+      "numbering.test.ts"
     ],
-    "tests/integration/dashboards/": [
-      "missing-work.test.ts",
-      "risk.test.ts",
-      "dashboard-api.test.ts"
-    ],
-    "tests/integration/gradebook/": [
-      "batch-grades.test.ts"
-    ],
-    "tests/integration/reports/": [
-      "reports.test.ts"
-    ],
-    "tests/unit/": [
-      "dates.test.ts",
-      "WidgetErrorBoundary.test.tsx"
-    ],
-    "tests/unit/dashboards/": [
-      "risk-rules.test.ts"
+    "tests/unit/fees/": [
+      "fee-math.test.ts",
+      "money.test.ts"
     ]
   },
-  "totalEstimateHours": 81.5,
+  "totalEstimateHours": 97,
   "nxpPatterns": [],
-  "status": "complete",
-  "notes": [
-    "Where the architect files disagree, system-design.md wins over the earlier tech-stack-decisions.md: WidgetErrorBoundary lives in src/components/Widget/, the pure rules live in risk-rules.ts (not risk.ts), and the FR-21 events expand recurrences through calendar/recurrence.expandOccurrences.",
-    "Chart widgets render @mui/x-charts directly inside the client ChartA11y wrapper and pass only serialisable props, so no separate client chart files are planned. Format labels and values on the server instead of passing functions such as valueFormatter. Every new file must be in the ownership matrix.",
-    "NFR-5 is a process step: look up every MUI component through mui-mcp before using it. If mui-mcp is unavailable, that is a dev blocker.",
-    "Dependency gaps (not blockers): announcements (FR-8, FR-14, FR-38) are gated by ANNOUNCEMENTS_AVAILABLE=false in src/server/dashboards/announcements.ts.",
-    "Run npm run lint && npm run typecheck && npm run test after each task group (NFR-10)."
-  ]
+  "status": "complete"
 }

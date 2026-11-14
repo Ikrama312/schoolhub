@@ -1,78 +1,77 @@
-# SH-16 — User Stories (PRD-16 Role Dashboards, Reports & Early-Warning Insights)
+# SH-17 — PRD-17 Fees, Invoices & Payment Records: User Stories
 
-Source: PRD-16 (SCH-016), run mode `--brownfield --tech-stack react`. Confidence labels match `requirements.json`.
+Roles: **Bursar** = ADMIN with `isBursar=true`; **Admin** = any ADMIN (read-only on fees unless bursar); **Parent**; Student and Teacher have no fee access.
 
-## Dashboard shell
-- **FR-1 (HIGH)** As any signed-in user, I want `/dashboard` to show the dashboard for my role (parents go to the child overview) so that I land on what's relevant to me.
-- **FR-2 (HIGH)** As a user, I want each widget to load on its own with a skeleton, and to show "This widget could not load — Retry" if it fails, so that one broken widget doesn't break my page.
-- **FR-3 (HIGH)** As a user, I want a greeting with my name, today's date and the current term so that I know where I am at a glance.
+## Data & settings
+- **US-1 (FR-1, FR-2, FR-3)** As a bursar, I want fee items, plans, discounts, invoices, payments, allocations and number sequences stored in the database, so that balances are always derivable from the ledger.
+- **US-2 (FR-4)** As a bursar, I want to set the school currency and an invoice footer with bank details, so that printouts and the parent view show how to pay.
+- **US-3 (FR-5, FR-45)** As a principal, I want only bursar-flagged admins to change fee data, so that other office staff can look but not alter the ledger.
 
-## Teacher dashboard
-- **FR-4 (HIGH)** As a teacher, I want today's classes with Now/Next badges and attendance status so that I know which registers I still need to take.
-- **FR-5 (HIGH)** As a teacher, I want a count and the oldest 5 ungraded submissions and quiz attempts so that I can clear my grading backlog.
-- **FR-6 (HIGH)** As a teacher, I want deadlines in the next 7 days with submission rates so that I can chase students before work is due.
-- **FR-7 (HIGH)** As a teacher, I want my top 5 at-risk students with reasons so that I can intervene early.
-- **FR-8 (MEDIUM)** As a teacher, I want my unread message count and the latest 3 announcements so that I don't miss communication.
-- **FR-9 (HIGH)** As a teacher, I want quick actions (New assignment, New announcement, Take attendance, New quiz) so that I can start common tasks in one click.
+## Fee setup
+- **US-4 (FR-6)** As a bursar, I want to manage fee items (tuition, lab fee, bus), so that plans and invoices use consistent names and amounts.
+- **US-5 (FR-7)** As a bursar, I want to define a fee plan per term (or annual) and grade level with a line editor and a computed total, so that invoices are generated consistently.
+- **US-6 (FR-8, FR-11)** As a bursar, I want percent or fixed discounts, including automatic sibling rules, so that families with several children are billed correctly without manual work.
+- **US-7 (FR-9)** As a bursar, I want to assign optional fees such as Bus to individual students or a whole section, so that only those who use the service are billed.
+- **US-8 (FR-10)** As a bursar, I want to assign scholarships and other manual discounts to students, so that their invoices reflect them.
 
-## Student dashboard
-- **FR-10 (HIGH)** As a student, I want today's schedule with Now/Next, or a holiday message, so that I know where to be.
-- **FR-11 (HIGH)** As a student, I want work due in the next 7 days, with missing work first in red, so that I stay organised.
-- **FR-12 (HIGH)** As a student, I want my last 5 grades so that I see recent feedback.
-- **FR-13 (HIGH)** As a student, I want course cards with current percent and letter, content progress and next lesson so that I can pick up where I left off.
-- **FR-14 (MEDIUM)** As a student, I want my latest 3 unread announcements so that I stay informed.
-- **FR-15 (HIGH)** As a student, I want my term attendance rate as a gauge so that I can see how I'm doing.
+## Invoice generation & management
+- **US-9 (FR-12, FR-13)** As a bursar, I want to preview a term's invoices per student, with already-invoiced students skipped, so that I can check totals before billing.
+- **US-10 (FR-14, FR-16)** As a bursar, I want to create drafts or create and issue invoices in bulk with unique sequential numbers, so that every family is billed at once.
+- **US-11 (FR-15)** As a bursar, I want percent discounts applied to non-optional lines first and fixed discounts after, never going below zero, so that discounts are fair and predictable.
+- **US-12 (FR-17, FR-18)** As an admin, I want to filter and search invoices and see totals for billed, paid and outstanding, so that I know where collection stands.
+- **US-13 (FR-19–FR-22)** As a bursar, I want to edit, issue or delete drafts and adjust or void issued invoices with a reason, with every change in the activity timeline, so that corrections stay auditable.
+- **US-14 (FR-23)** As a bursar, I want to create a one-off manual invoice (for example a trip fee), so that ad-hoc charges go through the same ledger.
+- **US-15 (FR-24, FR-25)** As an admin, I want invoice status to update automatically (partially paid, paid, overdue), so that the list always reflects reality.
 
-## Admin dashboard
-- **FR-16 (HIGH)** As an admin, I want KPI cards (active students and teachers, today's attendance with weekly delta, missing registers, open safeguarding reports for leads, pending absence notes) so that I can monitor the school's health.
-- **FR-17 (HIGH)** As an admin, I want a 30-school-day attendance trend with the alert threshold line so that I spot declines.
-- **FR-18 (HIGH)** As an admin, I want enrollment per grade level stacked by gender so that I understand the student population.
-- **FR-19 (HIGH)** As an admin, I want a 10 % bucket grade distribution with average and median so that I see academic health.
-- **FR-20 (HIGH)** As an admin, I want at-risk counts by level and reason so that I see the size of the problem.
-- **FR-21 (MEDIUM)** As an admin, I want the next 5 school events so that I can prepare.
-- **FR-22 (HIGH)** As an admin, I want the last 10 user/report-card/settings audit entries so that I see recent changes.
+## Payments & receipts
+- **US-16 (FR-26, FR-27, FR-28)** As a bursar, I want to pick a parent or student, see the family's open invoices, and record a payment that is auto-allocated oldest-first (editable), so that payments go to the right invoices.
+- **US-17 (FR-29)** As a bursar, I want overpayments refused with a clear message, so that no unsupported credit balances appear.
+- **US-18 (FR-30, FR-34)** As a bursar, I want saving a payment to issue a numbered receipt with the amount in words and notify the parent, so that families have proof of payment.
+- **US-19 (FR-31)** As a bursar, I want to reverse a mistaken payment with a reason, without deleting it, so that the ledger stays correct and auditable.
+- **US-20 (FR-33, FR-35)** As a bursar or parent, I want an A4 printable invoice formatted in the school currency, so that I can print it or save it as a PDF.
 
-## Caching
-- **FR-23 (HIGH)** As a user, I want expensive aggregates cached (15 min; at-risk 60 min) so that dashboards load quickly.
-- **FR-24 (HIGH)** As an admin, I want to see "Updated N min ago" and a Refresh button so that I can force fresh data.
+## Reminders
+- **US-21 (FR-36, FR-37)** As a bursar, I want parents reminded automatically before the due date, the day after it, and every 14 days while overdue, so that collection improves without manual chasing.
+- **US-22 (FR-38)** As a bursar, I want to send a manual reminder from an invoice (at most once a day), so that I can follow up on specific cases.
 
-## Early-warning (at-risk)
-- **FR-25 (HIGH)** As an admin or teacher, I want each active student scored on attendance, grades and missing work so that slipping students are flagged.
-- **FR-26 (HIGH)** As an admin or teacher, I want a clear overall level (High / Medium / none) so that I can prioritise.
-- **FR-27 (HIGH)** As the system, I want risk results stored per student per term and refreshed at most hourly so that lists are fast and current.
-- **FR-28 (LOW)** As an admin or teacher, I want to see whether a student's risk is improving or worsening so that I can judge whether interventions are working.
-- **FR-29 (HIGH)** As an admin or teacher, I want an at-risk list scoped to the students I can access, with reasons as chips and quick actions, so that I can intervene early.
-- **FR-30 (HIGH)** As an admin or teacher, I want to filter the at-risk list and export it to CSV so that I can share it with colleagues.
-- **FR-31 (HIGH)** As an admin or teacher, I want an Insights tab on the student page so that I see the student's signals and history in context.
-- **FR-32 (HIGH)** As a homeroom teacher, I want to be notified when a student becomes High risk (no more than once per 14 days per student) so that I can act promptly.
+## Parent view
+- **US-23 (FR-39, FR-32)** As a parent, I want to see my children's invoices, total outstanding, next due date, overdue amount, payment history and receipts, so that I know what I owe without calling the office.
+- **US-24 (FR-40)** As a parent, I want a Fees card on my child's overview when there is a balance, so that I notice outstanding fees.
+- **US-25 (FR-41)** As a student, I don't see fees at all, so that family finances stay with parents.
 
-## Reports centre
-- **FR-33 (HIGH)** As an admin, I want a reports centre with a year/term selector, plus filters, a chart, a table and CSV export on every report, so that I can answer leadership questions.
-- **FR-34 (HIGH)** As an admin, I want an enrollment report so that I can report headcounts and movements.
-- **FR-35 (HIGH)** As an admin, I want an attendance report by grade, section and course with a trend and the lowest 20 students so that I can target attendance work.
-- **FR-36 (HIGH)** As an admin, I want an academic performance report by course, subject and section so that I can compare outcomes.
-- **FR-37 (HIGH)** As an admin, I want on-time / late / missing completion rates by course and teacher so that I see where work is slipping.
-- **FR-38 (MEDIUM)** As an admin, I want lesson completion, announcement read rate and parent portal activity so that I can measure engagement.
-- **FR-39 (HIGH)** As an admin, I want per-teacher workload (courses, students, weekly periods, grading backlog) so that I can balance staffing.
+## Dashboard & reports
+- **US-26 (FR-42)** As an admin, I want a fees dashboard with KPIs, a weekly collection trend, aging buckets and the top overdue families, so that I can prioritise follow-up.
+- **US-27 (FR-43)** As an admin, I want an "Outstanding fees" card on my main dashboard, so that I see the figure every day.
+- **US-28 (FR-44)** As a bursar, I want invoices, payments and aging CSV exports, so that I can reconcile with our accountant.
 
-## Navigation & API
-- **FR-40 (HIGH)** As an admin or teacher, I want "Reports" (admin) and "At-risk students" (admin, teacher) in the sidebar so that I can reach them directly.
-- **FR-41 – FR-44 (HIGH)** As a client developer, I want role-guarded REST endpoints for dashboard data, refresh, at-risk lists, student insights and reports (with `?format=csv`) so that the UI and exports share one source of truth.
+## Navigation, seed, tests
+- **US-29 (FR-46)** As a user, I want Fees in the sidebar only when my role can use it.
+- **US-30 (FR-47, FR-48)** As a developer, I want seed data (Alice as bursar, plans for Grades 6–8, Sam's scholarship, mixed-status invoices, 12 payments), so that demos and e2e tests have realistic data.
+- **US-31 (FR-49, FR-50, FR-51)** As QA, I want unit, integration and Playwright coverage of discounts, allocation, numbering, reversal and the bursar-to-parent flow.
 
-## Seed data
-- **FR-45 (HIGH)** As a developer, I want `npm run seed:large` (600 students, 40 teachers, deterministic) so that I can verify performance targets.
-- **FR-46 (HIGH)** As a developer, I want the default seed to include at least 3 students at each risk level so that features are demonstrable locally.
+## Acceptance criteria trace
+| AC | Requirements |
+|---|---|
+| 1 Sam: subtotal 2,450.00, discount −215.00, total 2,235.00 | FR-15, FR-12 |
+| 2 Sara sibling −107.50 | FR-11, FR-15 |
+| 3 Concurrent numbering | FR-16, NFR-3 |
+| 4 $1,000 partial payment, receipt, notification | FR-24, FR-30, FR-34 |
+| 5 Overpayment refused | FR-29 |
+| 6 Reversal restores status | FR-31, FR-24 |
+| 7 OVERDUE + day-after reminder once | FR-25, FR-37 |
+| 8 Non-bursar 403, teacher 403 | FR-45 |
+| 9 Parent `/fees`, no student menu | FR-39, FR-41 |
 
 ## Non-Functional Requirements
-- **NFR-1 (HIGH)** Dashboards render first content in under 1.5 s and reports in under 3 s on seed:large data.
-- **NFR-2 (HIGH)** Charts have accessible summaries or hidden tables, meet 3:1 contrast, don't rely on colour alone, and pass an axe scan.
-- **NFR-3 (HIGH)** Teacher-scoped data is limited to `getAccessibleStudentIds`, enforced server-side.
-- **NFR-4 (HIGH)** UI is built only from Material UI / MUI X components; no banned libraries.
-- **NFR-5 (HIGH)** Every MUI component is looked up through the mui-mcp server first; QA verifies imports.
-- **NFR-6 (HIGH)** Platform conventions apply: thin handlers, Zod validators, standard response shapes, pagination limits, feature-subdirectory services.
-- **NFR-7 (HIGH)** All date logic uses the school timezone.
-- **NFR-8 (HIGH)** Brownfield reuse: no re-scaffolding, no duplicated helpers, no renamed routes or models.
-- **NFR-9 (HIGH)** Tests cover risk boundaries (unit), reports and cache revalidation (integration), and role dashboards with axe (Playwright).
-- **NFR-10 (HIGH)** lint, typecheck and tests keep passing; no `console.log`.
-- **NFR-11 (HIGH)** Out of scope: drag-and-drop layouts, ML risk models, scheduled report emails.
-- **NFR-12 (HIGH)** At-risk data is refreshed at least hourly.
+- **NFR-1** Decimal money with half-up 2 dp rounding; `amountPaid` = sum of non-reversed allocations, plus an integrity test.
+- **NFR-2** No hard delete of issued invoices or payments; every change is audited with before/after values.
+- **NFR-3** Gap-free, unique invoice and receipt numbers under concurrency.
+- **NFR-4** Parents see only linked children; every URL ID is access-checked server-side.
+- **NFR-5** A full term's generation finishes in under 5 minutes.
+- **NFR-6** MUI-only UI, with every component looked up through the MUI MCP; no banned libraries (QA-checked).
+- **NFR-7** Thin Zod handlers and the `src/server/fees/` service, using the standard response, error and pagination shapes.
+- **NFR-8** UTC storage and school-timezone date rules.
+- **NFR-9** Reuse existing helpers and components; no duplicates or renames; logger instead of console.log.
+- **NFR-10** lint, typecheck and test stay green.
+- **NFR-11** Out of scope: gateways, accounting integrations, multi-currency, tax, credit balances.
+- **NFR-12** A4 print layouts through the browser print dialog.

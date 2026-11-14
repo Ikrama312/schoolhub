@@ -18,6 +18,10 @@ import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlin
 import DrawOutlinedIcon from '@mui/icons-material/DrawOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import PointOfSaleOutlinedIcon from '@mui/icons-material/PointOfSaleOutlined';
 
 export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
@@ -60,6 +64,8 @@ export const navigation: NavItem[] = [
   { label: 'Absence notes', href: '/attendance/absence-notes', icon: SickOutlinedIcon, roles: ['TEACHER'], requires: 'homeroom' },
   { label: 'Conferences', href: '/conferences', icon: EventAvailableOutlinedIcon, roles: ['PARENT', 'TEACHER'] },
   { label: 'Consent forms', href: '/consent-forms', icon: DrawOutlinedIcon, roles: ['PARENT', 'ADMIN'] },
+  // PRD-17 FR-46: parent fees; no entry for TEACHER or STUDENT (FR-41).
+  { label: 'Fees', href: '/fees', icon: PaymentsOutlinedIcon, roles: ['PARENT'] },
   { label: 'Notifications', href: '/notifications', icon: NotificationsNoneIcon, roles: ALL_ROLES },
   { label: 'Messages', href: '/messages', icon: ChatBubbleOutlineIcon, roles: ALL_ROLES, badge: 'messages' },
   { label: 'My courses', href: '/my-courses', icon: MenuBookOutlinedIcon, roles: ['TEACHER', 'STUDENT', 'PARENT'] },
@@ -69,6 +75,11 @@ export const navigation: NavItem[] = [
   { label: 'Report cards', href: '/report-cards', icon: WorkspacePremiumOutlinedIcon, roles: ['TEACHER'] },
   { label: 'Attendance', href: '/admin/attendance', icon: FactCheckOutlinedIcon, roles: ['ADMIN'] },
   { label: 'Email log', href: '/admin/email-log', icon: MarkEmailUnreadOutlinedIcon, roles: ['ADMIN'] },
+  // PRD-17 FR-46: admin fees (every admin reads; write controls depend on isBursar).
+  { label: 'Fees', href: '/admin/fees', icon: PaymentsOutlinedIcon, roles: ['ADMIN'], group: 'Fees' },
+  { label: 'Fee setup', href: '/admin/fees/setup', icon: TuneOutlinedIcon, roles: ['ADMIN'], group: 'Fees' },
+  { label: 'Invoices', href: '/admin/fees/invoices', icon: ReceiptLongOutlinedIcon, roles: ['ADMIN'], group: 'Fees' },
+  { label: 'Payments', href: '/admin/fees/payments', icon: PointOfSaleOutlinedIcon, roles: ['ADMIN'], group: 'Fees' },
   { label: 'Conferences', href: '/admin/conferences', icon: EventAvailableOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Sections', href: '/admin/sections', icon: GroupsOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },
   { label: 'Courses', href: '/admin/courses', icon: ClassOutlinedIcon, roles: ['ADMIN'], group: 'Administration' },

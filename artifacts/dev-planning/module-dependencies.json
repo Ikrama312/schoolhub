@@ -1,6 +1,6 @@
 {
-  "ticketId": "SH-16",
-  "timestamp": "2026-11-10T15:00:00Z",
+  "ticketId": "SH-17",
+  "timestamp": "2026-11-10T16:30:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "modules": [
@@ -9,176 +9,173 @@
       "dependsOn": []
     },
     {
-      "name": "src/lib/dates.ts",
-      "dependsOn": []
-    },
-    {
-      "name": "src/lib/validators",
-      "dependsOn": []
-    },
-    {
-      "name": "src/server/notifications",
+      "name": "src/lib/money.ts",
       "dependsOn": [
-        "prisma"
+        "src/server/assignments/grading-math.ts"
       ]
     },
     {
-      "name": "src/server/gradebook",
+      "name": "src/lib/validators/fees.ts",
       "dependsOn": [
-        "prisma"
+        "src/lib/money.ts"
       ]
     },
     {
-      "name": "src/server/dashboards/risk-rules.ts",
-      "dependsOn": []
+      "name": "src/server/fees/fee-math.ts",
+      "dependsOn": [
+        "src/lib/money.ts",
+        "src/lib/dates.ts"
+      ]
     },
     {
-      "name": "src/server/dashboards",
+      "name": "src/server/fees/ledger.ts",
       "dependsOn": [
         "prisma",
-        "src/lib/dates.ts",
-        "src/server/gradebook",
-        "src/server/attendance",
-        "src/server/assignments",
-        "src/server/parent",
-        "src/server/messaging",
-        "src/server/calendar",
-        "src/server/notifications",
+        "src/server/fees/fee-math.ts",
+        "src/lib/dates.ts"
+      ]
+    },
+    {
+      "name": "src/server/fees/access.ts",
+      "dependsOn": [
+        "prisma",
         "src/server/auth",
-        "src/server/audit.ts"
-      ]
-    },
-    {
-      "name": "src/server/assignments",
-      "dependsOn": [
-        "prisma",
-        "src/server/dashboards/missing-work.ts"
-      ]
-    },
-    {
-      "name": "src/server/reports",
-      "dependsOn": [
-        "prisma",
-        "src/lib/validators",
-        "src/server/gradebook",
-        "src/server/attendance",
-        "src/server/dashboards/missing-work.ts"
-      ]
-    },
-    {
-      "name": "src/components/Widget",
-      "dependsOn": [
-        "src/components/LoadingSkeleton"
-      ]
-    },
-    {
-      "name": "src/components/charts",
-      "dependsOn": []
-    },
-    {
-      "name": "src/app/(app)/dashboard",
-      "dependsOn": [
-        "src/server/dashboards",
-        "src/components/Widget",
-        "src/components/charts",
-        "src/components/StatCard",
-        "src/components/EmptyState",
-        "src/components/Toast",
-        "src/lib/dates.ts",
-        "src/server/auth"
-      ]
-    },
-    {
-      "name": "src/app/(app)/insights/at-risk",
-      "dependsOn": [
-        "src/server/dashboards",
-        "src/lib/validators",
-        "src/components/DataTable",
-        "src/components/PageHeader",
-        "src/server/auth"
-      ]
-    },
-    {
-      "name": "src/app/(app)/students/[id]/insights",
-      "dependsOn": [
-        "src/server/dashboards",
-        "src/config",
-        "src/server/auth"
-      ]
-    },
-    {
-      "name": "src/app/(app)/admin/reports",
-      "dependsOn": [
-        "src/server/reports",
-        "src/lib/validators",
-        "src/components/charts",
-        "src/components/DataTable",
-        "src/components/PageHeader",
-        "src/server/auth"
-      ]
-    },
-    {
-      "name": "src/app/api/dashboard",
-      "dependsOn": [
-        "src/server/dashboards",
-        "src/server/http.ts",
-        "src/server/auth",
-        "src/server/audit.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/insights",
-      "dependsOn": [
-        "src/server/dashboards",
-        "src/lib/validators",
-        "src/server/http.ts",
-        "src/server/csv.ts"
-      ]
-    },
-    {
-      "name": "src/app/api/students/[id]/insights",
-      "dependsOn": [
-        "src/server/dashboards",
-        "src/lib/validators",
         "src/server/http.ts"
       ]
     },
     {
-      "name": "src/app/api/reports",
+      "name": "src/server/fees/maintenance.ts",
       "dependsOn": [
-        "src/server/reports",
-        "src/lib/validators",
-        "src/server/http.ts",
-        "src/server/csv.ts"
+        "prisma",
+        "src/server/fees/fee-math.ts",
+        "src/server/notifications",
+        "src/lib/dates.ts"
+      ]
+    },
+    {
+      "name": "src/server/fees/reports.ts",
+      "dependsOn": [
+        "prisma",
+        "src/server/fees/fee-math.ts",
+        "src/server/fees/maintenance.ts",
+        "src/server/fees/access.ts",
+        "src/server/csv.ts",
+        "src/lib/money.ts"
+      ]
+    },
+    {
+      "name": "src/server/fees/fees-service.ts",
+      "dependsOn": [
+        "prisma",
+        "src/server/fees/fee-math.ts",
+        "src/server/fees/ledger.ts",
+        "src/server/fees/access.ts",
+        "src/server/fees/maintenance.ts",
+        "src/server/fees/reports.ts",
+        "src/server/audit.ts",
+        "src/server/notifications",
+        "src/lib/money.ts",
+        "src/lib/validators/fees.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/fees",
+      "dependsOn": [
+        "src/server/fees/fees-service.ts",
+        "src/server/fees/reports.ts",
+        "src/server/fees/access.ts",
+        "src/lib/validators/fees.ts",
+        "src/server/http.ts"
+      ]
+    },
+    {
+      "name": "src/app/api/me/fees",
+      "dependsOn": [
+        "src/server/fees/reports.ts",
+        "src/server/auth"
       ]
     },
     {
       "name": "src/app/api/internal/email/dispatch",
       "dependsOn": [
-        "src/server/dashboards"
+        "src/server/fees/maintenance.ts"
       ]
     },
     {
-      "name": "src/config",
+      "name": "src/components/fees",
+      "dependsOn": [
+        "src/lib/money.ts",
+        "src/server/fees/fee-math.ts"
+      ]
+    },
+    {
+      "name": "src/app/(app)/admin/fees",
+      "dependsOn": [
+        "src/components/fees",
+        "src/components/DataTable",
+        "src/components/StatCard",
+        "src/components/ConfirmDialog",
+        "src/components/PageHeader",
+        "src/components/Toast",
+        "src/server/fees/fees-service.ts",
+        "src/server/fees/reports.ts",
+        "src/server/fees/access.ts",
+        "src/lib/validators/fees.ts"
+      ]
+    },
+    {
+      "name": "src/app/(app)/fees",
+      "dependsOn": [
+        "src/components/fees",
+        "src/server/fees/reports.ts",
+        "src/server/fees/fees-service.ts",
+        "src/server/fees/access.ts"
+      ]
+    },
+    {
+      "name": "src/server/dashboards/admin.ts",
+      "dependsOn": [
+        "src/server/fees/reports.ts"
+      ]
+    },
+    {
+      "name": "src/server/parent/overview-service.ts",
+      "dependsOn": [
+        "src/server/fees/reports.ts"
+      ]
+    },
+    {
+      "name": "src/config/navigation.ts",
       "dependsOn": []
     },
     {
       "name": "prisma/seed.ts",
       "dependsOn": [
-        "prisma",
-        "src/server/dashboards"
+        "src/server/fees/fees-service.ts",
+        "src/server/fees/maintenance.ts"
       ]
     },
     {
-      "name": "prisma/seed-large.ts",
+      "name": "tests/unit/fees",
       "dependsOn": [
-        "prisma",
-        "src/server/dashboards"
+        "src/server/fees/fee-math.ts",
+        "src/lib/money.ts"
+      ]
+    },
+    {
+      "name": "tests/integration/fees",
+      "dependsOn": [
+        "src/server/fees/fees-service.ts",
+        "src/server/fees/ledger.ts",
+        "src/server/fees/access.ts"
+      ]
+    },
+    {
+      "name": "tests/e2e/fees.spec.ts",
+      "dependsOn": [
+        "tests/e2e/helpers",
+        "prisma/seed.ts"
       ]
     }
-  ],
-  "notes": [
-    "src/server/dashboards/missing-work.ts must not import the rest of src/server/dashboards. assignments/reminders.ts imports it, so keeping it standalone avoids an import cycle.",
-    "risk-rules.ts has no imports (pure). risk.ts imports tag constants from insights.ts, and insights.ts must not import risk.ts."
   ]
 }

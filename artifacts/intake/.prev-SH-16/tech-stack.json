@@ -1,0 +1,11 @@
+{
+  "ticketId": "SH-16",
+  "timestamp": "2026-11-10T12:00:00Z",
+  "phase": "intake",
+  "version": "1.0",
+
+  "techStack": "react",
+  "confidencePct": 98,
+  "detectionNotes": "PRD run mode '--brownfield --tech-stack react'. Platform Context fixes Next.js 14 App Router, React 18, TypeScript strict, MUI v9 + Emotion, @mui/x-charts 9.5.0 (LineChart, BarChart, Gauge), @mui/x-data-grid 9.5.0, Prisma/PostgreSQL 16, Auth.js v5, Zod, React Hook Form, Vitest and Playwright with @axe-core/playwright. Confirmed in package.json and prisma/schema.prisma. Styling goes only through the MUI theme, sx and styled(), so cssPreprocessor is plain css.",
+  "cssPreprocessor": "css"
+}

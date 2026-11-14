@@ -282,6 +282,31 @@ export const NOTIFICATION_TYPES = {
     mandatoryInApp: false,
     roles: ['TEACHER'],
   },
+  // PRD-17 fees (FR-36, FR-37, FR-38). Recipients: every parent linked to the student.
+  'fees.invoice_issued': {
+    label: 'Invoice issued',
+    description: 'A new fee invoice was issued for your child.',
+    category: 'FINANCE',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['PARENT'],
+  },
+  'fees.payment_received': {
+    label: 'Payment received',
+    description: 'A payment was recorded and a receipt is available.',
+    category: 'FINANCE',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['PARENT'],
+  },
+  'fees.overdue_reminder': {
+    label: 'Fee reminder',
+    description: 'An invoice is due soon or overdue.',
+    category: 'FINANCE',
+    defaultEmail: true,
+    mandatoryInApp: false,
+    roles: ['PARENT'],
+  },
 } as const satisfies Record<string, NotificationTypeDef>;
 
 export type NotificationType = keyof typeof NOTIFICATION_TYPES;

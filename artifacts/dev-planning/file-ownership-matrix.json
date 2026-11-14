@@ -1,6 +1,6 @@
 {
-  "ticketId": "SH-16",
-  "timestamp": "2026-11-10T15:00:00Z",
+  "ticketId": "SH-17",
+  "timestamp": "2026-11-10T16:30:00Z",
   "phase": "dev-planning",
   "version": "1.0",
   "entries": [
@@ -10,408 +10,453 @@
       "operation": "MODIFY"
     },
     {
-      "path": "prisma/migrations/20261115000000_add_student_risk_snapshot/migration.sql",
+      "path": "prisma/migrations/20261116000000_add_fees/migration.sql",
       "taskId": "TASK-1",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/dashboards/risk-rules.ts",
+      "path": "src/lib/money.ts",
       "taskId": "TASK-2",
       "operation": "CREATE"
     },
     {
-      "path": "tests/unit/dashboards/risk-rules.test.ts",
-      "taskId": "TASK-2",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/lib/dates.ts",
+      "path": "src/lib/validators/fees.ts",
       "taskId": "TASK-3",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "tests/unit/dates.test.ts",
-      "taskId": "TASK-3",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/dashboards/missing-work.ts",
+      "path": "src/server/fees/fee-math.ts",
       "taskId": "TASK-4",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/assignments/reminders.ts",
-      "taskId": "TASK-4",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "tests/integration/dashboards/missing-work.test.ts",
-      "taskId": "TASK-4",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/gradebook/batch-grades.ts",
+      "path": "tests/unit/fees/fee-math.test.ts",
       "taskId": "TASK-5",
       "operation": "CREATE"
     },
     {
-      "path": "tests/integration/gradebook/batch-grades.test.ts",
+      "path": "tests/unit/fees/money.test.ts",
       "taskId": "TASK-5",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/dashboards.ts",
+      "path": "src/server/fees/ledger.ts",
       "taskId": "TASK-6",
       "operation": "CREATE"
     },
     {
-      "path": "src/lib/validators/reports.ts",
-      "taskId": "TASK-6",
+      "path": "src/server/fees/access.ts",
+      "taskId": "TASK-7",
       "operation": "CREATE"
     },
     {
       "path": "src/server/notifications/types.ts",
-      "taskId": "TASK-7",
+      "taskId": "TASK-8",
       "operation": "MODIFY"
     },
     {
-      "path": "src/server/dashboards/insights.ts",
-      "taskId": "TASK-8",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/dashboards/announcements.ts",
-      "taskId": "TASK-8",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/dashboards/risk.ts",
+      "path": "src/lib/validators/users.ts",
       "taskId": "TASK-9",
-      "operation": "CREATE"
+      "operation": "MODIFY"
     },
     {
-      "path": "tests/integration/dashboards/risk.test.ts",
+      "path": "src/server/services/users.ts",
+      "taskId": "TASK-9",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/fees/fees-service.ts",
       "taskId": "TASK-10",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/dashboards/teacher.ts",
+      "path": "src/app/api/fees/items/route.ts",
       "taskId": "TASK-11",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/dashboards/student.ts",
+      "path": "src/app/api/fees/items/[id]/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/items/[id]/archive/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/plans/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/plans/[id]/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/discounts/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/discounts/[id]/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/discounts/[id]/archive/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/students/[id]/optional-fees/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/optional-fees/bulk/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/students/[id]/discounts/route.ts",
+      "taskId": "TASK-11",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/fees/maintenance.ts",
       "taskId": "TASK-12",
       "operation": "CREATE"
     },
     {
-      "path": "src/server/dashboards/admin.ts",
+      "path": "src/app/api/internal/email/dispatch/route.ts",
+      "taskId": "TASK-12",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/fees/fees-service.ts",
+      "taskId": "TASK-13",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/fees/reports.ts",
       "taskId": "TASK-13",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/internal/email/dispatch/route.ts",
+      "path": "src/app/api/fees/invoices/preview/route.ts",
       "taskId": "TASK-14",
-      "operation": "MODIFY"
+      "operation": "CREATE"
     },
     {
-      "path": "tests/integration/email-dispatch.test.ts",
+      "path": "src/app/api/fees/invoices/generate/route.ts",
       "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/invoices/route.ts",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/invoices/[id]/route.ts",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/invoices/[id]/issue/route.ts",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/invoices/[id]/void/route.ts",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/invoices/[id]/adjust/route.ts",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/invoices/[id]/remind/route.ts",
+      "taskId": "TASK-14",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/fees/fees-service.ts",
+      "taskId": "TASK-15",
       "operation": "MODIFY"
     },
     {
-      "path": "src/components/Widget/Widget.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/Widget/WidgetErrorBoundary.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/components/charts/ChartA11y.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/unit/WidgetErrorBoundary.test.tsx",
-      "taskId": "TASK-15",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/page.tsx",
+      "path": "src/app/api/fees/families/[parentId]/open-invoices/route.ts",
       "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/payments/route.ts",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/payments/[id]/route.ts",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/api/fees/payments/[id]/reverse/route.ts",
+      "taskId": "TASK-16",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/fees/reports.ts",
+      "taskId": "TASK-17",
       "operation": "MODIFY"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/GreetingHeader.tsx",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/RefreshButton.tsx",
-      "taskId": "TASK-16",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/TeacherDashboard.tsx",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/TodaysClassesWidget.tsx",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/ToGradeWidget.tsx",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/UpcomingDeadlinesWidget.tsx",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/AtRiskWidget.tsx",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/TeacherMessagesWidget.tsx",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/QuickActionsWidget.tsx",
-      "taskId": "TASK-17",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/StudentDashboard.tsx",
+      "path": "src/app/api/fees/dashboard/route.ts",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/StudentTodayWidget.tsx",
+      "path": "src/app/api/fees/aging/route.ts",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/DueSoonWidget.tsx",
+      "path": "src/app/api/fees/export/invoices/route.ts",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/RecentGradesWidget.tsx",
+      "path": "src/app/api/fees/export/payments/route.ts",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/MyCoursesWidget.tsx",
+      "path": "src/app/api/fees/export/aging/route.ts",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/AnnouncementsWidget.tsx",
+      "path": "src/app/api/me/fees/route.ts",
       "taskId": "TASK-18",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/TermAttendanceWidget.tsx",
-      "taskId": "TASK-18",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/AdminDashboard.tsx",
+      "path": "src/components/fees/InvoiceStatusChip.tsx",
       "taskId": "TASK-19",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/KpiRowWidget.tsx",
+      "path": "src/components/fees/MoneyText.tsx",
       "taskId": "TASK-19",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/AttendanceTrendWidget.tsx",
+      "path": "src/components/fees/PrintButton.tsx",
       "taskId": "TASK-19",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/EnrollmentByGradeWidget.tsx",
+      "path": "src/components/fees/InvoiceLinesEditor.tsx",
       "taskId": "TASK-19",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/GradeDistributionWidget.tsx",
+      "path": "src/components/fees/AllocationEditor.tsx",
       "taskId": "TASK-19",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/(app)/dashboard/_components/widgets/RiskSummaryWidget.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/UpcomingEventsWidget.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/dashboard/_components/widgets/RecentActivityWidget.tsx",
-      "taskId": "TASK-19",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/dashboard/teacher/route.ts",
+      "path": "src/components/fees/InvoiceDocument.tsx",
       "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/dashboard/student/route.ts",
+      "path": "src/components/fees/ReceiptDocument.tsx",
       "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/dashboard/admin/route.ts",
+      "path": "src/app/(app)/fees/invoices/[id]/print/page.tsx",
       "taskId": "TASK-20",
       "operation": "CREATE"
     },
     {
-      "path": "src/app/api/dashboard/refresh/route.ts",
+      "path": "src/app/(app)/fees/receipts/[paymentId]/print/page.tsx",
       "taskId": "TASK-20",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/integration/dashboards/dashboard-api.test.ts",
-      "taskId": "TASK-20",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/insights/at-risk/route.ts",
-      "taskId": "TASK-21",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/insights/at-risk/page.tsx",
-      "taskId": "TASK-21",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/insights/at-risk/_components/AtRiskFilters.tsx",
-      "taskId": "TASK-21",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/students/[id]/insights/route.ts",
-      "taskId": "TASK-22",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/students/[id]/insights/page.tsx",
-      "taskId": "TASK-22",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/config/student-tabs.ts",
-      "taskId": "TASK-22",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "src/server/reports/enrollment.ts",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/reports/attendance.ts",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/reports/performance.ts",
-      "taskId": "TASK-23",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/reports/completion.ts",
-      "taskId": "TASK-24",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/reports/engagement.ts",
-      "taskId": "TASK-24",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/reports/workload.ts",
-      "taskId": "TASK-24",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/server/reports/index.ts",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
-    },
-    {
-      "path": "tests/integration/reports/reports.test.ts",
-      "taskId": "TASK-25",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/api/reports/[reportKey]/route.ts",
-      "taskId": "TASK-26",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/reports/page.tsx",
-      "taskId": "TASK-26",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/reports/[reportKey]/page.tsx",
-      "taskId": "TASK-26",
-      "operation": "CREATE"
-    },
-    {
-      "path": "src/app/(app)/admin/reports/[reportKey]/_components/ReportFilters.tsx",
-      "taskId": "TASK-26",
       "operation": "CREATE"
     },
     {
       "path": "src/config/navigation.ts",
+      "taskId": "TASK-21",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/setup/page.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/setup/_components/SetupTabs.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/setup/_components/FeeItemsTab.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/setup/_components/FeePlansTab.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/setup/_components/DiscountsTab.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/setup/_components/OptionalFeesTab.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/setup/_components/StudentDiscountsTab.tsx",
+      "taskId": "TASK-22",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/invoices/page.tsx",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/invoices/_components/InvoicesTable.tsx",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/invoices/_components/ManualInvoiceDialog.tsx",
+      "taskId": "TASK-23",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/invoices/generate/page.tsx",
+      "taskId": "TASK-24",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/invoices/generate/_components/GenerateInvoices.tsx",
+      "taskId": "TASK-24",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/invoices/[id]/page.tsx",
+      "taskId": "TASK-25",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/invoices/[id]/_components/InvoiceActions.tsx",
+      "taskId": "TASK-25",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/payments/page.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/payments/_components/PaymentsTable.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/payments/new/page.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/payments/new/_components/RecordPaymentForm.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/payments/[id]/page.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/payments/[id]/_components/ReversePaymentButton.tsx",
+      "taskId": "TASK-26",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/page.tsx",
       "taskId": "TASK-27",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/admin/fees/_components/FeesDashboard.tsx",
+      "taskId": "TASK-27",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/fees/page.tsx",
+      "taskId": "TASK-28",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/app/(app)/fees/_components/ParentFeesView.tsx",
+      "taskId": "TASK-28",
+      "operation": "CREATE"
+    },
+    {
+      "path": "src/server/dashboards/admin.ts",
+      "taskId": "TASK-29",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/(app)/dashboard/_components/widgets/KpiRowWidget.tsx",
+      "taskId": "TASK-29",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/server/parent/overview-service.ts",
+      "taskId": "TASK-29",
+      "operation": "MODIFY"
+    },
+    {
+      "path": "src/app/(app)/my-children/[studentId]/OverviewCards.tsx",
+      "taskId": "TASK-29",
       "operation": "MODIFY"
     },
     {
       "path": "prisma/seed.ts",
-      "taskId": "TASK-28",
+      "taskId": "TASK-30",
       "operation": "MODIFY"
     },
     {
-      "path": "prisma/seed-large.ts",
-      "taskId": "TASK-29",
+      "path": "tests/integration/fees/access.test.ts",
+      "taskId": "TASK-31",
       "operation": "CREATE"
     },
     {
-      "path": "package.json",
-      "taskId": "TASK-29",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "tests/e2e/dashboard.spec.ts",
-      "taskId": "TASK-30",
-      "operation": "MODIFY"
-    },
-    {
-      "path": "tests/e2e/insights.spec.ts",
-      "taskId": "TASK-30",
+      "path": "tests/integration/fees/numbering.test.ts",
+      "taskId": "TASK-31",
       "operation": "CREATE"
     },
     {
-      "path": "tests/e2e/reports.spec.ts",
-      "taskId": "TASK-30",
+      "path": "tests/integration/fees/ledger.test.ts",
+      "taskId": "TASK-31",
+      "operation": "CREATE"
+    },
+    {
+      "path": "tests/e2e/fees.spec.ts",
+      "taskId": "TASK-32",
       "operation": "CREATE"
     }
   ]

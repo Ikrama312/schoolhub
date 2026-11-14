@@ -197,10 +197,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('SH-15 QA: consent forms + confe
     expect(await listMyMeetings(U('t1', 'TEACHER'), range)).toHaveLength(1);
     const upcoming = await getUpcomingEvents(U('p1', 'PARENT'), ids.s1);
     expect(upcoming.filter((e) => e.source === 'myMeetings')).toHaveLength(2);
-    // NFR-2 proxy: all eight overview cards resolve server-side well under the 2 s page budget.
+    // NFR-2 proxy: all overview cards resolve server-side well under the 2 s page budget.
+    // SH-17 FR-40 added a ninth card, `fees`.
     const t0 = performance.now();
     const all = await getOverview(U('p1', 'PARENT'), ids.s1);
-    expect(Object.keys(all)).toHaveLength(8);
+    expect(Object.keys(all)).toHaveLength(9);
     expect(performance.now() - t0).toBeLessThan(1000);
   });
 

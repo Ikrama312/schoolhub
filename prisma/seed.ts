@@ -166,6 +166,7 @@ async function main() {
   await seedMessaging();
   await seedParentPortal();
   await seedRiskCohort();
+  await seedFees();
 }
 
 /** Deterministic PRNG so every seed run produces the same attendance (FR-38). */
@@ -1007,6 +1008,187 @@ async function seedRiskCohort() {
   const result = await recomputeRiskSnapshots({ force: true });
   const levels = await prisma.studentRiskSnapshot.groupBy({ by: ['level'], where: { termId: term.id, studentId: { in: students.map((s) => s.id) } }, _count: { _all: true } });
   logger.info('Seed: risk cohort ready', { ...result, levels: Object.fromEntries(levels.map((l) => [l.level ?? 'NONE', l._count._all])) });
+}
+
+/**
+ * PRD-17 FR-47/FR-48: Alice is the bursar, USD + invoice footer, fee items, Semester 1 plans for
+ * Grades 6–8, Sibling 5 % (auto) and Merit 10 % (Sam), then Grade 7 Semester 1 invoices and 12
+ * payments, all through fees-service so numbers and amountPaid stay consistent. Three invoices are
+ * issued with an injected past "today" so markOverdue turns them OVERDUE.
+ * Payments need a payer family: Grade 7 students without a primary parent get a fee demo parent
+ * (fees.parentN@schoolhub.test, owned by this seed); the first two share one, so the sibling rule shows.
+ * Idempotent: setup rows are upserted; invoices and payments are created only when Grade 7 has no
+ * Semester 1 plan invoice yet.
+ */
+async function seedFees() {
+  const { generateInvoices, issue, recordPayment } = await import('../src/server/fees/fees-service');
+  const { markOverdue } = await import('../src/server/fees/maintenance');
+  const { feeSettings } = await import('../src/server/fees/ledger');
+  const { dec, fixed2 } = await import('../src/lib/money');
+  const { addDateDays } = await import('../src/lib/dates');
+
+  const [alice, sam, year] = await Promise.all([
+    prisma.user.findUnique({ where: { email: 'admin@schoolhub.test' } }),
+    prisma.user.findUnique({ where: { email: 'student@schoolhub.test' } }),
+    prisma.academicYear.findFirst({ where: { isCurrent: true } }),
+  ]);
+  const term = year && (await prisma.term.findFirst({ where: { academicYearId: year.id, name: 'Semester 1' } }));
+  if (!alice || !year || !term) {
+    logger.warn('Seed: fees skipped (Alice Admin, current year or Semester 1 missing)');
+    return;
+  }
+  const actor = { id: alice.id, role: 'ADMIN' as const };
+  await prisma.user.update({ where: { id: alice.id }, data: { isBursar: true } });
+  const settings = await prisma.schoolSettings.findUniqueOrThrow({ where: { id: 'singleton' } });
+  await prisma.schoolSettings.update({
+    where: { id: 'singleton' },
+    data: {
+      currency: settings.currency || 'USD',
+      invoiceFooter:
+        settings.invoiceFooter ??
+        'Please pay by bank transfer to SchoolHub Academy, Springfield Community Bank\nAccount 12345678 · Routing 021000021\nUse the invoice number as the payment reference.',
+    },
+  });
+
+  const items = [
+    { code: 'TUITION', name: 'Tuition', defaultAmount: '2000.00', isOptional: false },
+    { code: 'LAB', name: 'Lab fee', defaultAmount: '150.00', isOptional: false },
+    { code: 'BUS', name: 'Bus service', defaultAmount: '300.00', isOptional: true },
+    { code: 'ACTIVITY', name: 'Activity fee', defaultAmount: '100.00', isOptional: false },
+  ];
+  const item: Record<string, string> = {};
+  for (const i of items) item[i.code] = (await prisma.feeItem.upsert({ where: { code: i.code }, update: {}, create: i })).id;
+
+  const tuitionByGrade: Record<string, string> = { 'Grade 6': '1900.00', 'Grade 7': '2000.00', 'Grade 8': '2100.00' };
+  for (const [gradeName, tuition] of Object.entries(tuitionByGrade)) {
+    const grade = await prisma.gradeLevel.findUnique({ where: { name: gradeName } });
+    if (!grade) continue;
+    const exists = await prisma.feePlan.findUnique({ where: { termId_gradeLevelId: { termId: term.id, gradeLevelId: grade.id } } });
+    if (exists) continue;
+    await prisma.feePlan.create({
+      data: {
+        name: `${gradeName} · Semester 1`,
+        academicYearId: year.id,
+        termId: term.id,
+        gradeLevelId: grade.id,
+        dueDays: 30,
+        lines: {
+          createMany: {
+            data: [
+              { feeItemId: item.TUITION, amount: tuition },
+              { feeItemId: item.LAB, amount: '150.00' },
+              { feeItemId: item.ACTIVITY, amount: '100.00' },
+            ],
+          },
+        },
+      },
+    });
+  }
+
+  const discount = async (name: string, autoRule: string | null) =>
+    (await prisma.discount.findFirst({ where: { name } })) ??
+    (await prisma.discount.create({ data: { name, kind: 'PERCENT', value: autoRule ? '5.00' : '10.00', autoRule } }));
+  await discount('Sibling', 'SIBLING_2ND');
+  const merit = await discount('Merit scholarship', null);
+  if (sam?.role === 'STUDENT') {
+    await prisma.studentDiscount.upsert({
+      where: { studentId_academicYearId_discountId: { studentId: sam.id, academicYearId: year.id, discountId: merit.id } },
+      update: {},
+      create: { studentId: sam.id, academicYearId: year.id, discountId: merit.id, note: 'Academic merit 2026-2027' },
+    });
+  } else logger.warn('Seed: Sam Student not found, merit scholarship not assigned');
+
+  const grade7 = await prisma.gradeLevel.findUnique({ where: { name: 'Grade 7' } });
+  if (!grade7) return;
+  const already = await prisma.invoice.count({ where: { termId: term.id, feePlanId: { not: null }, student: { studentProfile: { gradeLevelId: grade7.id } } } });
+  if (already) {
+    logger.info('Seed: Grade 7 Semester 1 invoices already exist, skipping invoices and payments');
+    return;
+  }
+
+  const students = await prisma.user.findMany({
+    where: { role: 'STUDENT', archivedAt: null, studentProfile: { gradeLevelId: grade7.id } },
+    select: { id: true, firstName: true, studentLinks: { where: { isPrimary: true }, select: { parentId: true } } },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+  });
+  if (students.length < 6) {
+    logger.warn('Seed: fees need at least 6 Grade 7 students for the status mix, skipping invoices', { found: students.length });
+    return;
+  }
+  // Payer families for students without a primary parent; the first two orphans are siblings.
+  const orphans = students.filter((s) => s.studentLinks.length === 0);
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
+  for (const [i, s] of orphans.entries()) {
+    const n = i < 2 ? 1 : i;
+    const parent = await prisma.user.upsert({
+      where: { email: `fees.parent${n}@schoolhub.test` },
+      update: {},
+      create: { email: `fees.parent${n}@schoolhub.test`, firstName: 'Fiona', lastName: `Family${n}`, role: 'PARENT', status: 'ACTIVE', passwordHash },
+    });
+    await prisma.parentStudentLink.upsert({
+      where: { parentId_studentId: { parentId: parent.id, studentId: s.id } },
+      update: {},
+      create: { parentId: parent.id, studentId: s.id, relationship: 'MOTHER', isPrimary: true },
+    });
+    s.studentLinks = [{ parentId: parent.id }];
+  }
+
+  // Bus service for two students (optional fee, FR-9).
+  for (const s of students.slice(0, 2)) {
+    await prisma.studentOptionalFee.upsert({
+      where: { studentId_academicYearId_feeItemId: { studentId: s.id, academicYearId: year.id, feeItemId: item.BUS } },
+      update: {},
+      create: { studentId: s.id, academicYearId: year.id, feeItemId: item.BUS, amount: '300.00' },
+    });
+  }
+
+  const { today } = await feeSettings();
+  const drafts = await generateInvoices(actor, { academicYearId: year.id, termId: term.id, gradeLevelIds: [grade7.id], issue: false });
+  const invoices = await prisma.invoice.findMany({ where: { id: { in: drafts.invoiceIds } }, select: { id: true, studentId: true } });
+  const byStudent = new Map(invoices.map((i) => [i.studentId, i.id]));
+  const ordered = students.flatMap((s) => (byStudent.has(s.id) ? [{ ...s, invoiceId: byStudent.get(s.id)! }] : []));
+
+  // The last three are issued 45 days ago (due 15 days ago → OVERDUE); the rest today.
+  const overdue = ordered.slice(-3);
+  for (const s of ordered) await issue(actor, s.invoiceId, { today: overdue.includes(s) ? addDateDays(today, -45) : today });
+  await markOverdue(today);
+
+  const METHODS = ['CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD_TERMINAL', 'OTHER'] as const;
+  let n = 0;
+  const pay = async (s: (typeof ordered)[number], amount: string) => {
+    const parentId = s.studentLinks[0]?.parentId;
+    if (!parentId) return;
+    const parent = await prisma.user.findUniqueOrThrow({ where: { id: parentId } });
+    await recordPayment(actor, {
+      payerParentId: parentId,
+      amount,
+      method: METHODS[n % METHODS.length],
+      reference: n % METHODS.length === 1 ? `TRF-${1000 + n}` : n % METHODS.length === 2 ? `CHQ-${500 + n}` : null,
+      receivedAt: new Date(Date.now() - (12 - n) * 86_400_000),
+      payerName: `${parent.firstName} ${parent.lastName}`,
+      allocations: [{ invoiceId: s.invoiceId, amount }],
+    });
+    n++;
+  };
+  const totalOf = async (id: string) => dec((await prisma.invoice.findUniqueOrThrow({ where: { id } })).total);
+
+  // 3 PAID (two payments each), 2 PARTIALLY_PAID (two payments each), 1 ISSUED, 2 overdue partly paid = 12 payments.
+  const fresh = ordered.slice(0, -3);
+  for (const s of fresh.slice(0, 3)) {
+    const total = await totalOf(s.invoiceId);
+    const half = fixed2(total.div(2));
+    await pay(s, half);
+    await pay(s, fixed2(total.minus(half)));
+  }
+  for (const s of fresh.slice(3, 5)) {
+    const quarter = fixed2((await totalOf(s.invoiceId)).div(4));
+    await pay(s, quarter);
+    await pay(s, quarter);
+  }
+  for (const s of overdue.slice(0, 2)) await pay(s, fixed2((await totalOf(s.invoiceId)).div(10)));
+
+  const statuses = await prisma.invoice.groupBy({ by: ['status'], where: { id: { in: drafts.invoiceIds } }, _count: { _all: true } });
+  logger.info('Seed: fees ready', { invoices: drafts.invoiceIds.length, payments: n, statuses: Object.fromEntries(statuses.map((x) => [x.status, x._count._all])) });
 }
 
 async function disconnectAll() {

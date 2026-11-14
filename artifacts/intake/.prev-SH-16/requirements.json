@@ -1,0 +1,124 @@
+{
+  "ticketId": "SH-16",
+  "timestamp": "2026-11-10T12:00:00Z",
+  "phase": "intake",
+  "version": "1.0",
+  "prd": "PRD-16 Role Dashboards, Reports & Early-Warning Insights (SCH-016)",
+  "runMode": "--brownfield --tech-stack react",
+
+  "functionalRequirements": [
+    { "id": "FR-1", "description": "/dashboard renders AdminDashboard, TeacherDashboard or StudentDashboard by role; PARENT is redirected to the child overview (/my-children, existing PRD-15 redirect kept).", "confidence": "HIGH", "source": "PRD-16 FR-1.1; Acceptance Criterion 3" },
+    { "id": "FR-2", "description": "Each dashboard widget is an independent server component wrapped in Suspense with an MUI Skeleton fallback and an error boundary showing 'This widget could not load — Retry' without breaking the rest of the page.", "confidence": "HIGH", "source": "PRD-16 FR-1.2; Acceptance Criterion 8" },
+    { "id": "FR-3", "description": "Greeting header shows 'Good morning/afternoon/evening, <first name>' by school-timezone time of day, plus today's date and the current term name.", "confidence": "HIGH", "source": "PRD-16 FR-1.3" },
+
+    { "id": "FR-4", "description": "Teacher 'Today's classes' widget: today's timetable with Now/Next badges, per-class attendance status (taken / not taken) with a 'Take attendance' action and a link to the course.", "confidence": "HIGH", "source": "PRD-16 FR-2.1; Acceptance Criterion 1" },
+    { "id": "FR-5", "description": "Teacher 'To grade' widget: count plus top 5 (oldest first) submitted-but-ungraded assignment submissions and quiz attempts needing grading across the teacher's courses, with links.", "confidence": "HIGH", "source": "PRD-16 FR-2.2; Acceptance Criterion 1" },
+    { "id": "FR-6", "description": "Teacher 'Upcoming deadlines' widget: assignments and quizzes in the teacher's courses due in the next 7 days, each with its submission rate.", "confidence": "HIGH", "source": "PRD-16 FR-2.3" },
+    { "id": "FR-7", "description": "Teacher 'At-risk students' widget: top 5 at-risk students among the teacher's accessible students with reasons and a link to /insights/at-risk.", "confidence": "HIGH", "source": "PRD-16 FR-2.4" },
+    { "id": "FR-8", "description": "Teacher 'Messages & announcements' widget: unread message count (PRD-13) and latest 3 announcements (PRD-12).", "confidence": "MEDIUM", "source": "PRD-16 FR-2.5 (announcement data source absent in workspace — see clarificationLog)" },
+    { "id": "FR-9", "description": "Teacher 'Quick actions' widget: New assignment, New announcement, Take attendance, New quiz links.", "confidence": "HIGH", "source": "PRD-16 FR-2.6" },
+
+    { "id": "FR-10", "description": "Student 'Today' widget: today's schedule with Now/Next badges, or a holiday message on non-school days.", "confidence": "HIGH", "source": "PRD-16 FR-3.1" },
+    { "id": "FR-11", "description": "Student 'Due soon' widget: assignments and open quizzes due in the next 7 days; overdue (missing) items listed first and highlighted in red.", "confidence": "HIGH", "source": "PRD-16 FR-3.2; Acceptance Criterion 2" },
+    { "id": "FR-12", "description": "Student 'Recent grades' widget: last 5 grades with course and percent.", "confidence": "HIGH", "source": "PRD-16 FR-3.3" },
+    { "id": "FR-13", "description": "Student 'My courses' widget: course cards with current percent and letter (consistent with the Grades tab), PRD-08 content progress bar and next-lesson link.", "confidence": "HIGH", "source": "PRD-16 FR-3.4; Acceptance Criterion 2" },
+    { "id": "FR-14", "description": "Student 'Announcements' widget: latest 3 unread announcements.", "confidence": "MEDIUM", "source": "PRD-16 FR-3.5 (announcement data source absent in workspace — see clarificationLog)" },
+    { "id": "FR-15", "description": "Student 'Attendance this term' widget: term attendance rate shown with a small MUI X Gauge.", "confidence": "HIGH", "source": "PRD-16 FR-3.6" },
+
+    { "id": "FR-16", "description": "Admin KPI row of StatCards: active students, active teachers, today's attendance rate with delta vs. same weekday last week, registers missing today, open safeguarding reports (visible to safeguarding leads only), pending absence notes.", "confidence": "HIGH", "source": "PRD-16 FR-4.1" },
+    { "id": "FR-17", "description": "Admin 'Attendance trend': MUI X LineChart of daily school-wide attendance rate over the last 30 school days with SchoolSettings.attendanceAlertThreshold as a reference line.", "confidence": "HIGH", "source": "PRD-16 FR-4.2" },
+    { "id": "FR-18", "description": "Admin 'Enrollment by grade level': MUI X BarChart of active students per grade level, stacked by gender.", "confidence": "HIGH", "source": "PRD-16 FR-4.3" },
+    { "id": "FR-19", "description": "Admin 'Grade distribution': MUI X BarChart histogram of current-term course percentages across all students in 10 % buckets, with average and median.", "confidence": "HIGH", "source": "PRD-16 FR-4.4" },
+    { "id": "FR-20", "description": "Admin 'At-risk summary': counts by risk level (High / Medium) and by reason, with link to the full list.", "confidence": "HIGH", "source": "PRD-16 FR-4.5" },
+    { "id": "FR-21", "description": "Admin 'Upcoming events': next 5 school events from PRD-14 CalendarEvent.", "confidence": "MEDIUM", "source": "PRD-16 FR-4.6 (CalendarEvent model exists but no calendar service/API — see clarificationLog)" },
+    { "id": "FR-22", "description": "Admin 'Recent activity': last 10 AuditLog entries with action types user.*, report_card.*, settings.*.", "confidence": "HIGH", "source": "PRD-16 FR-4.7" },
+
+    { "id": "FR-23", "description": "Expensive aggregates (admin KPIs, trends, distributions, risk scores) are computed in src/server/dashboards/insights.ts and cached with Next.js unstable_cache keyed by role scope: 15-minute revalidate, 60 minutes for at-risk.", "confidence": "HIGH", "source": "PRD-16 FR-5.1" },
+    { "id": "FR-24", "description": "Each cached widget shows 'Updated N min ago'; admins get a 'Refresh' button calling POST /api/dashboard/refresh that revalidates the cache tags (and triggers risk recompute).", "confidence": "HIGH", "source": "PRD-16 FR-5.1, FR-6.3, API table" },
+
+    { "id": "FR-25", "description": "src/server/dashboards/risk.ts computes three signals per ACTIVE student in the current term: Attendance (< school threshold, default 90 % → Medium; < 80 % → High); Grades (any course < 60 % → Medium; ≥2 courses < 60 % or any < 50 % → High); Missing work (3–4 missing assignments in last 30 days → Medium; ≥5 → High).", "confidence": "HIGH", "source": "PRD-16 FR-6.1; Acceptance Criteria 4, 5" },
+    { "id": "FR-26", "description": "Overall risk level = High if any signal is High or two signals are Medium; Medium if exactly one signal is Medium; otherwise none.", "confidence": "HIGH", "source": "PRD-16 FR-6.2; Acceptance Criteria 4, 5" },
+    { "id": "FR-27", "description": "Add Prisma model StudentRiskSnapshot { studentId, termId, level, reasons Json, computedAt } (one row per student per term, upserted) with migration; refreshed by the existing maintenance run (internal dispatch cron) at most once per hour and on admin Refresh.", "confidence": "HIGH", "source": "PRD-16 FR-6.3" },
+    { "id": "FR-28", "description": "Snapshot history sufficient to drive a trend arrow vs. the previous snapshot and a 'short history' on the student Insights tab, despite one upserted row per student per term.", "confidence": "LOW", "source": "PRD-16 FR-6.3 vs FR-6.4/FR-6.5 (conflict — see clarificationLog)" },
+    { "id": "FR-29", "description": "Page /insights/at-risk scoped ADMIN: all students; TEACHER: students they teach plus their homeroom section; table with student, section, level badge, reason chips ('Attendance 78 %', '2 courses < 60 %', '6 missing'), trend arrow, and actions (open student, message parents).", "confidence": "HIGH", "source": "PRD-16 FR-6.4; Acceptance Criterion 6" },
+    { "id": "FR-30", "description": "At-risk list filters (level, reason, grade level, section) and formula-injection-safe CSV export matching the filtered table.", "confidence": "HIGH", "source": "PRD-16 FR-6.4; API table" },
+    { "id": "FR-31", "description": "Register student tab 'Insights' in src/config/student-tabs.ts (ADMIN/TEACHER) showing current signal values and a short snapshot history.", "confidence": "HIGH", "source": "PRD-16 FR-6.5" },
+    { "id": "FR-32", "description": "Risk level change from none/Medium to High notifies the student's homeroom teacher via notify() with new type 'insights.student_high_risk' (default email true), at most once per student per 14 days.", "confidence": "HIGH", "source": "PRD-16 FR-6.6" },
+
+    { "id": "FR-33", "description": "Reports centre at /admin/reports (ADMIN) with an academic-year and term selector at the top; every report has filters, a chart, a data table and formula-injection-safe CSV export (reuse PRD-03 CSV helper src/server/csv.ts).", "confidence": "HIGH", "source": "PRD-16 FR-7 intro, FR-7.7" },
+    { "id": "FR-34", "description": "Enrollment report: students by grade level, section and gender; new enrollments and archives by month.", "confidence": "HIGH", "source": "PRD-16 FR-7.1" },
+    { "id": "FR-35", "description": "Attendance report: rate by grade level / section / course for a date range, daily trend, top 20 lowest students — reusing the PRD-07 attendance service; CSV rows match the on-screen table.", "confidence": "HIGH", "source": "PRD-16 FR-7.2; Acceptance Criterion 7" },
+    { "id": "FR-36", "description": "Academic performance report: average percent and letter distribution by course and by subject for a term; comparison between sections of the same grade for the same subject.", "confidence": "HIGH", "source": "PRD-16 FR-7.3" },
+    { "id": "FR-37", "description": "Assignment completion report: on-time / late / missing rates by course and by teacher for a date range.", "confidence": "HIGH", "source": "PRD-16 FR-7.4" },
+    { "id": "FR-38", "description": "Engagement report: lesson completion rate by course (PRD-08 LessonProgress), announcement read rate (PRD-12), distinct parents signed in during last 7/30 days from User.lastLoginAt and audit 'auth.login.success'.", "confidence": "MEDIUM", "source": "PRD-16 FR-7.5 (announcement read data absent — see clarificationLog)" },
+    { "id": "FR-39", "description": "Teacher workload report: per teacher — courses, students taught, weekly periods (PRD-06 TimetableSlot), grading backlog.", "confidence": "HIGH", "source": "PRD-16 FR-7.6" },
+
+    { "id": "FR-40", "description": "Navigation (src/config/navigation.ts): 'Dashboard' stays first for all roles; ADMIN adds 'Reports' and 'At-risk students'; TEACHER adds 'At-risk students'.", "confidence": "HIGH", "source": "PRD-16 FR-8.1" },
+
+    { "id": "FR-41", "description": "API: GET /api/dashboard/teacher (TEACHER), GET /api/dashboard/student (STUDENT), GET /api/dashboard/admin (ADMIN) return widget data; POST /api/dashboard/refresh (ADMIN) revalidates cache tags.", "confidence": "HIGH", "source": "PRD-16 API table" },
+    { "id": "FR-42", "description": "API: GET /api/insights/at-risk?level=&reason=&sectionId=&page= (ADMIN, TEACHER scoped; ?format=csv); filters can never widen a teacher's scope beyond accessible students.", "confidence": "HIGH", "source": "PRD-16 API table; Acceptance Criterion 6" },
+    { "id": "FR-43", "description": "API: GET /api/students/:id/insights (ADMIN, TEACHER of the student).", "confidence": "HIGH", "source": "PRD-16 API table" },
+    { "id": "FR-44", "description": "API: GET /api/reports/:reportKey (ADMIN) with reportKey ∈ enrollment, attendance, performance, completion, engagement, workload and ?format=csv; unknown key → 404.", "confidence": "HIGH", "source": "PRD-16 API table" },
+
+    { "id": "FR-45", "description": "Add 'npm run seed:large' script: 600 students across Grades 6–8 (8 sections), 40 teachers, full timetables, 60 school days of attendance, assignments and grades, deterministic with a fixed random seed; default seed stays small.", "confidence": "HIGH", "source": "PRD-16 Seed Data; NFR-1" },
+    { "id": "FR-46", "description": "Default seed guarantees at least 3 students at each risk level (High, Medium, none).", "confidence": "HIGH", "source": "PRD-16 Seed Data" }
+  ],
+
+  "nonFunctionalRequirements": [
+    { "id": "NFR-1", "description": "Performance: with seed:large data (600 students, 40 teachers, one year), every dashboard renders first content < 1.5 s and each report < 3 s.", "confidence": "HIGH", "source": "PRD-16 NFR-1" },
+    { "id": "NFR-2", "description": "Accessibility: every chart has a visually hidden data table or aria-label summary (e.g. 'Attendance trend: 94.2 % average, lowest 88.1 % on 3 Oct'); colours meet 3:1 contrast and use patterns/labels where colour alone conveys meaning; each role dashboard passes an axe scan.", "confidence": "HIGH", "source": "PRD-16 NFR-2; Test Requirements" },
+    { "id": "NFR-3", "description": "Privacy: teacher dashboards, risk lists and student insights include only students from getAccessibleStudentIds (src/server/auth/student-access.ts); enforced server-side in every handler and server page.", "confidence": "HIGH", "source": "PRD-16 NFR-3; Platform Context 'Code layout' (requireRole); Acceptance Criterion 6" },
+    { "id": "NFR-4", "description": "UI component rule: every visible element uses @mui/material, @mui/icons-material or MUI X (x-charts LineChart/BarChart/Gauge, x-data-grid via shared DataTable, x-date-pickers); no banned libraries (Tailwind, shadcn, Recharts, etc.); no hand-styled raw HTML where an MUI component exists; styling only via theme/sx/styled().", "confidence": "HIGH", "source": "PRD-16 Platform Context 'UI component rule' items 1, 3, 5, 6" },
+    { "id": "NFR-5", "description": "Every MUI component used is looked up through the mui-mcp server (useMuiDocs + fetchDocs) for the installed version (9.5.0) before use; MCP unavailability is reported as a blocker; QA verifies no banned imports and every MUI import resolves to a documented component.", "confidence": "HIGH", "source": "PRD-16 Platform Context 'UI component rule' items 2, 6" },
+    { "id": "NFR-6", "description": "Conventions: thin route handlers (Zod parse → service → JSON), Zod schemas in src/lib/validators/<feature>.ts, standard success/list/error response shapes and error codes, pagination ?page/?pageSize (max 100), services in feature subdirectory src/server/dashboards/ and src/server/reports/, cuid IDs with createdAt/updatedAt.", "confidence": "HIGH", "source": "PRD-16 Platform Context 'Code layout and conventions'" },
+    { "id": "NFR-7", "description": "All date rules (today, time-of-day greeting, last 30 days, school days, 7-day windows) use SchoolSettings.timezone; timestamps stored UTC.", "confidence": "HIGH", "source": "PRD-16 Platform Context 'Code layout' and 'Assumptions'" },
+    { "id": "NFR-8", "description": "Brownfield: reuse existing models, services and components (StatCard, DataTable, LoadingSkeleton, PageHeader, Toast/useToast, csv.ts, attendance-service, gradebook, notify(), audit()); never re-scaffold, rename routes/models or duplicate helpers.", "confidence": "HIGH", "source": "PRD-16 Platform Context intro; FR-7.2 'reuses PRD-07 service'" },
+    { "id": "NFR-9", "description": "Tests: unit tests for every risk boundary (90/80 %, 60/50 %, 3/5 missing, Medium+Medium → High); integration tests of report queries against seeded data with known totals and of cache revalidation; Playwright e2e per role dashboard with axe scan.", "confidence": "HIGH", "source": "PRD-16 Test Requirements" },
+    { "id": "NFR-10", "description": "Keep npm run lint && npm run typecheck && npm run test passing; no console.log (use src/lib/logger.ts).", "confidence": "HIGH", "source": "PRD-16 Platform Context 'Assumptions and constraints' and 'Code layout'" },
+    { "id": "NFR-11", "description": "Scope guard: no custom drag-and-drop dashboard layouts, no ML risk models (rule-based only), no scheduled report emails; do not modify behaviour owned by PRD-17/18.", "confidence": "HIGH", "source": "PRD-16 Out of Scope; Platform Context 'Constraints'" },
+    { "id": "NFR-12", "description": "Freshness: at-risk data refreshed at least hourly (cache ≤ 60 min, maintenance recompute at most once/hour).", "confidence": "HIGH", "source": "PRD-16 Goal 2; FR-5.1; FR-6.3" }
+  ],
+
+  "brownfieldObservations": [
+    "Placeholder src/app/(app)/dashboard/page.tsx exists; already redirects PARENT to /my-children (PRD-15 FR-8) — keep that behaviour.",
+    "Shared components live under src/components/<Name>/ (StatCard, DataTable, LoadingSkeleton, PageHeader, EmptyState, Toast), not src/components/shared/.",
+    "getAccessibleStudentIds exists in src/server/auth/student-access.ts.",
+    "SchoolSettings.attendanceAlertThreshold (default 90) exists; use it as the attendance risk threshold and trend reference line.",
+    "User.lastLoginAt and Gender enum (FEMALE, MALE, OTHER, UNDISCLOSED) exist; safeguardingLead flag and safeguarding reports API exist (src/server/messaging/access.ts).",
+    "No Announcement model in prisma/schema.prisma (PRD-12 only has src/server/announcements/audience.ts).",
+    "CalendarEvent/EventAudience models exist but there is no calendar service or API (PRD-14 dev phase previously failed).",
+    "No 'missing' column: SubmissionStatus is SUBMITTED|RETURNED; missing = published assignment past due with no submission and no GradeExemption (pattern in src/server/assignments/reminders.ts).",
+    "Maintenance passes run from the internal dispatch cron at src/app/api/internal/email/dispatch/route.ts — the hourly risk recompute hooks in there.",
+    "No unstable_cache usage exists yet; no npm seed:large script yet."
+  ],
+
+  "overallConfidencePct": 91,
+
+  "clarificationLog": [
+    {
+      "round": 1,
+      "questions": [
+        "PRD-12 Announcement model is absent. Should the teacher/student Announcements widgets and the engagement 'announcement read rate' render an empty state, or is PRD-12 expected to be repaired first?",
+        "PRD-14 has no calendar service/API. May the admin 'Upcoming events' widget query the existing CalendarEvent model directly (school-wide, non-recurring expansion only)?",
+        "StudentRiskSnapshot is 'one row per student per term, upserted', yet the list needs a trend arrow vs. the previous snapshot and the Insights tab needs a short history. Store previousLevel + a capped history array in the row, or add a separate history table?",
+        "How is 'missing' counted for the risk signal: published assignments due in the last 30 days with no submission and no exemption (NO_SUBMISSION type excluded)?",
+        "Is a student with no attendance records / no graded courses in the term treated as 'no signal' (not at risk)?",
+        "Which teacher students count as 'their students' for dashboards and notifications: enrolled in courses they teach plus their homeroom section (i.e. getAccessibleStudentIds)?"
+      ],
+      "unresolved": [
+        "Announcement data source for FR-8, FR-14, FR-38 — default: render EmptyState / omit the metric with 'Announcements not available' and record as dependency gap; Architect to confirm.",
+        "Upcoming events source for FR-21 — default: query CalendarEvent directly via a small read function in the dashboards service.",
+        "Snapshot history design for FR-28 — default: keep unique (studentId, termId) and store previousLevel plus a capped history array in reasons/extra Json; Architect to decide.",
+        "Missing-work definition — default: reuse the reminders.ts definition (published, due within last 30 days, no submission, not exempt, submissionType != NO_SUBMISSION).",
+        "No-data students — default: no signal."
+      ]
+    },
+    {
+      "round": 2,
+      "questions": [],
+      "unresolved": ["No interactive user available; round 1 defaults carried forward. Aggregate confidence 91 % ≥ 80 % threshold, so no further rounds required."]
+    }
+  ],
+
+  "status": "complete"
+}
